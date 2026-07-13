@@ -4,14 +4,33 @@ import { useFocusEffect } from '@react-navigation/native';
 import Animated, { FadeInUp } from 'react-native-reanimated';
 import Icon from 'react-native-vector-icons/MaterialIcons';
 import { Colors } from '../constants/Colors';
-import { ATTENDANCE_HISTORY } from '../constants/DummyData';
+import { API_BASE_URL } from '../constants/Config';
 
 export default function History() {
   const [history, setHistory] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
 
   useFocusEffect(
     useCallback(() => {
-      setHistory([...ATTENDANCE_HISTORY]);
+      setLoading(true);
+      fetch(`${API_BASE_URL}/history`)
+        .then(res => res.json())
+        .then(data => {
+          const mapped = data.map((item: any) => ({
+            id: String(item.id),
+            date: new Date(item.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+            className: item.Timetable.section,
+            subject: item.Timetable.Subject.title,
+            absentCount: item.absentCount || 0,
+            smsSent: true
+          }));
+          setHistory(mapped);
+          setLoading(false);
+        })
+        .catch(err => {
+          console.error(err);
+          setLoading(false);
+        });
     }, [])
   );
 
@@ -46,20 +65,24 @@ export default function History() {
         <Text style={styles.subtitle}>Recent Class Attendance</Text>
       </View>
 
-      <FlatList
-        data={history}
-        keyExtractor={(item) => item.id}
-        renderItem={renderHistoryItem}
-        contentContainerStyle={[styles.listContainer, history.length === 0 && styles.listContainerEmpty]}
-        showsVerticalScrollIndicator={false}
-        ListEmptyComponent={
-          <View style={styles.emptyState}>
-            <Icon name="history" size={48} color={Colors.textSecondary} style={{ opacity: 0.5, marginBottom: 16 }} />
-            <Text style={styles.emptyTitle}>No History Yet</Text>
-            <Text style={styles.emptySubtitle}>Submit attendance to see records here.</Text>
-          </View>
-        }
-      />
+      {loading ? (
+        <Text style={{ textAlign: 'center', marginTop: 40, color: Colors.textSecondary }}>Loading live history...</Text>
+      ) : (
+        <FlatList
+          data={history}
+          keyExtractor={(item) => item.id}
+          renderItem={renderHistoryItem}
+          contentContainerStyle={[styles.listContainer, history.length === 0 && styles.listContainerEmpty]}
+          showsVerticalScrollIndicator={false}
+          ListEmptyComponent={
+            <View style={styles.emptyState}>
+              <Icon name="history" size={48} color={Colors.textSecondary} style={{ opacity: 0.5, marginBottom: 16 }} />
+              <Text style={styles.emptyTitle}>No History Yet</Text>
+              <Text style={styles.emptySubtitle}>Submit attendance to see records here.</Text>
+            </View>
+          }
+        />
+      )}
     </SafeAreaView>
   );
 }

@@ -1,97 +1,97 @@
-This is a new [**React Native**](https://reactnative.dev) project, bootstrapped using [`@react-native-community/cli`](https://github.com/react-native-community/cli).
+# ClassTrack SKCT 🎓
 
-# Getting Started
+**ClassTrack** is a premium, full-stack React Native application designed specifically for Sri Krishna College of Technology (SKCT) faculty. It provides a sleek, intuitive, and highly functional interface for managing daily schedules, tracking student attendance, and automating SMS notifications to parents.
 
-> **Note**: Make sure you have completed the [Set Up Your Environment](https://reactnative.dev/docs/set-up-your-environment) guide before proceeding.
+---
 
-## Step 1: Start Metro
+## 🚀 Features
 
-First, you will need to run **Metro**, the JavaScript build tool for React Native.
+- **Live Cloud Dashboard**: Instantly fetch daily class schedules straight from the AWS cloud.
+- **Smart Attendance System**:
+  - One-tap marking for Present, Absent, and On-Duty (OD).
+  - Fast-marking input box to mark absentees by the last few digits of their roll number.
+- **Automated SMS Alerts**: Directly integrates with the device's native SMS capabilities to instantly send personalized absentee alerts to parents.
+- **Real-time History Tracking**: All attendance submissions are logged directly to the cloud and instantly viewable on the History tab.
+- **Premium UI/UX**: Built with modern, glass-morphic elements, smooth micro-animations using `react-native-reanimated`, and a curated dark/light color palette.
 
-To start the Metro dev server, run the following command from the root of your React Native project:
+---
 
-```sh
-# Using npm
-npm start
+## 🏗 Architecture
 
-# OR using Yarn
-yarn start
-```
+The project is built as a full-stack application.
 
-## Step 2: Build and run your app
+### Frontend (React Native)
+- **Framework**: React Native CLI
+- **Language**: TypeScript
+- **State & Data**: React Hooks + standard `fetch` API.
+- **Animations**: `react-native-reanimated`
 
-With Metro running, open a new terminal window/pane from the root of your React Native project, and use one of the following commands to build and run your Android or iOS app:
+### Backend (Node.js & AWS)
+The backend source code is located in the `/backend` folder.
+- **Server**: Express.js REST API
+- **Database**: AWS RDS MySQL
+- **ORM**: Sequelize
+- **Hosting**: AWS EC2 Instance running PM2
 
-### Android
+---
 
-```sh
-# Using npm
-npm run android
+## 🛠 Setup & Installation
 
-# OR using Yarn
-yarn android
-```
+### 1. Backend Setup
+1. Navigate to the backend directory:
+   ```bash
+   cd backend
+   ```
+2. Install dependencies:
+   ```bash
+   npm install
+   ```
+3. Configure your environment:
+   Create a `.env` file in the `backend` folder containing your AWS RDS credentials:
+   ```env
+   DB_HOST=your-rds-endpoint.amazonaws.com
+   DB_USER=admin
+   DB_PASS=yourpassword
+   DB_NAME=classtrack
+   PORT=3000
+   ```
+4. Run the seed script to initialize the database:
+   ```bash
+   node setup_db.js
+   node seed.js
+   ```
+5. Start the server:
+   ```bash
+   npm start
+   ```
 
-### iOS
+### 2. Frontend Setup
+1. Install dependencies in the root directory:
+   ```bash
+   npm install
+   ```
+2. Update the API URL:
+   Open `src/constants/Config.ts` and set it to your backend's IP address.
+   ```typescript
+   export const API_BASE_URL = 'http://your-ec2-ip:3000/api';
+   ```
+3. Run the application:
+   ```bash
+   npx react-native run-android
+   # or
+   npx react-native run-ios
+   ```
 
-For iOS, remember to install CocoaPods dependencies (this only needs to be run on first clone or after updating native deps).
+---
 
-The first time you create a new project, run the Ruby bundler to install CocoaPods itself:
+## 👥 Developers
 
-```sh
-bundle install
-```
+Proudly developed by the students of SKCT:
+- **Vividhan**
+- **Darshini**
+- **Sivakumar**
+- **Sudhan**
 
-Then, and every time you update your native dependencies, run:
+---
 
-```sh
-bundle exec pod install
-```
-
-For more information, please visit [CocoaPods Getting Started guide](https://guides.cocoapods.org/using/getting-started.html).
-
-```sh
-# Using npm
-npm run ios
-
-# OR using Yarn
-yarn ios
-```
-
-If everything is set up correctly, you should see your new app running in the Android Emulator, iOS Simulator, or your connected device.
-
-This is one way to run your app — you can also build it directly from Android Studio or Xcode.
-
-## Step 3: Modify your app
-
-Now that you have successfully run the app, let's make changes!
-
-Open `App.tsx` in your text editor of choice and make some changes. When you save, your app will automatically update and reflect these changes — this is powered by [Fast Refresh](https://reactnative.dev/docs/fast-refresh).
-
-When you want to forcefully reload, for example to reset the state of your app, you can perform a full reload:
-
-- **Android**: Press the <kbd>R</kbd> key twice or select **"Reload"** from the **Dev Menu**, accessed via <kbd>Ctrl</kbd> + <kbd>M</kbd> (Windows/Linux) or <kbd>Cmd ⌘</kbd> + <kbd>M</kbd> (macOS).
-- **iOS**: Press <kbd>R</kbd> in iOS Simulator.
-
-## Congratulations! :tada:
-
-You've successfully run and modified your React Native App. :partying_face:
-
-### Now what?
-
-- If you want to add this new React Native code to an existing application, check out the [Integration guide](https://reactnative.dev/docs/integration-with-existing-apps).
-- If you're curious to learn more about React Native, check out the [docs](https://reactnative.dev/docs/getting-started).
-
-# Troubleshooting
-
-If you're having issues getting the above steps to work, see the [Troubleshooting](https://reactnative.dev/docs/troubleshooting) page.
-
-# Learn More
-
-To learn more about React Native, take a look at the following resources:
-
-- [React Native Website](https://reactnative.dev) - learn more about React Native.
-- [Getting Started](https://reactnative.dev/docs/environment-setup) - an **overview** of React Native and how setup your environment.
-- [Learn the Basics](https://reactnative.dev/docs/getting-started) - a **guided tour** of the React Native **basics**.
-- [Blog](https://reactnative.dev/blog) - read the latest official React Native **Blog** posts.
-- [`@facebook/react-native`](https://github.com/facebook/react-native) - the Open Source; GitHub **repository** for React Native.
+*© 2026 ClassTrack. Designed for Sri Krishna College of Technology.*

@@ -4,15 +4,36 @@ import { useNavigation, useRoute } from '@react-navigation/native';
 import Animated, { FadeInRight, FadeInUp, FadeInDown, Layout } from 'react-native-reanimated';
 import Icon from 'react-native-vector-icons/MaterialIcons';
 import { Colors } from '../constants/Colors';
-import { DUMMY_STUDENTS, addAttendanceHistory } from '../constants/DummyData';
+import { API_BASE_URL } from '../constants/Config';
 
 export default function Attendance() {
   const navigation = useNavigation<any>();
   const route = useRoute<any>();
   const { classDetails } = route.params || { classDetails: { subject: 'Unknown', className: 'Unknown' } };
   
-  const [students, setStudents] = useState(DUMMY_STUDENTS);
+  const [students, setStudents] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
   const [absentInput, setAbsentInput] = useState('');
+
+  React.useEffect(() => {
+    fetch(`${API_BASE_URL}/students?section=${classDetails.className}`)
+      .then(res => res.json())
+      .then(data => {
+        const mapped = data.map((s: any) => ({
+          id: s.rollNo,
+          name: s.name,
+          phone: s.parentPhone,
+          isAbsent: false,
+          isOnDuty: false
+        }));
+        setStudents(mapped);
+        setLoading(false);
+      })
+      .catch(err => {
+        console.error(err);
+        setLoading(false);
+      });
+  }, [classDetails.className]);
 
   const markStatus = (id: string, status: 'present' | 'absent' | 'onduty') => {
     setStudents(prev => 
@@ -71,15 +92,23 @@ export default function Attendance() {
       }
     }
 
-    // Save to history
-    addAttendanceHistory({
-      id: Date.now().toString(),
-      date: new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }),
-      subject: classDetails.subject,
-      className: classDetails.className,
-      absentCount: absentStudents.length,
-      smsSent: smsWasSent
-    });
+    // Save to history via live API
+    try {
+      await fetch(`${API_BASE_URL}/attendance`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          timetable_id: classDetails.timetable_id,
+          date: new Date().toISOString().split('T')[0],
+          records: students.map(s => ({
+            rollNo: s.id,
+            status: s.isAbsent ? 'Absent' : s.isOnDuty ? 'On Duty' : 'Present'
+          }))
+        })
+      });
+    } catch(err) {
+      console.error(err);
+    }
 
     navigation.navigate('Success');
   };
@@ -160,14 +189,18 @@ export default function Attendance() {
           </View>
         </Animated.View>
 
-        <Animated.FlatList
-          data={students}
-          keyExtractor={(item: any) => item.id}
-          renderItem={renderStudent}
-          showsVerticalScrollIndicator={false}
-          contentContainerStyle={{ paddingBottom: 20 }}
-          itemLayoutAnimation={Layout.springify()}
-        />
+        {loading ? (
+          <Text style={{ textAlign: 'center', marginTop: 20, color: Colors.textSecondary }}>Loading live students...</Text>
+        ) : (
+          <Animated.FlatList
+            data={students}
+            keyExtractor={(item: any) => item.id}
+            renderItem={renderStudent}
+            showsVerticalScrollIndicator={false}
+            contentContainerStyle={{ paddingBottom: 20 }}
+            itemLayoutAnimation={Layout.springify()}
+          />
+        )}
       </View>
 
       <View style={styles.footer}>

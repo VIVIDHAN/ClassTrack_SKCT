@@ -4,10 +4,33 @@ import { useNavigation } from '@react-navigation/native';
 import Animated, { FadeInUp, FadeInRight } from 'react-native-reanimated';
 import Icon from 'react-native-vector-icons/MaterialIcons';
 import { Colors } from '../constants/Colors';
-import { DUMMY_USER, TODAY_CLASSES } from '../constants/DummyData';
+import { DUMMY_USER } from '../constants/DummyData';
+import { API_BASE_URL } from '../constants/Config';
 
 export default function Dashboard() {
   const navigation = useNavigation<any>();
+  const [classes, setClasses] = React.useState<any[]>([]);
+  const [loading, setLoading] = React.useState(true);
+
+  React.useEffect(() => {
+    fetch(`${API_BASE_URL}/timetable?day=1&section=III IT G`)
+      .then(res => res.json())
+      .then(data => {
+        const mapped = data.map((item: any) => ({
+          id: String(item.id),
+          time: `Period ${item.period}`,
+          className: item.section,
+          subject: item.Subject.title,
+          timetable_id: item.id
+        }));
+        setClasses(mapped);
+        setLoading(false);
+      })
+      .catch(err => {
+        console.error(err);
+        setLoading(false);
+      });
+  }, []);
 
   const renderClassItem = ({ item, index }: { item: any, index: number }) => (
     <Animated.View entering={FadeInRight.delay(index * 100).duration(400)}>
@@ -65,23 +88,27 @@ export default function Dashboard() {
       <View style={styles.statsOverview}>
         <View style={styles.statBox}>
           <Text style={styles.statBoxLabel}>Classes Today</Text>
-          <Text style={styles.statBoxValue}>{TODAY_CLASSES.length}</Text>
+          <Text style={styles.statBoxValue}>{loading ? '-' : classes.length}</Text>
         </View>
         <View style={styles.statBox}>
           <Text style={styles.statBoxLabel}>Pending</Text>
-          <Text style={[styles.statBoxValue, { color: Colors.primary }]}>{TODAY_CLASSES.length}</Text>
+          <Text style={[styles.statBoxValue, { color: Colors.primary }]}>{loading ? '-' : classes.length}</Text>
         </View>
       </View>
 
       <View style={styles.listContainer}>
         <Text style={styles.sectionTitle}>Schedule</Text>
-        <FlatList
-          data={TODAY_CLASSES}
-          keyExtractor={(item) => item.id}
-          renderItem={renderClassItem}
-          showsVerticalScrollIndicator={false}
-          contentContainerStyle={{ paddingBottom: 100 }}
-        />
+        {loading ? (
+          <Text style={{ textAlign: 'center', marginTop: 20, color: Colors.textSecondary }}>Loading live schedule...</Text>
+        ) : (
+          <FlatList
+            data={classes}
+            keyExtractor={(item) => item.id}
+            renderItem={renderClassItem}
+            showsVerticalScrollIndicator={false}
+            contentContainerStyle={{ paddingBottom: 100 }}
+          />
+        )}
       </View>
     </SafeAreaView>
   );
