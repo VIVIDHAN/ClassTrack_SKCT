@@ -394,11 +394,6 @@ const seed = async () => {
     "roll_no": "727825TUIT603",
     "name": "LOGESWARAN",
     "parent_phone": "9788627430"
-  },
-  {
-    "roll_no": "727824TUIT214",
-    "name": "Shagul Hameed",
-    "parent_phone": "7708630984"
   }
 ].map(s => ({ ...s, section: 'III IT E' }));
 
