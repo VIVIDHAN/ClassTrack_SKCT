@@ -82,6 +82,11 @@ const seed = async () => {
     const guranna = await Teacher.create({ name: 'Mr. Guranna', email: 'guranna@skct.edu.in', password: 'SKCT@123admin', department: 'IT' });
     const narmatha = await Teacher.create({ name: 'Ms. B Narmatha', email: 'narmatha@skct.edu.in', password: 'SKCT@123admin', department: 'IT' });
     const saranya = await Teacher.create({ name: 'Ms. S Saranya', email: 'saranya@skct.edu.in', password: 'SKCT@123admin', department: 'IT' });
+    const edwin = await Teacher.create({ name: 'Dr G Edwin Prem Kumar', email: 'edwin@skct.edu.in', password: 'SKCT@123admin', department: 'IT' });
+    const ratheesh = await Teacher.create({ name: 'Mr A M Ratheeshkumar', email: 'ratheesh@skct.edu.in', password: 'SKCT@123admin', department: 'IT' });
+    const mouneesh = await Teacher.create({ name: 'Mr Mouneesh', email: 'mouneesh@skct.edu.in', password: 'SKCT@123admin', department: 'IT' });
+    const crown = await Teacher.create({ name: 'Mr Crown', email: 'crown@skct.edu.in', password: 'SKCT@123admin', department: 'IT' });
+    const gayathri = await Teacher.create({ name: 'Ms Gayathri', email: 'gayathri@skct.edu.in', password: 'SKCT@123admin', department: 'IT' });
 
     // 2. Create Students
     await Student.bulkCreate(studentsData);
@@ -128,6 +133,41 @@ const seed = async () => {
       { day: 5, period: 5, section: 'III IT G', subject_id: subDC.id, teacher_id: saranya.id },
     ];
     await Timetable.bulkCreate(timetableData);
+
+    // 5. Create Timetable (III IT E)
+    const timetableDataE = [
+      // DAY 1
+      { day: 1, period: 1, section: 'III IT E', subject_id: subAC.id, teacher_id: edwin.id },
+      { day: 1, period: 2, section: 'III IT E', subject_id: subAD.id, teacher_id: gayathri.id },
+      { day: 1, period: 3, section: 'III IT E', subject_id: subAD.id, teacher_id: gayathri.id },
+      { day: 1, period: 4, section: 'III IT E', subject_id: subAC.id, teacher_id: edwin.id },
+      { day: 1, period: 5, section: 'III IT E', subject_id: subDC.id, teacher_id: ratheesh.id },
+      // DAY 2
+      { day: 2, period: 1, section: 'III IT E', subject_id: subST.id, teacher_id: mouneesh.id },
+      { day: 2, period: 2, section: 'III IT E', subject_id: subST.id, teacher_id: mouneesh.id },
+      { day: 2, period: 3, section: 'III IT E', subject_id: subCISM.id, teacher_id: crown.id },
+      { day: 2, period: 4, section: 'III IT E', subject_id: subCISM.id, teacher_id: crown.id },
+      { day: 2, period: 5, section: 'III IT E', subject_id: subAC.id, teacher_id: edwin.id },
+      // DAY 3
+      { day: 3, period: 1, section: 'III IT E', subject_id: subAD.id, teacher_id: gayathri.id },
+      { day: 3, period: 2, section: 'III IT E', subject_id: subAD.id, teacher_id: gayathri.id },
+      { day: 3, period: 3, section: 'III IT E', subject_id: subST.id, teacher_id: mouneesh.id },
+      { day: 3, period: 4, section: 'III IT E', subject_id: subST.id, teacher_id: mouneesh.id },
+      { day: 3, period: 5, section: 'III IT E', subject_id: subDC.id, teacher_id: ratheesh.id },
+      // DAY 4
+      { day: 4, period: 1, section: 'III IT E', subject_id: subDC.id, teacher_id: ratheesh.id },
+      { day: 4, period: 2, section: 'III IT E', subject_id: subAC.id, teacher_id: edwin.id },
+      { day: 4, period: 3, section: 'III IT E', subject_id: subDC.id, teacher_id: ratheesh.id },
+      { day: 4, period: 4, section: 'III IT E', subject_id: subAC.id, teacher_id: edwin.id },
+      { day: 4, period: 5, section: 'III IT E', subject_id: subTWM.id, teacher_id: defaultTeacher.id },
+      // DAY 5
+      { day: 5, period: 1, section: 'III IT E', subject_id: subCISM.id, teacher_id: crown.id },
+      { day: 5, period: 2, section: 'III IT E', subject_id: subCISM.id, teacher_id: crown.id },
+      { day: 5, period: 3, section: 'III IT E', subject_id: subAC.id, teacher_id: edwin.id },
+      { day: 5, period: 4, section: 'III IT E', subject_id: subDC.id, teacher_id: ratheesh.id },
+      { day: 5, period: 5, section: 'III IT E', subject_id: subST.id, teacher_id: mouneesh.id },
+    ];
+    await Timetable.bulkCreate(timetableDataE);
 
     console.log('Seed completed successfully!');
     process.exit(0);
