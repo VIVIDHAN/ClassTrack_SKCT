@@ -57,13 +57,27 @@ app.post('/api/attendance', async (req, res) => {
 app.get('/api/history', async (req, res) => {
   try {
     const history = await Attendance.findAll({
+      attributes: [
+        [sequelize.fn('MAX', sequelize.col('Attendance.id')), 'id'],
+        'date',
+        'timetable_id',
+        [sequelize.fn('SUM', sequelize.literal("CASE WHEN Attendance.status = 'Absent' THEN 1 ELSE 0 END")), 'absentCount']
+      ],
       include: [
-        Student,
         { model: Timetable, include: [Subject] }
       ],
+      group: ['date', 'timetable_id', 'Timetable.id', 'Timetable->Subject.id'],
       order: [['date', 'DESC']]
     });
-    res.json(history);
+    
+    // Format response to ensure absentCount is a number
+    const formatted = history.map(h => {
+      const data = h.toJSON();
+      data.absentCount = parseInt(data.absentCount, 10) || 0;
+      return data;
+    });
+    
+    res.json(formatted);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

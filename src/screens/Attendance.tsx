@@ -20,7 +20,8 @@ export default function Attendance() {
       .then(res => res.json())
       .then(data => {
         const mapped = data.map((s: any) => ({
-          id: s.rollNo,
+          id: s.roll_no || s.rollNo,
+          db_id: s.id,
           name: s.name,
           phone: s.parentPhone,
           isAbsent: false,
@@ -101,8 +102,8 @@ export default function Attendance() {
           timetable_id: classDetails.timetable_id,
           date: new Date().toISOString().split('T')[0],
           records: students.map(s => ({
-            rollNo: s.id,
-            status: s.isAbsent ? 'Absent' : s.isOnDuty ? 'On Duty' : 'Present'
+            student_id: s.db_id,
+            status: s.isAbsent ? 'Absent' : s.isOnDuty ? 'OD' : 'Present'
           }))
         })
       });
