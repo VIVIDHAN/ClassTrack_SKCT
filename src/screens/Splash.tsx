@@ -1,41 +1,68 @@
 import React from 'react';
-import { View, Text, StyleSheet, Animated, ActivityIndicator } from 'react-native';
-import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
+import { View, Text, StyleSheet, Animated, ActivityIndicator, Dimensions } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import BreatheLoader from '../components/BreatheLoader';
+
+const { width } = Dimensions.get('window');
 
 export default function Splash({ navigation }: any) {
   const fadeAnim = React.useRef(new Animated.Value(0)).current;
-  const scaleAnim = React.useRef(new Animated.Value(0.8)).current;
+  const scaleAnim = React.useRef(new Animated.Value(0.9)).current;
+  const slideAnim = React.useRef(new Animated.Value(50)).current;
 
   React.useEffect(() => {
     Animated.parallel([
       Animated.timing(fadeAnim, {
         toValue: 1,
-        duration: 800,
+        duration: 1000,
         useNativeDriver: true,
       }),
       Animated.spring(scaleAnim, {
         toValue: 1,
-        friction: 4,
+        friction: 5,
+        tension: 40,
+        useNativeDriver: true,
+      }),
+      Animated.timing(slideAnim, {
+        toValue: 0,
+        duration: 800,
         useNativeDriver: true,
       }),
     ]).start();
 
-    const timer = setTimeout(() => {
-      navigation.replace('Login');
-    }, 2500); // Slightly longer to show off the animation
-    return () => clearTimeout(timer);
-  }, [navigation, fadeAnim, scaleAnim]);
+    const checkSession = async () => {
+      try {
+        const token = await AsyncStorage.getItem('userToken');
+        setTimeout(() => {
+          if (token) {
+            navigation.replace('Dashboard');
+          } else {
+            navigation.replace('Login');
+          }
+        }, 3000);
+      } catch (e) {
+        setTimeout(() => navigation.replace('Login'), 3000);
+      }
+    };
+
+    checkSession();
+  }, [navigation, fadeAnim, scaleAnim, slideAnim]);
 
   return (
     <View style={styles.container}>
-      <Animated.View style={[styles.content, { opacity: fadeAnim, transform: [{ scale: scaleAnim }] }]}>
-        <View style={styles.iconContainer}>
-          <Icon name="school" size={80} color="#4F46E5" />
+      {/* Background glow effects */}
+      <View style={[styles.glow, { top: -100, left: -50, backgroundColor: 'rgba(255, 93, 56, 0.2)' }]} />
+      <View style={[styles.glow, { bottom: -100, right: -50, backgroundColor: 'rgba(79, 70, 229, 0.2)' }]} />
+
+      <Animated.View style={[styles.content, { opacity: fadeAnim, transform: [{ scale: scaleAnim }, { translateY: slideAnim }] }]}>
+        <View style={{ marginBottom: 24 }}>
+          <BreatheLoader message="" />
         </View>
-        <Text style={styles.title}>ClassTrack</Text>
-        <Text style={styles.subtitle}>Smart Attendance Management</Text>
+        <Text style={styles.title}>ClassTrack<Text style={styles.titleAccent}>.</Text></Text>
+        <Text style={styles.subtitle}>SRI KRISHNA INSTITUTIONS</Text>
       </Animated.View>
-      <ActivityIndicator style={styles.loader} size="large" color="#FFFFFF" />
+
+      <ActivityIndicator style={styles.loader} size="large" color="#FF5D38" />
     </View>
   );
 }
@@ -45,36 +72,57 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#4F46E5', // Modern Indigo Background
+    backgroundColor: '#0F172A', // Ultra-premium deep dark blue
+    overflow: 'hidden',
+  },
+  glow: {
+    position: 'absolute',
+    width: width * 0.8,
+    height: width * 0.8,
+    borderRadius: width * 0.4,
+    filter: 'blur(60px)',
   },
   content: {
     alignItems: 'center',
   },
-  iconContainer: {
-    backgroundColor: '#FFFFFF',
-    padding: 20,
-    borderRadius: 60,
-    marginBottom: 20,
+  logoBadge: {
+    width: 72,
+    height: 72,
+    borderRadius: 24,
+    backgroundColor: '#FF5D38',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 24,
+    shadowColor: '#FF5D38',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.5,
+    shadowRadius: 24,
     elevation: 10,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 5,
+  },
+  logoBadgeText: {
+    color: '#ffffff',
+    fontSize: 32,
+    fontWeight: '900',
+    letterSpacing: 2,
   },
   title: {
-    fontSize: 42,
+    fontSize: 48,
     fontWeight: '900',
     color: '#FFFFFF',
-    letterSpacing: 1.5,
+    letterSpacing: -1,
+  },
+  titleAccent: {
+    color: '#FF5D38',
   },
   subtitle: {
-    fontSize: 16,
-    color: '#E0E7FF',
-    marginTop: 8,
-    fontWeight: '500',
+    fontSize: 12,
+    color: '#94A3B8',
+    marginTop: 12,
+    fontWeight: '700',
+    letterSpacing: 3,
   },
   loader: {
     position: 'absolute',
-    bottom: 60,
+    bottom: 80,
   },
 });

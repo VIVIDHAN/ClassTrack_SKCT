@@ -7,6 +7,9 @@ import Icon from 'react-native-vector-icons/MaterialIcons';
 import Splash from '../screens/Splash';
 import Login from '../screens/Login';
 import Dashboard from '../screens/Dashboard';
+import ClassesList from '../screens/ClassesList';
+import StudentDirectoryList from '../screens/StudentDirectoryList';
+import StudentProfile from '../screens/StudentProfile';
 import Attendance from '../screens/Attendance';
 import Success from '../screens/Success';
 import History from '../screens/History';
@@ -24,37 +27,6 @@ import { Colors } from '../constants/Colors';
 const Stack = createNativeStackNavigator();
 const Tab = createBottomTabNavigator();
 
-function BottomTabs() {
-  return (
-    <Tab.Navigator
-      screenOptions={({ route }) => ({
-        headerShown: false,
-        tabBarActiveTintColor: Colors.primary,
-        tabBarInactiveTintColor: Colors.textSecondary,
-        tabBarStyle: {
-          backgroundColor: Colors.surface,
-          borderTopColor: Colors.border,
-          elevation: 0,
-          shadowOpacity: 0.1,
-          height: 70,
-          paddingBottom: 12,
-          paddingTop: 12,
-        },
-        tabBarIcon: ({ color, size }) => {
-          let iconName = '';
-          if (route.name === 'Dashboard') iconName = 'dashboard';
-          else if (route.name === 'History') iconName = 'history';
-          else if (route.name === 'Profile') iconName = 'person';
-          return <Icon name={iconName} size={size + 2} color={color} />;
-        },
-      })}
-    >
-      <Tab.Screen name="Dashboard" component={Dashboard} />
-      <Tab.Screen name="History" component={History} />
-      <Tab.Screen name="Profile" component={Profile} />
-    </Tab.Navigator>
-  );
-}
 
 export default function AppNavigator() {
   return (
@@ -62,7 +34,12 @@ export default function AppNavigator() {
       <Stack.Navigator screenOptions={{ headerShown: false }} initialRouteName="Splash">
         <Stack.Screen name="Splash" component={Splash} />
         <Stack.Screen name="Login" component={Login} />
-        <Stack.Screen name="MainTabs" component={BottomTabs} />
+        <Stack.Screen name="Dashboard" component={Dashboard} />
+        <Stack.Screen name="ClassesList" component={ClassesList} />
+        <Stack.Screen name="StudentDirectoryList" component={StudentDirectoryList} />
+        <Stack.Screen name="StudentProfile" component={StudentProfile} />
+        <Stack.Screen name="History" component={History} />
+        <Stack.Screen name="Profile" component={Profile} />
         <Stack.Screen name="Attendance" component={Attendance} />
         <Stack.Screen name="Success" component={Success} />
         <Stack.Screen name="Notifications" component={Notifications} />

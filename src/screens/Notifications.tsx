@@ -1,13 +1,36 @@
 import React from 'react';
-import { View, Text, StyleSheet, SafeAreaView, Platform, StatusBar } from 'react-native';
+import { View, Text, StyleSheet, Platform, StatusBar } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import Animated, { FadeInUp } from 'react-native-reanimated';
 import Icon from 'react-native-vector-icons/MaterialIcons';
 import { Colors } from '../constants/Colors';
 import { TouchableOpacity } from 'react-native';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useFocusEffect } from '@react-navigation/native';
+import BreatheLoader from '../components/BreatheLoader';
 
 export default function Notifications() {
   const navigation = useNavigation<any>();
+  const [loading, setLoading] = React.useState(true);
+
+  useFocusEffect(
+    React.useCallback(() => {
+      setLoading(true);
+      const timer = setTimeout(() => {
+        setLoading(false);
+      }, 1000);
+      return () => clearTimeout(timer);
+    }, [])
+  );
+
+  if (loading) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={{ flex: 1, justifyContent: 'center' }}>
+          <BreatheLoader message="Loading notifications..." />
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={styles.container}>
@@ -35,7 +58,7 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: Colors.background,
-    paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight : 0,
+    
   },
   header: {
     flexDirection: 'row',

@@ -1,13 +1,27 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, SafeAreaView, TouchableOpacity, Platform, StatusBar, ScrollView, Switch } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Platform, StatusBar, ScrollView, Switch } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/MaterialIcons';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { Colors } from '../constants/Colors';
 import Animated, { FadeInUp } from 'react-native-reanimated';
+import BreatheLoader from '../components/BreatheLoader';
 
 export default function Settings() {
   const navigation = useNavigation<any>();
   
+  const [loading, setLoading] = useState(true);
+
+  useFocusEffect(
+    React.useCallback(() => {
+      setLoading(true);
+      const timer = setTimeout(() => {
+        setLoading(false);
+      }, 1000);
+      return () => clearTimeout(timer);
+    }, [])
+  );
+
   const [pushEnabled, setPushEnabled] = useState(true);
   const [smsEnabled, setSmsEnabled] = useState(true);
   const [darkMode, setDarkMode] = useState(false);
@@ -42,6 +56,16 @@ export default function Settings() {
       <Icon name="chevron-right" size={24} color={Colors.border} />
     </TouchableOpacity>
   );
+
+  if (loading) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={{ flex: 1, justifyContent: 'center' }}>
+          <BreatheLoader message="Loading settings..." />
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={styles.container}>
@@ -114,6 +138,25 @@ export default function Settings() {
               <Text style={styles.destructiveText}>Clear App Cache</Text>
             </TouchableOpacity>
           </View>
+
+          <Text style={styles.sectionTitle}>Support</Text>
+          <View style={styles.card}>
+            <TouchableOpacity style={styles.settingRow} onPress={() => navigation.navigate('HelpSupport')}>
+              <View style={[styles.iconBox, { backgroundColor: '#F1F5F9' }]}>
+                <Icon name="help-outline" size={24} color="#64748B" />
+              </View>
+              <Text style={[styles.settingTitle, { flex: 1 }]}>Help & Support</Text>
+              <Icon name="chevron-right" size={24} color={Colors.border} />
+            </TouchableOpacity>
+            <View style={styles.divider} />
+            <TouchableOpacity style={styles.settingRow} onPress={() => navigation.navigate('About')}>
+              <View style={[styles.iconBox, { backgroundColor: '#F1F5F9' }]}>
+                <Icon name="info-outline" size={24} color="#64748B" />
+              </View>
+              <Text style={[styles.settingTitle, { flex: 1 }]}>About ClassTrack</Text>
+              <Icon name="chevron-right" size={24} color={Colors.border} />
+            </TouchableOpacity>
+          </View>
           
         </Animated.View>
       </ScrollView>
@@ -122,7 +165,7 @@ export default function Settings() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: Colors.background, paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight : 0 },
+  container: { flex: 1, backgroundColor: Colors.background },
   header: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 24, paddingVertical: 16, backgroundColor: Colors.surface, borderBottomWidth: 1, borderBottomColor: Colors.border },
   backBtn: { padding: 10, backgroundColor: Colors.background, borderRadius: 10, marginRight: 16, borderWidth: 1, borderColor: Colors.border },
   headerTitle: { fontSize: 24, fontWeight: '800', color: Colors.text },

@@ -1,10 +1,12 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, SafeAreaView, NativeModules, PermissionsAndroid, Platform, Alert, TextInput, StatusBar } from 'react-native';
+import { View, Text, StyleSheet, FlatList, TouchableOpacity, NativeModules, PermissionsAndroid, Platform, Alert, TextInput, StatusBar, Modal } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import Animated, { FadeInRight, FadeInUp, FadeInDown, Layout } from 'react-native-reanimated';
 import Icon from 'react-native-vector-icons/MaterialIcons';
 import { Colors } from '../constants/Colors';
 import { API_BASE_URL } from '../constants/Config';
+import BreatheLoader from '../components/BreatheLoader';
 
 export default function Attendance() {
   const navigation = useNavigation<any>();
@@ -14,6 +16,7 @@ export default function Attendance() {
   const [students, setStudents] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [absentInput, setAbsentInput] = useState('');
+  const [fastMarkModalVisible, setFastMarkModalVisible] = useState(false);
 
   React.useEffect(() => {
     fetch(`${API_BASE_URL}/students?section=${classDetails.className}`)
@@ -23,7 +26,7 @@ export default function Attendance() {
           id: s.roll_no || s.rollNo,
           db_id: s.id,
           name: s.name,
-          phone: s.parentPhone,
+          phone: s.parentPhone || s.parent_phone,
           isAbsent: false,
           isOnDuty: false
         }));
@@ -36,28 +39,46 @@ export default function Attendance() {
       });
   }, [classDetails.className]);
 
+  const sortStudents = (list: any[]) => {
+    return [...list].sort((a, b) => {
+      const aIsMarked = a.isAbsent || a.isOnDuty;
+      const bIsMarked = b.isAbsent || b.isOnDuty;
+      if (aIsMarked && !bIsMarked) return -1;
+      if (!aIsMarked && bIsMarked) return 1;
+      return String(a.id).localeCompare(String(b.id));
+    });
+  };
+
   const markStatus = (id: string, status: 'present' | 'absent' | 'onduty') => {
-    setStudents(prev => 
-      prev.map(s => s.id === id ? { 
+    setStudents(prev => {
+      const updated = prev.map(s => s.id === id ? { 
         ...s, 
         isAbsent: status === 'absent', 
         isOnDuty: status === 'onduty' 
-      } : s)
-    );
+      } : s);
+      return sortStudents(updated);
+    });
   };
 
   const handleFastMark = () => {
     if (absentInput.trim().length === 0) return;
+    setFastMarkModalVisible(true);
+  };
+
+  const applyFastMark = (status: 'present' | 'absent' | 'onduty') => {
     const identifiers = absentInput.split(',').map(s => s.trim()).filter(s => s.length > 0);
-    
-    setStudents(prev => prev.map(student => {
-      const isMarkedByInput = identifiers.some(id => student.id.endsWith(id));
-      if (isMarkedByInput) {
-        return { ...student, isAbsent: true, isOnDuty: false };
-      }
-      return student;
-    }));
+    setStudents(prev => {
+      const updated = prev.map(student => {
+        const isMarkedByInput = identifiers.some(id => String(student.id).endsWith(id));
+        if (isMarkedByInput) {
+          return { ...student, isAbsent: status === 'absent', isOnDuty: status === 'onduty' };
+        }
+        return student;
+      });
+      return sortStudents(updated);
+    });
     setAbsentInput(''); // Clear it out after marking
+    setFastMarkModalVisible(false);
   };
 
   const handleSubmit = async () => {
@@ -111,11 +132,11 @@ export default function Attendance() {
       console.error(err);
     }
 
-    navigation.navigate('Success');
+    navigation.navigate('Success', { absentStudents, classDetails });
   };
 
   const renderStudent = ({ item, index }: { item: any, index: number }) => (
-    <Animated.View entering={FadeInRight.delay(index * 50).duration(300)}>
+    <View>
       <View style={styles.studentCard}>
         <View style={styles.studentInfo}>
           <Text style={styles.studentName}>{item.name}</Text>
@@ -142,19 +163,30 @@ export default function Attendance() {
           </TouchableOpacity>
         </View>
       </View>
-    </Animated.View>
+    </View>
   );
+
+  if (loading) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={{ flex: 1, justifyContent: 'center' }}>
+          <BreatheLoader message="Loading student list..." />
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
-          <Icon name="arrow-back" size={24} color={Colors.text} />
-        </TouchableOpacity>
-        <View style={styles.headerTitleContainer}>
+        <View style={styles.headerTop}>
+          <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
+            <Icon name="arrow-back" size={28} color={Colors.text} />
+          </TouchableOpacity>
           <Text style={styles.title}>{classDetails.className}</Text>
-          <Text style={styles.subtitle}>{classDetails.subject}</Text>
+          <View style={{ width: 28 }} />
         </View>
+        <Text style={styles.subtitle}>{classDetails.subject}</Text>
       </View>
 
       <View style={styles.listContainer}>
@@ -171,6 +203,7 @@ export default function Attendance() {
             />
             <TouchableOpacity style={styles.fastMarkBtn} onPress={handleFastMark}>
               <Text style={styles.fastMarkBtnText}>Mark</Text>
+              <Icon name="keyboard-arrow-down" size={16} color="#ffffff" style={{ marginLeft: 4 }} />
             </TouchableOpacity>
           </View>
         </Animated.View>
@@ -190,18 +223,14 @@ export default function Attendance() {
           </View>
         </Animated.View>
 
-        {loading ? (
-          <Text style={{ textAlign: 'center', marginTop: 20, color: Colors.textSecondary }}>Loading live students...</Text>
-        ) : (
-          <Animated.FlatList
-            data={students}
-            keyExtractor={(item: any) => item.id}
-            renderItem={renderStudent}
-            showsVerticalScrollIndicator={false}
-            contentContainerStyle={{ paddingBottom: 20 }}
-            itemLayoutAnimation={Layout.springify()}
-          />
-        )}
+        <Animated.FlatList
+          data={students}
+          keyExtractor={(item: any) => item.id}
+          renderItem={renderStudent}
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={{ paddingBottom: 20 }}
+          itemLayoutAnimation={Layout.springify()}
+        />
       </View>
 
       <View style={styles.footer}>
@@ -209,6 +238,35 @@ export default function Attendance() {
           <Text style={styles.submitText}>Submit & Send SMS</Text>
         </TouchableOpacity>
       </View>
+
+      {/* CUSTOM FAST MARK MODAL */}
+      <Modal transparent visible={fastMarkModalVisible} animationType="fade">
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalCard}>
+            <Text style={styles.modalTitle}>Apply Fast Marking</Text>
+            <Text style={styles.modalSubtitle}>Select attendance status for entered students.</Text>
+            
+            <View style={styles.modalOptionsContainer}>
+              <TouchableOpacity style={[styles.modalOptionBtn, { backgroundColor: Colors.success }]} onPress={() => applyFastMark('present')}>
+                <Icon name="check-circle" size={24} color="#fff" />
+                <Text style={styles.modalOptionText}>Present</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={[styles.modalOptionBtn, { backgroundColor: Colors.error }]} onPress={() => applyFastMark('absent')}>
+                <Icon name="cancel" size={24} color="#fff" />
+                <Text style={styles.modalOptionText}>Absent</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={[styles.modalOptionBtn, { backgroundColor: Colors.primary }]} onPress={() => applyFastMark('onduty')}>
+                <Icon name="business-center" size={24} color="#fff" />
+                <Text style={styles.modalOptionText}>On Duty (OD)</Text>
+              </TouchableOpacity>
+            </View>
+
+            <TouchableOpacity style={styles.modalCancelBtn} onPress={() => setFastMarkModalVisible(false)}>
+              <Text style={styles.modalCancelText}>Cancel</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -217,38 +275,35 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: Colors.surface, // Clean white header
-    paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight : 0,
+    
   },
   header: {
-    flexDirection: 'row',
-    alignItems: 'center',
     paddingHorizontal: 24,
     paddingVertical: 16,
+    backgroundColor: '#ffffff',
     borderBottomWidth: 1,
-    borderBottomColor: Colors.border,
+    borderBottomColor: '#F1F5F9',
   },
-  backButton: {
-    paddingVertical: 10,
-    paddingHorizontal: 10,
-    backgroundColor: Colors.background,
-    borderRadius: 10,
-    marginRight: 16,
-    borderWidth: 1,
-    borderColor: Colors.border,
+  headerTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
   },
-  headerTitleContainer: {
-    flex: 1,
+  backBtn: {
+    padding: 4,
+    marginLeft: -4,
   },
   title: {
-    fontSize: 24,
+    fontSize: 22,
     fontWeight: '800',
-    color: Colors.text,
+    color: '#0F172A',
   },
   subtitle: {
     fontSize: 14,
-    color: Colors.textSecondary,
+    color: '#64748B',
     fontWeight: '600',
-    marginTop: 4,
+    marginTop: 8,
+    textAlign: 'center',
   },
   fastInputContainer: {
     marginBottom: 20,
@@ -275,12 +330,13 @@ const styles = StyleSheet.create({
     marginRight: 10,
   },
   fastMarkBtn: {
-    backgroundColor: Colors.error,
+    backgroundColor: Colors.primary,
     paddingVertical: 10,
     paddingHorizontal: 16,
     borderRadius: 10,
     justifyContent: 'center',
     alignItems: 'center',
+    flexDirection: 'row',
   },
   fastMarkBtnText: {
     color: '#ffffff',
@@ -400,5 +456,14 @@ const styles = StyleSheet.create({
     color: '#ffffff',
     fontSize: 16,
     fontWeight: '800',
-  }
+  },
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(15, 23, 42, 0.6)', justifyContent: 'center', alignItems: 'center', padding: 24 },
+  modalCard: { backgroundColor: '#ffffff', borderRadius: 24, padding: 24, width: '100%', shadowColor: '#000', shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.2, shadowRadius: 20, elevation: 10 },
+  modalTitle: { fontSize: 22, fontWeight: '800', color: '#0F172A', marginBottom: 8, textAlign: 'center' },
+  modalSubtitle: { fontSize: 14, color: '#64748B', textAlign: 'center', marginBottom: 24, lineHeight: 20 },
+  modalOptionsContainer: { width: '100%', marginBottom: 16 },
+  modalOptionBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 14, borderRadius: 12, marginBottom: 12 },
+  modalOptionText: { color: '#ffffff', fontWeight: '700', fontSize: 16, marginLeft: 8 },
+  modalCancelBtn: { width: '100%', paddingVertical: 14, backgroundColor: '#F1F5F9', borderRadius: 12, alignItems: 'center' },
+  modalCancelText: { color: '#64748B', fontWeight: '700', fontSize: 15 }
 });
