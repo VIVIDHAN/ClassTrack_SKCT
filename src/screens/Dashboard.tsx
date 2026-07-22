@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, FlatList, TouchableOpacity, Platform, StatusBar, Image, ScrollView, Dimensions, Pressable, Modal } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -57,8 +57,44 @@ export default function Dashboard() {
       };
       
       loadDashboard();
+      
+      // Update current time every minute to keep UI in sync
+      const timer = setInterval(() => {
+        setCurrentTime(new Date());
+      }, 60000);
+      
+      return () => clearInterval(timer);
     }, [])
   );
+  
+  const [currentTime, setCurrentTime] = useState(new Date());
+
+  const getClassStatus = (period: number) => {
+    const timeSlots = [
+      { start: '08:45', end: '09:40' },
+      { start: '09:40', end: '10:35' },
+      { start: '10:50', end: '11:45' },
+      { start: '11:45', end: '12:40' },
+      { start: '13:30', end: '14:25' },
+      { start: '14:25', end: '15:20' },
+      { start: '15:20', end: '16:15' }
+    ];
+    if (period < 1 || period > 7) return 'upcoming';
+    
+    const slot = timeSlots[period - 1];
+    const currentMinutes = currentTime.getHours() * 60 + currentTime.getMinutes();
+    
+    const [startH, startM] = slot.start.split(':').map(Number);
+    const startMinutes = startH * 60 + startM;
+    
+    const [endH, endM] = slot.end.split(':').map(Number);
+    const endMinutes = endH * 60 + endM;
+    
+    if (currentMinutes < startMinutes) return 'upcoming';
+    if (currentMinutes > endMinutes) return 'past';
+    return 'ongoing';
+  };
+
   return (
     <SafeAreaView style={styles.container}>
       {/* Header */}
@@ -128,19 +164,35 @@ export default function Dashboard() {
               // Convert period to roughly time slot
               const timeSlots = ['08:45 AM - 09:40 AM', '09:40 AM - 10:35 AM', '10:50 AM - 11:45 AM', '11:45 AM - 12:40 PM', '01:30 PM - 02:25 PM', '02:25 PM - 03:20 PM', '03:20 PM - 04:15 PM'];
               const timeString = timeSlots[cls.period - 1] || `Period ${cls.period}`;
+              const status = getClassStatus(cls.period);
+              const isPast = status === 'past';
+              const isOngoing = status === 'ongoing';
               
               return (
-                <View key={cls.id} style={[styles.upcomingCard, { marginBottom: 16 }]}>
+                <View key={cls.id} style={[
+                  styles.upcomingCard, 
+                  { marginBottom: 16 },
+                  isPast && { opacity: 0.5, backgroundColor: '#F8FAFC' },
+                  isOngoing && { borderColor: Colors.primary, borderWidth: 2, shadowColor: Colors.primary, shadowOpacity: 0.15 }
+                ]}>
                   <View style={styles.upcomingHeader}>
                     <View style={styles.upcomingBadge}>
                       <Icon name="schedule" size={16} color={Colors.primary} style={{ marginRight: 4 }} />
                       <Text style={styles.upcomingBadgeText}>{timeString}</Text>
                     </View>
-                    <View style={[styles.attendanceBadge, { backgroundColor: '#3B82F6' }]}>
-                      <Text style={styles.attendanceBadgeText}>{cls.section}</Text>
+                    <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                      {isOngoing && (
+                        <View style={[styles.attendanceBadge, { backgroundColor: '#EF4444', marginRight: 8, flexDirection: 'row', alignItems: 'center' }]}>
+                          <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: '#ffffff', marginRight: 4 }} />
+                          <Text style={styles.attendanceBadgeText}>ONGOING</Text>
+                        </View>
+                      )}
+                      <View style={[styles.attendanceBadge, { backgroundColor: isPast ? '#94A3B8' : '#3B82F6' }]}>
+                        <Text style={styles.attendanceBadgeText}>{cls.section}</Text>
+                      </View>
                     </View>
                   </View>
-                  <Text style={styles.upcomingSubject}>{cls.Subject ? cls.Subject.title : 'Subject'}</Text>
+                  <Text style={[styles.upcomingSubject, isPast && { color: '#64748B' }]}>{cls.Subject ? cls.Subject.title : 'Subject'}</Text>
                   <View style={styles.upcomingFooter}>
                     <View style={styles.footerItem}>
                       <Icon name="badge" size={20} color="#64748B" />
