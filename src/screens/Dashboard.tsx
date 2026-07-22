@@ -171,10 +171,9 @@ export default function Dashboard() {
       </View>
 
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 120 }}>
-        {/* Welcome Banner */}
         <Animated.View entering={FadeInUp.delay(100).duration(500)} style={styles.welcomeContainer}>
           <LinearGradient 
-            colors={['#ffffff', '#FFF5ED']} 
+            colors={['#F97316', '#EA580C']} 
             start={{ x: 0, y: 0 }} 
             end={{ x: 1, y: 1 }} 
             style={styles.welcomeCard}
@@ -297,7 +296,12 @@ export default function Dashboard() {
 
         {/* Notification Overview */}
         <Animated.View entering={FadeInUp.delay(250).duration(500)} style={styles.overviewSection}>
-          <View style={styles.notificationCard}>
+          <LinearGradient 
+            colors={['#ffffff', '#FFF5ED']} 
+            start={{ x: 0, y: 0 }} 
+            end={{ x: 1, y: 1 }} 
+            style={styles.notificationCard}
+          >
             <View style={styles.notificationHeader}>
                <Text style={styles.notificationTitle}>Notification Overview</Text>
                <TouchableOpacity style={styles.todayDropdown}>
@@ -330,8 +334,8 @@ export default function Dashboard() {
                    <Text style={styles.statLabelLarge}>Absent</Text>
                  </View>
                </View>
-            </View>
-          </View>
+             </View>
+          </LinearGradient>
         </Animated.View>
 
         {/* Daily Wisdom */}
@@ -399,10 +403,10 @@ const styles = StyleSheet.create({
   notificationDot: { position: 'absolute', top: 12, right: 12, width: 10, height: 10, borderRadius: 5, backgroundColor: '#DC2626', borderWidth: 2, borderColor: '#FFF5ED' },
   
   welcomeContainer: { paddingHorizontal: 24, paddingTop: 16, paddingBottom: 16 },
-  welcomeCard: { borderRadius: 32, padding: 32, shadowColor: '#EA580C', shadowOffset: { width: 0, height: 12 }, shadowOpacity: 0.1, shadowRadius: 24, elevation: 12, minHeight: 200, borderWidth: 1, borderColor: '#FFF5ED' },
-  greeting: { fontFamily: 'Poppins-Medium', fontSize: 12, color: '#94A3B8', marginBottom: 4, letterSpacing: 2, textTransform: 'uppercase' },
-  name: { fontFamily: 'Poppins-Bold', fontSize: 32, color: '#0F172A', marginBottom: 20, letterSpacing: -0.5 },
-  departmentBadge: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#FFF5ED', paddingHorizontal: 16, paddingVertical: 10, borderRadius: 12, alignSelf: 'flex-start' },
+  welcomeCard: { borderRadius: 32, padding: 32, shadowColor: '#EA580C', shadowOffset: { width: 0, height: 12 }, shadowOpacity: 0.3, shadowRadius: 24, elevation: 12, minHeight: 200 },
+  greeting: { fontFamily: 'Poppins-Medium', fontSize: 12, color: 'rgba(255,255,255,0.8)', marginBottom: 4, letterSpacing: 2, textTransform: 'uppercase' },
+  name: { fontFamily: 'Poppins-Bold', fontSize: 32, color: '#ffffff', marginBottom: 20, letterSpacing: -0.5 },
+  departmentBadge: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#ffffff', paddingHorizontal: 16, paddingVertical: 10, borderRadius: 12, alignSelf: 'flex-start', shadowColor: '#000', shadowOffset: {width: 0, height: 4}, shadowOpacity: 0.05, shadowRadius: 8 },
   departmentText: { fontFamily: 'Poppins-Bold', fontSize: 13, color: '#EA580C' },
 
   scheduleSection: { paddingHorizontal: 24, marginTop: 24 },
@@ -432,7 +436,7 @@ const styles = StyleSheet.create({
   seeAllText: { fontFamily: 'Poppins-Bold', color: '#F97316', fontSize: 15 },
 
   overviewSection: { paddingHorizontal: 24, marginTop: 24 },
-  notificationCard: { backgroundColor: '#ffffff', borderRadius: 28, padding: 24, shadowColor: '#0F172A', shadowOffset: { width: 0, height: 12 }, shadowOpacity: 0.05, shadowRadius: 24, elevation: 8, borderWidth: 1, borderColor: '#F1F5F9' },
+  notificationCard: { borderRadius: 28, padding: 24, shadowColor: '#EA580C', shadowOffset: { width: 0, height: 12 }, shadowOpacity: 0.1, shadowRadius: 24, elevation: 8, borderWidth: 1, borderColor: '#FFF5ED' },
   notificationHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 },
   notificationTitle: { fontFamily: 'Poppins-Bold', fontSize: 18, color: '#0F172A' },
   todayDropdown: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#F8FAFC', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 16 },
