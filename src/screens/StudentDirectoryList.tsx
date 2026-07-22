@@ -39,15 +39,20 @@ export default function StudentDirectoryList() {
     fetchStudents();
   }, [classDetails.className]);
 
-  // Logic to bring matched students to the top if query length >= 3
+  // Logic to bring matched students to the top (supports comma-separated queries)
   const displayedStudents = useMemo(() => {
-    if (searchQuery.trim().length < 3) {
+    if (searchQuery.trim().length === 0) {
       return students;
     }
-    const query = searchQuery.toLowerCase().trim();
+    const queries = searchQuery.toLowerCase().split(',').map(q => q.trim()).filter(q => q.length >= 3);
+    
+    if (queries.length === 0) {
+      return students;
+    }
+
     return [...students].sort((a, b) => {
-      const aMatch = a.roll_no.toLowerCase().includes(query) || a.name.toLowerCase().includes(query);
-      const bMatch = b.roll_no.toLowerCase().includes(query) || b.name.toLowerCase().includes(query);
+      const aMatch = queries.some(q => a.roll_no.toLowerCase().includes(q) || a.name.toLowerCase().includes(q));
+      const bMatch = queries.some(q => b.roll_no.toLowerCase().includes(q) || b.name.toLowerCase().includes(q));
       if (aMatch && !bMatch) return -1;
       if (!aMatch && bMatch) return 1;
       return 0;
@@ -56,10 +61,11 @@ export default function StudentDirectoryList() {
 
   // Auto-mark matched students as absent when typing
   useEffect(() => {
-    const query = searchQuery.toLowerCase().trim();
-    if (query.length >= 3) {
+    const queries = searchQuery.toLowerCase().split(',').map(q => q.trim()).filter(q => q.length >= 3);
+    
+    if (queries.length > 0) {
       const matched = students.filter(s => 
-        s.roll_no.toLowerCase().includes(query) || s.name.toLowerCase().includes(query)
+        queries.some(q => s.roll_no.toLowerCase().includes(q) || s.name.toLowerCase().includes(q))
       );
       
       if (matched.length > 0) {
