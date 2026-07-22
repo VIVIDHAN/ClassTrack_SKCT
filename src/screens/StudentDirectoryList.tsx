@@ -54,6 +54,30 @@ export default function StudentDirectoryList() {
     });
   }, [students, searchQuery]);
 
+  // Auto-mark matched students as absent when typing
+  useEffect(() => {
+    const query = searchQuery.toLowerCase().trim();
+    if (query.length >= 3) {
+      const matched = students.filter(s => 
+        s.roll_no.toLowerCase().includes(query) || s.name.toLowerCase().includes(query)
+      );
+      
+      if (matched.length > 0) {
+        setMarkedAbsentees(prev => {
+          const next = new Set(prev);
+          let changed = false;
+          matched.forEach(m => {
+            if (!next.has(m.roll_no)) {
+              next.add(m.roll_no);
+              changed = true;
+            }
+          });
+          return changed ? next : prev;
+        });
+      }
+    }
+  }, [searchQuery, students]);
+
   const toggleAttendance = (roll_no: string) => {
     setMarkedAbsentees(prev => {
       const next = new Set(prev);
