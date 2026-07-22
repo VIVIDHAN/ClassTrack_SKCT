@@ -167,25 +167,23 @@ export default function Dashboard() {
         <Animated.View entering={FadeInUp.delay(150).duration(500)} style={styles.upcomingContainer}>
           <Text style={styles.sectionTitleLabel}>Today's Schedule</Text>
           
-          {classes.length === 0 ? (
+          {classes.filter(cls => getClassStatus(cls.period) !== 'past').length === 0 ? (
              <View style={[styles.upcomingCard, { alignItems: 'center', padding: 30 }]}>
                <Icon name="event-available" size={48} color="#CBD5E1" />
-               <Text style={{ marginTop: 10, color: '#64748B', fontWeight: '600' }}>No classes scheduled for today.</Text>
+               <Text style={{ marginTop: 10, color: '#64748B', fontWeight: '600' }}>No more classes scheduled for today.</Text>
              </View>
           ) : (
-            classes.map((cls, index) => {
+            classes.filter(cls => getClassStatus(cls.period) !== 'past').map((cls, index) => {
               // Convert period to roughly time slot
               const timeSlots = ['08:45 AM - 09:40 AM', '09:40 AM - 10:35 AM', '10:50 AM - 11:45 AM', '11:45 AM - 12:40 PM', '01:30 PM - 02:25 PM', '02:25 PM - 03:20 PM', '03:20 PM - 04:15 PM'];
               const timeString = timeSlots[cls.period - 1] || `Period ${cls.period}`;
               const status = getClassStatus(cls.period);
-              const isPast = status === 'past';
               const isOngoing = status === 'ongoing';
               
               return (
                 <View key={cls.id} style={[
                   styles.upcomingCard, 
                   { marginBottom: 16 },
-                  isPast && { opacity: 0.5, backgroundColor: '#F8FAFC' },
                   isOngoing && { borderColor: Colors.primary, borderWidth: 2, shadowColor: Colors.primary, shadowOpacity: 0.15 }
                 ]}>
                   <View style={styles.upcomingHeader}>
@@ -200,12 +198,12 @@ export default function Dashboard() {
                           <Text style={styles.attendanceBadgeText}>ONGOING</Text>
                         </View>
                       )}
-                      <View style={[styles.attendanceBadge, { backgroundColor: isPast ? '#94A3B8' : '#3B82F6' }]}>
+                      <View style={[styles.attendanceBadge, { backgroundColor: '#3B82F6' }]}>
                         <Text style={styles.attendanceBadgeText}>{cls.section}</Text>
                       </View>
                     </View>
                   </View>
-                  <Text style={[styles.upcomingSubject, isPast && { color: '#64748B' }]}>{cls.Subject ? cls.Subject.title : 'Subject'}</Text>
+                  <Text style={styles.upcomingSubject}>{cls.Subject ? cls.Subject.title : 'Subject'}</Text>
                   <View style={styles.upcomingFooter}>
                     <View style={styles.footerItem}>
                       <Icon name="badge" size={20} color="#64748B" />
