@@ -42,8 +42,13 @@ const Timetable = sequelize.define('Timetable', {
   section: { type: DataTypes.STRING, allowNull: false }
 });
 
+const Quote = sequelize.define('Quote', {
+  id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
+  text: { type: DataTypes.STRING, allowNull: false }
+});
+
 // Relationships
 Timetable.belongsTo(Subject, { foreignKey: 'subject_id' });
 Timetable.belongsTo(Teacher, { foreignKey: 'teacher_id' });
 
-module.exports = { sequelize, Teacher, Student, Subject, Timetable };
+module.exports = { sequelize, Teacher, Student, Subject, Timetable, Quote };

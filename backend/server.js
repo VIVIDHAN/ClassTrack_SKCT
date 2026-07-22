@@ -1,7 +1,7 @@
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
-const { sequelize, Teacher, Student, Subject, Timetable } = require('./db');
+const { sequelize, Teacher, Student, Subject, Timetable, Quote } = require('./db');
 
 const app = express();
 app.use(cors());
@@ -57,7 +57,17 @@ app.get('/api/students', async (req, res) => {
   }
 });
 
-
+// 3. Get Daily Quote
+app.get('/api/quote/daily', async (req, res) => {
+  try {
+    const quote = await Quote.findOne({
+      order: sequelize.random()
+    });
+    res.json(quote);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
 
 const PORT = process.env.PORT || 3000;
 

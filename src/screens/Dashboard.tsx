@@ -33,6 +33,7 @@ export default function Dashboard() {
   };
 
   const [classes, setClasses] = useState<any[]>([]);
+  const [dailyQuote, setDailyQuote] = useState("The beautiful thing about learning is that no one can take it away from you.");
 
   useFocusEffect(
     React.useCallback(() => {
@@ -50,6 +51,18 @@ export default function Dashboard() {
             const response = await fetch(`${API_BASE_URL}/timetable?day=${day}&teacher_id=${profile.id}`);
             const data = await response.json();
             setClasses(Array.isArray(data) ? data : []);
+            
+            try {
+              const quoteRes = await fetch(`${API_BASE_URL}/quote/daily`);
+              if (quoteRes.ok) {
+                const quoteData = await quoteRes.json();
+                if (quoteData && quoteData.text) {
+                  setDailyQuote(quoteData.text);
+                }
+              }
+            } catch (qErr) {
+              console.log('Could not load daily quote', qErr);
+            }
           }
         } catch (error) {
           console.error('Failed to load dashboard:', error);
@@ -215,8 +228,8 @@ export default function Dashboard() {
           <View style={styles.wisdomCard}>
             <Icon name="format-quote" size={36} color="rgba(255, 93, 56, 0.2)" style={styles.quoteIcon} />
             <Text style={styles.wisdomTitle}>Daily Wisdom</Text>
-            <Text style={styles.wisdomText}>"The beautiful thing about learning is that no one can take it away from you."</Text>
-            <Text style={styles.wisdomAuthor}>- B.B. King</Text>
+            <Text style={styles.wisdomText}>"{dailyQuote}"</Text>
+            <Text style={styles.wisdomAuthor}>- ClassTrack Inspiration</Text>
           </View>
         </Animated.View>
       </ScrollView>
