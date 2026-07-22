@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Platform, StatusBar, TextInput } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Platform, StatusBar, TextInput, Linking } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import Animated, { FadeInRight, Layout } from 'react-native-reanimated';
@@ -16,6 +16,7 @@ export default function StudentDirectoryList() {
   const [students, setStudents] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
+  const [markedAbsent, setMarkedAbsent] = useState<{[key: string]: boolean}>({});
 
   useEffect(() => {
     fetch(`${API_BASE_URL}/students?section=${classDetails.className}`)
@@ -25,7 +26,7 @@ export default function StudentDirectoryList() {
           id: s.roll_no || s.rollNo,
           db_id: s.id,
           name: s.name,
-          phone: s.parentPhone || s.parent_phone,
+          phone: s.test_parent_phone_number || s.parent_phone || s.parentPhone || '9876543210',
         }));
         setStudents(mapped);
         setLoading(false);
@@ -41,20 +42,24 @@ export default function StudentDirectoryList() {
     s.id.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
+  const handleMarkAbsent = (item: any) => {
+    const separator = Platform.OS === 'ios' ? '&' : '?';
+    const message = `Dear Parent, your ward ${item.name} is absent today from ${classDetails.className}.`;
+    const url = `sms:${item.phone}${separator}body=${encodeURIComponent(message)}`;
+    
+    Linking.openURL(url).then(() => {
+      setMarkedAbsent(prev => ({...prev, [item.id]: true}));
+    }).catch(err => {
+      console.error('Failed to open SMS app', err);
+    });
+  };
+
   const renderStudent = ({ item, index }: { item: any, index: number }) => {
-    let hash = 0;
-    for (let i = 0; i < item.id.length; i++) {
-      hash += item.id.charCodeAt(i);
-    }
-    const mockAttendance = 70 + (hash % 31);
+    const isAbsent = markedAbsent[item.id];
     
     return (
       <View>
-        <TouchableOpacity 
-          style={styles.studentCard}
-          onPress={() => navigation.navigate('StudentProfile', { student: item, classDetails })}
-          activeOpacity={0.7}
-        >
+        <View style={styles.studentCard}>
           <View style={styles.studentAvatar}>
             <Text style={styles.avatarText}>{item.name.charAt(0)}</Text>
           </View>
@@ -62,15 +67,20 @@ export default function StudentDirectoryList() {
             <Text style={styles.studentName}>{item.name}</Text>
             <Text style={styles.studentId}>{item.id}</Text>
           </View>
-          <View style={styles.attendanceBadge}>
-            <Text style={[
-              styles.attendanceText, 
-              { color: mockAttendance >= 85 ? Colors.success : mockAttendance >= 75 ? '#EAB308' : Colors.error }
-            ]}>
-              {mockAttendance}%
-            </Text>
-          </View>
-        </TouchableOpacity>
+          
+          {isAbsent ? (
+            <View style={[styles.attendanceBadge, { backgroundColor: '#DCFCE7', borderColor: '#86EFAC' }]}>
+              <Text style={[styles.attendanceText, { color: Colors.success }]}>SMS Sent</Text>
+            </View>
+          ) : (
+            <TouchableOpacity 
+              style={[styles.attendanceBadge, { backgroundColor: '#FEE2E2', borderColor: '#FECACA' }]}
+              onPress={() => handleMarkAbsent(item)}
+            >
+              <Text style={[styles.attendanceText, { color: Colors.error }]}>Absent</Text>
+            </TouchableOpacity>
+          )}
+        </View>
       </View>
     );
   };

@@ -144,24 +144,7 @@ export default function Dashboard() {
           </View>
         </Animated.View>
 
-        <View style={styles.gridContainer}>
-          <TouchableOpacity 
-            style={[styles.fullWidthCard, { backgroundColor: '#DCFCE7', borderColor: '#86EFAC' }]} 
-            onPress={() => navigation.navigate('ClassesList', { mode: 'directory' })}
-            activeOpacity={0.8}
-          >
-            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-              <View style={[styles.gridIconWrap, { backgroundColor: '#4ADE80', marginBottom: 0, marginRight: 16 }]}>
-                <Icon name="people" size={32} color="#ffffff" />
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.gridTitle}>Student Directory</Text>
-                <Text style={styles.gridSubtitle}>View student info and details</Text>
-              </View>
-              <Icon name="chevron-right" size={24} color="#4ADE80" />
-            </View>
-          </TouchableOpacity>
-        </View>
+
 
         {/* Upcoming Classes */}
         <Animated.View entering={FadeInUp.delay(150).duration(500)} style={styles.upcomingContainer}>
@@ -181,11 +164,18 @@ export default function Dashboard() {
               const isOngoing = status === 'ongoing';
               
               return (
-                <View key={cls.id} style={[
-                  styles.upcomingCard, 
-                  { marginBottom: 16 },
-                  isOngoing && { borderColor: Colors.primary, borderWidth: 2, shadowColor: Colors.primary, shadowOpacity: 0.15 }
-                ]}>
+                <TouchableOpacity 
+                  key={cls.id} 
+                  activeOpacity={0.8}
+                  onPress={() => navigation.navigate('StudentDirectoryList', { 
+                    classDetails: { subject: cls.Subject ? cls.Subject.title : 'Subject', className: cls.section } 
+                  })}
+                  style={[
+                    styles.upcomingCard, 
+                    { marginBottom: 16 },
+                    isOngoing && { borderColor: Colors.primary, borderWidth: 2, shadowColor: Colors.primary, shadowOpacity: 0.15 }
+                  ]}
+                >
                   <View style={styles.upcomingHeader}>
                     <View style={styles.upcomingBadge}>
                       <Icon name="schedule" size={16} color={Colors.primary} style={{ marginRight: 4 }} />
@@ -215,7 +205,7 @@ export default function Dashboard() {
                       <Text style={styles.footerItemText}>{facultyDept} Block</Text>
                     </View>
                   </View>
-                </View>
+                </TouchableOpacity>
               );
             })
           )}
