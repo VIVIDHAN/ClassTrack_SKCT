@@ -1,12 +1,53 @@
 import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, SafeAreaView, Platform, StatusBar } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Platform, StatusBar, Modal } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import Icon from 'react-native-vector-icons/MaterialIcons';
 import { Colors } from '../constants/Colors';
-import { DUMMY_USER } from '../constants/DummyData';
-import { useNavigation } from '@react-navigation/native';
+import { API_BASE_URL } from '../constants/Config';
+import { useNavigation, useFocusEffect } from '@react-navigation/native';
+import BreatheLoader from '../components/BreatheLoader';
 
 export default function Profile() {
   const navigation = useNavigation<any>();
+  const [facultyName, setFacultyName] = React.useState('Faculty Member');
+  const [facultyEmail, setFacultyEmail] = React.useState('faculty@skct.edu.in');
+  const [facultyPhone, setFacultyPhone] = React.useState('+91 98765 43210');
+  const [loading, setLoading] = React.useState(true);
+  const [logoutModalVisible, setLogoutModalVisible] = React.useState(false);
+
+  useFocusEffect(
+    React.useCallback(() => {
+      setLoading(true);
+      fetch(`${API_BASE_URL}/timetable?day=1&section=III IT G`)
+        .then(res => res.json())
+        .then(data => {
+          if (data && data.length > 0 && data[0].Teacher) {
+            setFacultyName(data[0].Teacher.name);
+            if (data[0].Teacher.email) setFacultyEmail(data[0].Teacher.email);
+            if (data[0].Teacher.phone) setFacultyPhone(data[0].Teacher.phone);
+          }
+        })
+        .catch(err => console.log('Failed to fetch faculty profile:', err))
+        .finally(() => {
+          setTimeout(() => {
+            setLoading(false);
+          }, 1000);
+        });
+    }, [])
+  );
+
+  const handleLogout = async () => {
+    try {
+      await AsyncStorage.removeItem('userToken');
+      setLogoutModalVisible(false);
+      navigation.replace('Login');
+    } catch (e) {
+      console.log('Error logging out', e);
+      setLogoutModalVisible(false);
+      navigation.replace('Login');
+    }
+  };
 
   const MenuItem = ({ icon, title, subtitle, isDestructive = false, onPress }: any) => (
     <TouchableOpacity style={styles.menuItem} onPress={onPress} activeOpacity={0.7}>
@@ -15,16 +56,32 @@ export default function Profile() {
       </View>
       <View style={styles.menuTextContainer}>
         <Text style={[styles.menuTitle, { color: isDestructive ? '#EF4444' : '#0F172A' }]}>{title}</Text>
-        {subtitle && <Text style={styles.menuSubtitle}>{subtitle}</Text>}
+        {subtitle ? <Text style={styles.menuSubtitle}>{subtitle}</Text> : null}
       </View>
       {!isDestructive && <Icon name="chevron-right" size={24} color="#CBD5E1" />}
     </TouchableOpacity>
   );
 
+  if (loading) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={{ flex: 1, justifyContent: 'center' }}>
+          <BreatheLoader message="Loading profile..." />
+        </View>
+      </SafeAreaView>
+    );
+  }
+
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>My Account</Text>
+        <View style={styles.headerTop}>
+          <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
+            <Icon name="arrow-back" size={28} color={Colors.text} />
+          </TouchableOpacity>
+          <Text style={styles.title}>My Account</Text>
+          <View style={{ width: 28 }} />
+        </View>
       </View>
       
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
@@ -35,13 +92,10 @@ export default function Profile() {
             <Icon name="person" size={40} color={Colors.primary} />
           </View>
           <View style={styles.userInfo}>
-            <Text style={styles.userName}>{DUMMY_USER.name}</Text>
-            <Text style={styles.userEmail}>faculty@skct.edu.in</Text>
-            <Text style={styles.userPhone}>+91 98765 43210</Text>
+            <Text style={styles.userName}>{facultyName}</Text>
+            <Text style={styles.userEmail}>{facultyEmail}</Text>
+            <Text style={styles.userPhone}>{facultyPhone}</Text>
           </View>
-          <TouchableOpacity style={styles.editBtn}>
-            <Icon name="edit" size={20} color={Colors.primary} />
-          </TouchableOpacity>
         </View>
 
         {/* Menu Sections */}
@@ -54,26 +108,40 @@ export default function Profile() {
           <MenuItem icon="security" title="Security & Password" onPress={() => navigation.navigate('SecurityPassword')} />
         </View>
 
-        <Text style={styles.sectionTitle}>More</Text>
-        <View style={styles.menuCard}>
-          <MenuItem icon="settings" title="App Settings" subtitle="Theme, Notifications" onPress={() => navigation.navigate('Settings')} />
-          <View style={styles.divider} />
-          <MenuItem icon="help-outline" title="Help & Support" onPress={() => navigation.navigate('HelpSupport')} />
-          <View style={styles.divider} />
-          <MenuItem icon="info-outline" title="About ClassTrack" onPress={() => navigation.navigate('About')} />
-        </View>
-
         <View style={[styles.menuCard, { marginTop: 12 }]}>
           <MenuItem 
             icon="logout" 
             title="Log Out" 
             isDestructive={true} 
-            onPress={() => navigation.replace('Login')}
+            onPress={() => setLogoutModalVisible(true)}
           />
         </View>
         
         <Text style={styles.versionText}>App Version 1.0.0</Text>
       </ScrollView>
+
+      {/* CUSTOM LOGOUT MODAL */}
+      <Modal transparent visible={logoutModalVisible} animationType="fade">
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalCard}>
+            <View style={styles.modalIconBox}>
+              <Icon name="logout" size={32} color="#EF4444" />
+            </View>
+            <Text style={styles.modalTitle}>Confirm Logout</Text>
+            <Text style={styles.modalSubtitle}>Are you sure you want to log out of your session?</Text>
+            
+            <View style={styles.modalBtnRow}>
+              <TouchableOpacity style={styles.modalCancelBtn} onPress={() => setLogoutModalVisible(false)}>
+                <Text style={styles.modalCancelText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.modalConfirmBtn} onPress={handleLogout}>
+                <Text style={styles.modalConfirmText}>Log Out</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
     </SafeAreaView>
   );
 }
@@ -82,19 +150,27 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#F8FAFC',
-    paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight : 0,
+    
   },
   header: {
     paddingHorizontal: 24,
     paddingVertical: 16,
     backgroundColor: '#ffffff',
     borderBottomWidth: 1,
-    borderBottomColor: '#E2E8F0',
-    alignItems: 'center',
+    borderBottomColor: '#F1F5F9',
   },
-  headerTitle: {
-    fontSize: 18,
-    fontWeight: '700',
+  headerTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  backBtn: {
+    padding: 4,
+    marginLeft: -4,
+  },
+  title: {
+    fontSize: 22,
+    fontWeight: '800',
     color: '#0F172A',
   },
   scrollContent: {
@@ -207,4 +283,14 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     marginTop: 12,
   },
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(15, 23, 42, 0.6)', justifyContent: 'center', alignItems: 'center', padding: 24 },
+  modalCard: { backgroundColor: '#ffffff', borderRadius: 24, padding: 24, width: '100%', alignItems: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.2, shadowRadius: 20, elevation: 10 },
+  modalIconBox: { width: 64, height: 64, borderRadius: 32, backgroundColor: 'rgba(239, 68, 68, 0.1)', justifyContent: 'center', alignItems: 'center', marginBottom: 16 },
+  modalTitle: { fontSize: 20, fontWeight: '800', color: '#0F172A', marginBottom: 8 },
+  modalSubtitle: { fontSize: 14, color: '#64748B', textAlign: 'center', marginBottom: 24, lineHeight: 20 },
+  modalBtnRow: { flexDirection: 'row', width: '100%' },
+  modalCancelBtn: { flex: 1, paddingVertical: 14, backgroundColor: '#F1F5F9', borderRadius: 12, alignItems: 'center', marginRight: 8 },
+  modalCancelText: { color: '#64748B', fontWeight: '700', fontSize: 15 },
+  modalConfirmBtn: { flex: 1, paddingVertical: 14, backgroundColor: '#EF4444', borderRadius: 12, alignItems: 'center', marginLeft: 8 },
+  modalConfirmText: { color: '#ffffff', fontWeight: '700', fontSize: 15 }
 });

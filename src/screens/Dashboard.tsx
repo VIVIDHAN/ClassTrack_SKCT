@@ -1,368 +1,308 @@
-import React from 'react';
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, SafeAreaView, Platform, StatusBar } from 'react-native';
-import { useNavigation, useFocusEffect } from '@react-navigation/native';
-import Animated, { FadeInUp, FadeInRight } from 'react-native-reanimated';
-import Icon from 'react-native-vector-icons/MaterialIcons';
+import React, { useState } from 'react';
+import { View, Text, StyleSheet, FlatList, TouchableOpacity, Platform, StatusBar, Image, ScrollView, Dimensions, Pressable, Modal } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useNavigation, useFocusEffect } from '@react-navigation/native';
+import Animated, { FadeInUp, FadeInRight, SlideInLeft, SlideOutLeft, Easing } from 'react-native-reanimated';
+import Icon from 'react-native-vector-icons/MaterialIcons';
 import { Colors } from '../constants/Colors';
 import { API_BASE_URL } from '../constants/Config';
 
-// Time mappings based on the college timetable image
-const getPeriodTime = (period: number) => {
-  switch(period) {
-    case 1: return { label: '8:15 AM - 9:15 AM', start: 8.25, end: 9.25 };
-    case 2: return { label: '9:15 AM - 10:15 AM', start: 9.25, end: 10.25 };
-    case 3: return { label: '10:45 AM - 11:45 AM', start: 10.75, end: 11.75 };
-    case 4: return { label: '11:45 AM - 12:45 PM', start: 11.75, end: 12.75 };
-    case 5: return { label: '1:45 PM - 2:45 PM', start: 13.75, end: 14.75 };
-    default: return { label: 'Unknown', start: 0, end: 24 };
-  }
-};
+const { width, height } = Dimensions.get('window');
 
-const getClassStatus = (startHr: number, endHr: number) => {
-  const now = new Date();
-  const currentHr = now.getHours() + (now.getMinutes() / 60);
-  
-  if (currentHr > endHr) return 'completed';
-  if (currentHr >= startHr && currentHr <= endHr) return 'current';
-  return 'upcoming';
-};
+type ViewMode = 'grid' | 'classes';
 
 export default function Dashboard() {
   const navigation = useNavigation<any>();
-  const [classes, setClasses] = React.useState<any[]>([]);
-  const [loading, setLoading] = React.useState(true);
-  const [teacher, setTeacher] = React.useState<any>(null);
-  const [todayDay, setTodayDay] = React.useState(1);
+  
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [facultyName, setFacultyName] = useState('Faculty Member');
+  const [facultyDept, setFacultyDept] = useState('Loading...');
+  const [logoutModalVisible, setLogoutModalVisible] = useState(false);
+
+  const handleLogout = async () => {
+    try {
+      await AsyncStorage.removeItem('userToken');
+      setLogoutModalVisible(false);
+      navigation.replace('Login');
+    } catch (e) {
+      console.log('Error logging out', e);
+      setLogoutModalVisible(false);
+      navigation.replace('Login');
+    }
+  };
 
   useFocusEffect(
     React.useCallback(() => {
-      const loadDashboard = async () => {
-        try {
-          const profileStr = await AsyncStorage.getItem('teacherProfile');
-          if (!profileStr) {
-            navigation.replace('Login');
-            return;
+      fetch(`${API_BASE_URL}/timetable?day=1&section=III IT G`)
+        .then(res => res.json())
+        .then(data => {
+          if (data && data.length > 0 && data[0].Teacher) {
+            setFacultyName(data[0].Teacher.name);
+            setFacultyDept(data[0].Teacher.department || 'IT');
           }
-          const profile = JSON.parse(profileStr);
-          setTeacher(profile);
-
-          // Calculate day (1=Mon, 5=Fri). If weekend (0, 6), default to 1 for testing.
-          let day = new Date().getDay();
-          if (day === 0 || day === 6) day = 1; 
-          setTodayDay(day);
-
-          const res = await fetch(`${API_BASE_URL}/timetable?day=${day}&teacher_id=${profile.id}`);
-          const data = await res.json();
-
-          const mapped = data.map((item: any) => {
-            const timeInfo = getPeriodTime(item.period);
-            return {
-              id: String(item.id),
-              period: item.period,
-              timeLabel: timeInfo.label,
-              status: getClassStatus(timeInfo.start, timeInfo.end),
-              className: item.section,
-              subject: item.Subject.title,
-              timetable_id: item.id
-            };
-          });
-          
-          setClasses(mapped);
-        } catch (err) {
-          console.error('Error loading dashboard:', err);
-        } finally {
-          setLoading(false);
-        }
-      };
-
-      loadDashboard();
+        })
+        .catch(err => console.log('Failed to fetch faculty:', err));
     }, [])
   );
-
-  const renderClassItem = ({ item, index }: { item: any, index: number }) => {
-    const isCurrent = item.status === 'current';
-    const isCompleted = item.status === 'completed';
-
-    return (
-      <Animated.View entering={FadeInRight.delay(index * 100).duration(400)}>
-        <TouchableOpacity 
-          style={[
-            styles.classCard,
-            isCurrent && styles.currentClassCard,
-            isCompleted && styles.completedClassCard
-          ]}
-          activeOpacity={0.7}
-        >
-          <View style={styles.cardLeft}>
-            <View style={styles.timeRow}>
-              <Icon name="schedule" size={16} color={isCurrent ? Colors.primary : Colors.textSecondary} style={{ marginRight: 6 }} />
-              <Text style={[styles.classTime, isCurrent && { color: Colors.primary }]}>
-                {item.timeLabel} {isCurrent && '(Ongoing)'}
-              </Text>
-            </View>
-            <Text style={[styles.className, isCompleted && { color: Colors.textSecondary }]}>{item.className}</Text>
-            <Text style={styles.subjectName}>{item.subject}</Text>
-          </View>
-        </TouchableOpacity>
-      </Animated.View>
-    );
-  };
-
-  if (loading || !teacher) {
-    return (
-      <SafeAreaView style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
-        <Text style={{ color: Colors.textSecondary }}>Loading your schedule...</Text>
-      </SafeAreaView>
-    );
-  }
-
-  const upcomingClasses = classes.filter(c => c.status !== 'completed').length;
-
   return (
     <SafeAreaView style={styles.container}>
+      {/* Header */}
       <View style={styles.appBar}>
-        <TouchableOpacity style={styles.profileIconContainer} onPress={() => navigation.navigate('Profile')}>
-          <Icon name="person" size={26} color="#64748B" />
+        <TouchableOpacity style={styles.appBarBtn} onPress={() => setIsSidebarOpen(true)}>
+          <Icon name="menu" size={28} color="#0F172A" />
         </TouchableOpacity>
-        <Text style={styles.collegeName}>Sri Krishna College of Technology</Text>
-        <TouchableOpacity style={styles.notificationBtn} onPress={() => navigation.navigate('Notifications')}>
-          <Icon name="notifications-none" size={26} color="#0F172A" />
+        
+        <View style={styles.headerLogoContainer}>
+          <Image 
+            source={require('../assets/logo.png')} 
+            style={styles.headerLogo} 
+            resizeMode="contain" 
+          />
+        </View>
+
+        <TouchableOpacity style={styles.appBarBtn} onPress={() => navigation.navigate('Notifications')}>
+          <Icon name="notifications-none" size={28} color="#0F172A" />
         </TouchableOpacity>
       </View>
 
-      <Animated.View entering={FadeInUp.delay(100).duration(500)} style={styles.welcomeContainer}>
-        <View style={styles.facultyCard}>
-          <View style={styles.facultyCardContent}>
-            <Text style={styles.greeting}>Welcome back,</Text>
-            <Text style={styles.name}>Prof. {teacher.name.split(' ')[0]}</Text>
-            <View style={styles.departmentBadge}>
-              <Icon name="domain" size={16} color="#ffffff" style={{ marginRight: 6 }} />
-              <Text style={styles.subtitle}>{teacher.department} Department</Text>
+      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 100 }}>
+        {/* Welcome Banner */}
+        <Animated.View entering={FadeInUp.delay(100).duration(500)} style={styles.welcomeContainer}>
+          <View style={styles.facultyCard}>
+            <View style={styles.facultyCardContent}>
+              <Text style={styles.greeting}>Good Morning,</Text>
+              <Text style={styles.name}>{facultyName}</Text>
+              <View style={styles.departmentBadge}>
+                <Icon name="business" size={16} color={Colors.primary} style={{ marginRight: 6 }} />
+                <Text style={styles.subtitle}>{facultyDept}</Text>
+              </View>
             </View>
           </View>
-          <View style={styles.facultyIconWrapper}>
-            <Icon name="badge" size={80} color="rgba(255, 255, 255, 0.15)" />
+        </Animated.View>
+
+        <View style={styles.gridContainer}>
+          <TouchableOpacity 
+            style={[styles.fullWidthCard, { backgroundColor: '#DCFCE7', borderColor: '#86EFAC' }]} 
+            onPress={() => navigation.navigate('ClassesList', { mode: 'directory' })}
+            activeOpacity={0.8}
+          >
+            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+              <View style={[styles.gridIconWrap, { backgroundColor: '#4ADE80', marginBottom: 0, marginRight: 16 }]}>
+                <Icon name="people" size={32} color="#ffffff" />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.gridTitle}>Student Directory</Text>
+                <Text style={styles.gridSubtitle}>View student info and details</Text>
+              </View>
+              <Icon name="chevron-right" size={24} color="#4ADE80" />
+            </View>
+          </TouchableOpacity>
+        </View>
+
+        {/* Upcoming Classes */}
+        <Animated.View entering={FadeInUp.delay(150).duration(500)} style={styles.upcomingContainer}>
+          <Text style={styles.sectionTitleLabel}>Upcoming Classes</Text>
+          <View style={styles.upcomingCard}>
+            <View style={styles.upcomingHeader}>
+              <View style={styles.upcomingBadge}>
+                <Icon name="schedule" size={16} color={Colors.primary} style={{ marginRight: 4 }} />
+                <Text style={styles.upcomingBadgeText}>10:00 AM - 11:00 AM</Text>
+              </View>
+              <View style={styles.attendanceBadge}>
+                <Text style={styles.attendanceBadgeText}>85% Avg</Text>
+              </View>
+            </View>
+            <Text style={styles.upcomingSubject}>Cloud Computing & Distributed Systems</Text>
+            <View style={styles.upcomingFooter}>
+              <View style={styles.footerItem}>
+                <Icon name="door-front" size={20} color="#64748B" />
+                <Text style={styles.footerItemText}>Room 204</Text>
+              </View>
+              <View style={styles.footerDivider} />
+              <View style={styles.footerItem}>
+                <Icon name="domain" size={20} color="#64748B" />
+                <Text style={styles.footerItemText}>IT Block, 2nd Floor</Text>
+              </View>
+            </View>
+          </View>
+        </Animated.View>
+
+        {/* Daily Wisdom */}
+        <Animated.View entering={FadeInUp.delay(200).duration(500)} style={styles.wisdomContainer}>
+          <View style={styles.wisdomCard}>
+            <Icon name="format-quote" size={36} color="rgba(255, 93, 56, 0.2)" style={styles.quoteIcon} />
+            <Text style={styles.wisdomTitle}>Daily Wisdom</Text>
+            <Text style={styles.wisdomText}>"The beautiful thing about learning is that no one can take it away from you."</Text>
+            <Text style={styles.wisdomAuthor}>- B.B. King</Text>
+          </View>
+        </Animated.View>
+      </ScrollView>
+
+      {/* CUSTOM SIDEBAR OVERLAY */}
+      {isSidebarOpen && (
+        <View style={StyleSheet.absoluteFill}>
+          <Pressable style={styles.sidebarOverlay} onPress={() => setIsSidebarOpen(false)} />
+          <Animated.View 
+            entering={SlideInLeft.duration(300).easing(Easing.out(Easing.poly(4)))}
+            exiting={SlideOutLeft.duration(300)}
+            style={styles.sidebarContainer}
+          >
+            <View style={styles.sidebarHeader}>
+              <View style={{ width: 28 }} />
+              <View style={{ flex: 1, alignItems: 'center' }}>
+                <Image source={require('../assets/logo.png')} style={{ width: 170, height: 55 }} resizeMode="contain" />
+              </View>
+              <TouchableOpacity onPress={() => setIsSidebarOpen(false)}>
+                <Icon name="close" size={28} color="#0F172A" />
+              </TouchableOpacity>
+            </View>
+            
+            <View style={styles.sidebarMenu}>
+              <TouchableOpacity style={styles.sidebarMenuItem} onPress={() => setIsSidebarOpen(false)}>
+                <Icon name="space-dashboard" size={24} color={Colors.primary} />
+                <Text style={[styles.sidebarMenuText, { color: Colors.primary }]}>Dashboard</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity 
+                style={styles.sidebarMenuItem} 
+                onPress={() => {
+                  setIsSidebarOpen(false);
+                  navigation.navigate('Profile');
+                }}
+              >
+                <Icon name="account-circle" size={24} color="#64748B" />
+                <Text style={styles.sidebarMenuText}>Profile</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity 
+                style={styles.sidebarMenuItem} 
+                onPress={() => {
+                  setIsSidebarOpen(false);
+                  navigation.navigate('Settings');
+                }}
+              >
+                <Icon name="settings" size={24} color="#64748B" />
+                <Text style={styles.sidebarMenuText}>Settings</Text>
+              </TouchableOpacity>
+              
+              <View style={styles.sidebarDivider} />
+
+              <TouchableOpacity 
+                style={styles.sidebarMenuItem} 
+                onPress={() => {
+                  setIsSidebarOpen(false);
+                  setLogoutModalVisible(true);
+                }}
+              >
+                <Icon name="logout" size={24} color={Colors.error} />
+                <Text style={[styles.sidebarMenuText, { color: Colors.error }]}>Log Out</Text>
+              </TouchableOpacity>
+            </View>
+          </Animated.View>
+        </View>
+      )}
+
+      {/* CUSTOM LOGOUT MODAL */}
+      <Modal transparent visible={logoutModalVisible} animationType="fade">
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalCard}>
+            <View style={styles.modalIconBox}>
+              <Icon name="logout" size={32} color={Colors.error} />
+            </View>
+            <Text style={styles.modalTitle}>Confirm Logout</Text>
+            <Text style={styles.modalSubtitle}>Are you sure you want to log out of your session?</Text>
+            
+            <View style={styles.modalBtnRow}>
+              <TouchableOpacity style={styles.modalCancelBtn} onPress={() => setLogoutModalVisible(false)}>
+                <Text style={styles.modalCancelText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.modalConfirmBtn} onPress={handleLogout}>
+                <Text style={styles.modalConfirmText}>Log Out</Text>
+              </TouchableOpacity>
+            </View>
           </View>
         </View>
-      </Animated.View>
+      </Modal>
 
-      <View style={styles.statsOverview}>
-        <View style={styles.statBox}>
-          <Text style={styles.statBoxLabel}>Total Today</Text>
-          <Text style={styles.statBoxValue}>{classes.length}</Text>
-        </View>
-        <View style={styles.statBox}>
-          <Text style={styles.statBoxLabel}>Upcoming</Text>
-          <Text style={[styles.statBoxValue, { color: Colors.primary }]}>{upcomingClasses}</Text>
-        </View>
-      </View>
-
-      <View style={styles.listContainer}>
-        <Text style={styles.sectionTitle}>Day {todayDay} Schedule</Text>
-        {classes.length === 0 ? (
-          <Text style={{ textAlign: 'center', marginTop: 20, color: Colors.textSecondary }}>
-            No classes scheduled for today.
-          </Text>
-        ) : (
-          <FlatList
-            data={classes}
-            keyExtractor={(item) => item.id}
-            renderItem={renderClassItem}
-            showsVerticalScrollIndicator={false}
-            contentContainerStyle={{ paddingBottom: 100 }}
-          />
-        )}
-      </View>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: Colors.background,
-    paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight : 0,
-  },
-  appBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 24,
-    paddingVertical: 16,
-    backgroundColor: Colors.surface,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.border,
-  },
-  welcomeContainer: {
-    padding: 24,
-    paddingTop: 24,
-    backgroundColor: Colors.background,
-  },
-  facultyCard: {
-    backgroundColor: '#0F172A',
-    borderRadius: 20,
-    padding: 24,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.15,
-    shadowRadius: 16,
-    elevation: 8,
-    overflow: 'hidden',
-  },
-  facultyCardContent: {
-    flex: 1,
-    zIndex: 2,
-  },
-  facultyIconWrapper: {
-    position: 'absolute',
-    right: -15,
-    bottom: -15,
-    zIndex: 1,
-    transform: [{ rotate: '-15deg' }],
-  },
-  profileIconContainer: {
-    width: 44,
-    height: 44,
-    borderRadius: 24,
-    backgroundColor: '#F1F5F9',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 16,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-  },
-  collegeName: {
-    flex: 1,
-    fontSize: 14,
-    fontWeight: '800',
-    color: '#0F172A',
-  },
-  notificationBtn: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: '#F8FAFC',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginLeft: 12,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-  },
-  greeting: {
-    fontSize: 14,
-    color: 'rgba(255, 255, 255, 0.8)',
-    fontWeight: '700',
-    textTransform: 'uppercase',
-    letterSpacing: 1,
-  },
-  name: {
-    fontSize: 28,
-    fontWeight: '800',
-    color: '#ffffff',
-    marginTop: 4,
-    marginBottom: 16,
-  },
-  departmentBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 12,
-    alignSelf: 'flex-start',
-  },
-  subtitle: {
-    fontSize: 14,
-    color: '#ffffff',
-    fontWeight: '700',
-  },
-  statsOverview: {
-    flexDirection: 'row',
-    paddingHorizontal: 20,
-    justifyContent: 'space-between',
-  },
-  statBox: {
-    flex: 1,
-    backgroundColor: Colors.surface,
-    padding: 16,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    marginHorizontal: 4,
-  },
-  statBoxLabel: {
-    fontSize: 12,
-    color: Colors.textSecondary,
-    fontWeight: '700',
-    textTransform: 'uppercase',
-    marginBottom: 8,
-  },
-  statBoxValue: {
-    fontSize: 24,
-    fontWeight: '800',
-    color: Colors.text,
-  },
-  listContainer: {
-    flex: 1,
-    padding: 24,
-  },
-  sectionTitle: {
-    fontSize: 20,
-    fontWeight: '800',
-    color: Colors.text,
-    marginBottom: 20,
-  },
-  classCard: {
-    flexDirection: 'row',
-    backgroundColor: Colors.surface,
-    borderRadius: 14,
-    padding: 16,
-    marginBottom: 16,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    borderLeftWidth: 4,
-    borderLeftColor: Colors.border,
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  currentClassCard: {
-    borderLeftColor: Colors.primary,
-    backgroundColor: '#F0F9FF', // slight blue tint
-    borderColor: '#E0F2FE',
-    shadowColor: Colors.primary,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 4,
-  },
-  completedClassCard: {
-    opacity: 0.6,
-  },
-  cardLeft: {
-    flex: 1,
-  },
-  timeRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-  classTime: {
-    color: Colors.textSecondary,
-    fontWeight: '700',
-    fontSize: 13,
-  },
-  className: {
-    fontSize: 18,
-    fontWeight: '800',
-    color: Colors.text,
-    marginBottom: 4,
-  },
-  subjectName: {
-    fontSize: 14,
-    color: Colors.textSecondary,
-    fontWeight: '600',
-  }
+  container: { flex: 1, backgroundColor: '#F8FAFC' },
+  appBar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingVertical: 12, backgroundColor: '#ffffff', borderBottomWidth: 1, borderBottomColor: '#F1F5F9' },
+  appBarBtn: { padding: 8, borderRadius: 12, backgroundColor: '#F8FAFC' },
+  headerLogoContainer: { flex: 1, alignItems: 'center' },
+  headerLogo: { width: 240, height: 60, transform: [{ scale: 1.2 }] },
+  welcomeContainer: { padding: 20, paddingTop: 24 },
+  facultyCard: { backgroundColor: '#ffffff', borderRadius: 24, padding: 24, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', shadowColor: Colors.primary, shadowOffset: { width: 0, height: 12 }, shadowOpacity: 0.08, shadowRadius: 24, elevation: 8, overflow: 'hidden', borderWidth: 1, borderColor: 'rgba(255, 93, 56, 0.1)' },
+  facultyCardContent: { flex: 1, zIndex: 2 },
+  greeting: { fontSize: 14, color: '#64748B', fontWeight: '600', textTransform: 'uppercase', letterSpacing: 1.5 },
+  name: { fontSize: 26, fontWeight: '900', color: '#0F172A', marginTop: 6, marginBottom: 16, letterSpacing: -0.5 },
+  departmentBadge: { flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(255, 93, 56, 0.1)', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 12, alignSelf: 'flex-start' },
+  subtitle: { fontSize: 13, color: Colors.primary, fontWeight: '700' },
+  
+  gridContainer: { paddingHorizontal: 20, marginTop: 10 },
+  fullWidthCard: { padding: 20, borderRadius: 24, borderWidth: 1, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.04, shadowRadius: 10, elevation: 2, marginBottom: 16 },
+  rowGrid: { flexDirection: 'row', justifyContent: 'space-between' },
+  gridBox: { flex: 1, padding: 20, borderRadius: 24, marginHorizontal: 6, borderWidth: 1, alignItems: 'flex-start', shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.04, shadowRadius: 10, elevation: 2 },
+  gridIconWrap: { width: 48, height: 48, borderRadius: 14, justifyContent: 'center', alignItems: 'center', marginBottom: 12 },
+  gridTitle: { fontSize: 16, fontWeight: '800', color: '#0F172A', marginBottom: 4 },
+  gridSubtitle: { fontSize: 12, color: '#64748B', fontWeight: '600', lineHeight: 16 },
+
+  wisdomContainer: { paddingHorizontal: 20, marginTop: 10, paddingBottom: 20 },
+  wisdomCard: { backgroundColor: '#ffffff', borderRadius: 24, padding: 24, borderWidth: 1, borderColor: '#F1F5F9', shadowColor: Colors.primary, shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.05, shadowRadius: 16, elevation: 4 },
+  quoteIcon: { position: 'absolute', top: 16, right: 16 },
+  wisdomTitle: { fontSize: 14, fontWeight: '800', color: Colors.primary, textTransform: 'uppercase', letterSpacing: 1.2, marginBottom: 12 },
+  wisdomText: { fontSize: 18, color: '#334155', fontStyle: 'italic', lineHeight: 28, fontWeight: '500', marginBottom: 16 },
+  wisdomAuthor: { fontSize: 14, color: '#94A3B8', fontWeight: '700', textAlign: 'right' },
+
+  upcomingContainer: { paddingHorizontal: 20, marginTop: 24 },
+  sectionTitleLabel: { fontSize: 18, fontWeight: '800', color: '#0F172A', marginBottom: 12, marginLeft: 4 },
+  upcomingCard: { backgroundColor: '#ffffff', borderRadius: 24, padding: 20, borderWidth: 1, borderColor: '#F1F5F9', shadowColor: Colors.primary, shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.05, shadowRadius: 16, elevation: 4 },
+  upcomingHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 },
+  upcomingBadge: { flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(255, 93, 56, 0.1)', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 12 },
+  upcomingBadgeText: { color: Colors.primary, fontSize: 13, fontWeight: '700' },
+  attendanceBadge: { backgroundColor: Colors.success, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 12 },
+  attendanceBadgeText: { color: '#ffffff', fontSize: 13, fontWeight: '800' },
+  upcomingSubject: { fontSize: 20, fontWeight: '800', color: '#0F172A', marginBottom: 20, lineHeight: 28 },
+  upcomingFooter: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#F8FAFC', padding: 12, borderRadius: 16, borderWidth: 1, borderColor: '#F1F5F9' },
+  footerItem: { flexDirection: 'row', alignItems: 'center', flex: 1, justifyContent: 'center' },
+  footerItemText: { color: '#64748B', fontSize: 13, fontWeight: '600', marginLeft: 6 },
+  footerDivider: { width: 1, height: 20, backgroundColor: '#E2E8F0' },
+
+  listContainer: { flex: 1, padding: 20, paddingTop: 10 },
+  sectionHeaderRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 },
+  sectionTitle: { fontSize: 22, fontWeight: '800', color: '#0F172A' },
+  backBtn: { padding: 6, backgroundColor: '#E2E8F0', borderRadius: 10 },
+  loadingText: { textAlign: 'center', marginTop: 20, color: '#94A3B8', fontWeight: '500' },
+  classCard: { flexDirection: 'row', backgroundColor: '#ffffff', borderRadius: 20, padding: 20, marginBottom: 16, borderWidth: 1, borderColor: '#F1F5F9', alignItems: 'center', justifyContent: 'space-between', shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.03, shadowRadius: 12, elevation: 2 },
+  cardLeft: { flex: 1 },
+  timeRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 8 },
+  classTime: { color: Colors.primary, fontWeight: '700', fontSize: 13 },
+  className: { fontSize: 18, fontWeight: '800', color: '#0F172A', marginBottom: 4 },
+  subjectName: { fontSize: 14, color: '#64748B', fontWeight: '600' },
+  cardRight: { marginLeft: 16 },
+  takeAttendanceBtn: { flexDirection: 'row', alignItems: 'center', backgroundColor: Colors.primary, paddingVertical: 10, paddingHorizontal: 16, borderRadius: 14, shadowColor: Colors.primary, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 8, elevation: 4 },
+  takeAttendanceText: { color: '#ffffff', fontWeight: '700', fontSize: 14, marginRight: 4 },
+
+  sidebarOverlay: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(15, 23, 42, 0.4)', zIndex: 99 },
+  sidebarContainer: { position: 'absolute', top: 0, left: 0, bottom: 0, width: width * 0.75, backgroundColor: '#ffffff', zIndex: 100, borderTopRightRadius: 30, borderBottomRightRadius: 30, shadowColor: '#000', shadowOffset: { width: 10, height: 0 }, shadowOpacity: 0.1, shadowRadius: 20, elevation: 20, paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight : 40 },
+  sidebarHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 24, borderBottomWidth: 1, borderBottomColor: '#F1F5F9' },
+  sidebarMenu: { padding: 24 },
+  sidebarMenuItem: { flexDirection: 'row', alignItems: 'center', paddingVertical: 16, borderBottomWidth: 1, borderBottomColor: '#F1F5F9' },
+  sidebarMenuText: { fontSize: 16, fontWeight: '700', color: '#64748B', marginLeft: 16 },
+  sidebarDivider: { height: 1, backgroundColor: '#E2E8F0', marginVertical: 16 },
+
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(15, 23, 42, 0.6)', justifyContent: 'center', alignItems: 'center', padding: 24 },
+  modalCard: { backgroundColor: '#ffffff', borderRadius: 24, padding: 24, width: '100%', alignItems: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.2, shadowRadius: 20, elevation: 10 },
+  modalIconBox: { width: 64, height: 64, borderRadius: 32, backgroundColor: 'rgba(239, 68, 68, 0.1)', justifyContent: 'center', alignItems: 'center', marginBottom: 16 },
+  modalTitle: { fontSize: 20, fontWeight: '800', color: '#0F172A', marginBottom: 8 },
+  modalSubtitle: { fontSize: 14, color: '#64748B', textAlign: 'center', marginBottom: 24, lineHeight: 20 },
+  modalBtnRow: { flexDirection: 'row', width: '100%' },
+  modalCancelBtn: { flex: 1, paddingVertical: 14, backgroundColor: '#F1F5F9', borderRadius: 12, alignItems: 'center', marginRight: 8 },
+  modalCancelText: { color: '#64748B', fontWeight: '700', fontSize: 15 },
+  modalConfirmBtn: { flex: 1, paddingVertical: 14, backgroundColor: Colors.error, borderRadius: 12, alignItems: 'center', marginLeft: 8 },
+  modalConfirmText: { color: '#ffffff', fontWeight: '700', fontSize: 15 }
 });
