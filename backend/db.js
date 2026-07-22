@@ -24,6 +24,7 @@ const Student = sequelize.define('Student', {
   name: { type: DataTypes.STRING, allowNull: false },
   phone: { type: DataTypes.STRING },
   parent_phone: { type: DataTypes.STRING },
+  test_parent_phone_number: { type: DataTypes.STRING },
   section: { type: DataTypes.STRING }
 });
 
