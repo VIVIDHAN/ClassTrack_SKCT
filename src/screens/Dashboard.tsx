@@ -73,8 +73,17 @@ export default function Dashboard() {
               setEventName(calData.event_name || '');
 
               const response = await fetch(`${API_BASE_URL}/timetable?day=${day}&teacher_id=${profile.id}`);
-              const data = await response.json();
-              setClasses(Array.isArray(data) ? data : []);
+              const fetchedClasses = Array.isArray(data) ? data : [];
+              
+              // Inject a dummy class for testing that is always ongoing
+              const dummyClass = {
+                id: 9999,
+                period: 99,
+                section: 'III IT G', // Using a known section for students
+                Subject: { title: 'Testing / Demo Class', code: 'DEMO101' }
+              };
+              
+              setClasses([...fetchedClasses, dummyClass]);
             } else {
               setClasses([]);
               setIsHoliday(true);
@@ -111,6 +120,8 @@ export default function Dashboard() {
   );
 
   const getClassStatus = (period: number) => {
+    if (period === 99) return 'ongoing'; // Dummy class is always ongoing
+
     const timeSlots = [
       { start: '08:45', end: '09:40' },
       { start: '09:40', end: '10:35' },
@@ -221,7 +232,7 @@ export default function Dashboard() {
               }
 
               const timeSlots = ['08:45 AM - 09:40 AM', '09:40 AM - 10:35 AM', '10:50 AM - 11:45 AM', '11:45 AM - 12:40 PM', '01:30 PM - 02:25 PM', '02:25 PM - 03:20 PM', '03:20 PM - 04:15 PM'];
-              const timeString = timeSlots[activeClass.period - 1] || `Period ${activeClass.period}`;
+              const timeString = activeClass.period === 99 ? 'Anytime' : (timeSlots[activeClass.period - 1] || `Period ${activeClass.period}`);
               const status = getClassStatus(activeClass.period);
               const isOngoing = status === 'ongoing';
               const isUpcoming = status === 'upcoming';

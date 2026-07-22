@@ -20,6 +20,8 @@ export default function FullSchedule() {
   }, []);
 
   const getClassStatus = (period: number) => {
+    if (period === 99) return 'ongoing';
+    
     const timeSlots = [
       { start: '08:45', end: '09:40' },
       { start: '09:40', end: '10:35' },
@@ -65,7 +67,7 @@ export default function FullSchedule() {
         ) : (
           classes.map((cls: any, index: number) => {
             const timeSlots = ['08:45 AM - 09:40 AM', '09:40 AM - 10:35 AM', '10:50 AM - 11:45 AM', '11:45 AM - 12:40 PM', '01:30 PM - 02:25 PM', '02:25 PM - 03:20 PM', '03:20 PM - 04:15 PM'];
-            const timeString = timeSlots[cls.period - 1] || `Period ${cls.period}`;
+            const timeString = cls.period === 99 ? 'Anytime' : (timeSlots[cls.period - 1] || `Period ${cls.period}`);
             const status = getClassStatus(cls.period);
             const isOngoing = status === 'ongoing';
             const isPast = status === 'past';
