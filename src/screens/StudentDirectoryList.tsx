@@ -1,13 +1,13 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Platform, StatusBar, TextInput, NativeModules, PermissionsAndroid, Alert, ScrollView, KeyboardAvoidingView } from 'react-native';
+import React, { useState, useEffect, useMemo } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, Platform, StatusBar, TextInput, NativeModules, PermissionsAndroid, Alert, FlatList, ActivityIndicator, KeyboardAvoidingView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import Animated, { FadeInRight, Layout } from 'react-native-reanimated';
+import Animated, { FadeInUp, FadeIn, Layout, BounceIn } from 'react-native-reanimated';
 import Icon from 'react-native-vector-icons/MaterialIcons';
+import LinearGradient from 'react-native-linear-gradient';
 import { Colors } from '../constants/Colors';
 import { API_BASE_URL } from '../constants/Config';
-import BreatheLoader from '../components/BreatheLoader';
 
 const { DirectSms } = NativeModules;
 
@@ -15,101 +15,104 @@ export default function StudentDirectoryList() {
   const navigation = useNavigation<any>();
   const route = useRoute<any>();
   const { classDetails } = route.params || { classDetails: { subject: 'Unknown', className: 'Unknown' } };
-  
+
   const [students, setStudents] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [absentRollNumbers, setAbsentRollNumbers] = useState('');
-  const [markedAbsent, setMarkedAbsent] = useState<{[key: string]: boolean}>({});
+  const [searchQuery, setSearchQuery] = useState('');
+  
+  // Set of roll numbers marked as absent
+  const [markedAbsentees, setMarkedAbsentees] = useState<Set<string>>(new Set());
   const [isSending, setIsSending] = useState(false);
 
   useEffect(() => {
-    fetch(`${API_BASE_URL}/students?section=${classDetails.className}`)
-      .then(res => res.json())
-      .then(data => {
-        const mapped = data.map((s: any) => ({
-          id: s.roll_no || s.rollNo,
-          db_id: s.id,
-          name: s.name,
-          phone: s.test_parent_phone_number || s.parent_phone || s.parentPhone || '9876543210',
-        }));
-        setStudents(mapped);
+    const fetchStudents = async () => {
+      try {
+        const response = await fetch(`${API_BASE_URL}/students?section=${classDetails.className}`);
+        const data = await response.json();
+        setStudents(Array.isArray(data) ? data : []);
+      } catch (error) {
+        console.error('Failed to load students:', error);
+      } finally {
         setLoading(false);
-      })
-      .catch(err => {
-        console.error(err);
-        setLoading(false);
-      });
+      }
+    };
+    fetchStudents();
   }, [classDetails.className]);
 
-  const requestSmsPermission = async () => {
+  // Logic to bring matched students to the top if query length >= 3
+  const displayedStudents = useMemo(() => {
+    if (searchQuery.trim().length < 3) {
+      return students;
+    }
+    const query = searchQuery.toLowerCase().trim();
+    return [...students].sort((a, b) => {
+      const aMatch = a.roll_no.toLowerCase().includes(query) || a.name.toLowerCase().includes(query);
+      const bMatch = b.roll_no.toLowerCase().includes(query) || b.name.toLowerCase().includes(query);
+      if (aMatch && !bMatch) return -1;
+      if (!aMatch && bMatch) return 1;
+      return 0;
+    });
+  }, [students, searchQuery]);
+
+  const toggleAttendance = (roll_no: string) => {
+    setMarkedAbsentees(prev => {
+      const next = new Set(prev);
+      if (next.has(roll_no)) {
+        next.delete(roll_no);
+      } else {
+        next.add(roll_no);
+      }
+      return next;
+    });
+  };
+
+  const handleNotifyParents = async () => {
+    if (markedAbsentees.size === 0) {
+      Alert.alert("No Absentees", "Please mark at least one student as absent before notifying parents.");
+      return;
+    }
+
+    const absentStudentsList = students.filter(s => markedAbsentees.has(s.roll_no));
+
     if (Platform.OS === 'android') {
       try {
         const granted = await PermissionsAndroid.request(
           PermissionsAndroid.PERMISSIONS.SEND_SMS,
           {
             title: 'SMS Permission',
-            message: 'ClassTrack needs access to send SMS in the background for absentee notifications.',
+            message: 'ClassTrack needs SMS permission to notify parents.',
             buttonNeutral: 'Ask Me Later',
             buttonNegative: 'Cancel',
             buttonPositive: 'OK',
-          }
+          },
         );
-        return granted === PermissionsAndroid.RESULTS.GRANTED;
+        if (granted !== PermissionsAndroid.RESULTS.GRANTED) {
+          Alert.alert("Permission Denied", "Cannot send SMS without permission.");
+          return;
+        }
       } catch (err) {
         console.warn(err);
-        return false;
+        return;
       }
-    }
-    return true; // iOS would need different logic, but assuming Android based on MainApplication checks
-  };
-
-  const handleNotifyParents = async () => {
-    if (!absentRollNumbers.trim()) {
-      Alert.alert("Input Required", "Please enter the roll numbers of the absent students (e.g. 201, 202).");
-      return;
-    }
-    
-    const hasPermission = await requestSmsPermission();
-    if (!hasPermission) {
-      Alert.alert("Permission Denied", "Cannot send background SMS without permission.");
-      return;
     }
 
     setIsSending(true);
-    
-    const rollArray = absentRollNumbers.split(',').map(s => s.trim().toLowerCase()).filter(s => s);
-    
-    // Find matching students (matching last digits or full roll number)
-    const absentees = students.filter(s => {
-      const rollMatch = s.id.toLowerCase();
-      return rollArray.some(roll => rollMatch.endsWith(roll)); 
-    });
-    
-    if (absentees.length === 0) {
-      Alert.alert("Not Found", "No students matched the entered roll numbers.");
-      setIsSending(false);
-      return;
-    }
-    
-    // Mark them in UI
-    const newMarked: any = { ...markedAbsent };
-    absentees.forEach(s => newMarked[s.id] = true);
-    setMarkedAbsent(newMarked);
-    
     let successCount = 0;
-    
-    // Send SMS in background using the native module
-    for (const s of absentees) {
-      const message = `Dear Parent, your ward ${s.name} is absent today from ${classDetails.className}.`;
-      try {
-        if (DirectSms && DirectSms.sendDirectSms) {
-          DirectSms.sendDirectSms(s.phone, message);
-          successCount++;
+
+    for (const student of absentStudentsList) {
+      if (student.parents_mobile) {
+        const message = `Dear Parent, your ward ${student.name} is absent for the ${classDetails.subject} class today.`;
+        if (Platform.OS === 'android' && DirectSms) {
+          try {
+            DirectSms.sendDirectSms(student.parents_mobile, message);
+            successCount++;
+          } catch (e) {
+            console.log("Failed to send SMS to", student.parents_mobile);
+          }
         } else {
-          console.error("DirectSms module not found!");
+          // Fallback or iOS logic
+          successCount++;
         }
-      } catch (err) {
-        console.error("Error sending SMS", err);
       }
     }
     
@@ -126,8 +129,8 @@ export default function StudentDirectoryList() {
           body: JSON.stringify({
             teacher_id: profile.id,
             section: classDetails.className,
-            absent_count: absentees.length,
-            absent_roll_numbers: absentees.map(s => s.id).join(', ')
+            absent_count: absentStudentsList.length,
+            absent_roll_numbers: absentStudentsList.map(s => s.roll_no).join(', ')
           })
         });
       }
@@ -136,99 +139,146 @@ export default function StudentDirectoryList() {
     }
     
     setIsSending(false);
-    Alert.alert("Success", `Background SMS sent to ${successCount} absent students!`);
-    setAbsentRollNumbers('');
+    Alert.alert("Success", `Background SMS sent to ${successCount} absent students!`, [
+      { text: "OK", onPress: () => navigation.goBack() }
+    ]);
+  };
+
+  const getInitials = (name: string) => {
+    return name.substring(0, 2).toUpperCase();
   };
 
   const renderStudent = ({ item, index }: { item: any, index: number }) => {
-    const isAbsent = markedAbsent[item.id];
-    
+    const isAbsent = markedAbsentees.has(item.roll_no);
+
     return (
-      <View>
-        <View style={styles.studentCard}>
-          <View style={styles.studentAvatar}>
-            <Text style={styles.avatarText}>{item.name.charAt(0)}</Text>
-          </View>
-          <View style={styles.studentInfo}>
-            <Text style={styles.studentName}>{item.name}</Text>
-            <Text style={styles.studentId}>{item.id}</Text>
+      <Animated.View 
+        entering={FadeInUp.delay(Math.min(index * 50, 500)).duration(400)}
+        layout={Layout.springify()}
+      >
+        <TouchableOpacity 
+          activeOpacity={0.7} 
+          onPress={() => toggleAttendance(item.roll_no)}
+          style={[styles.studentCard, isAbsent && styles.studentCardAbsent]}
+        >
+          <View style={styles.studentInfoLeft}>
+            <View style={[styles.avatar, isAbsent ? { backgroundColor: 'rgba(239, 68, 68, 0.1)' } : { backgroundColor: '#F1F5F9' }]}>
+              <Text style={[styles.avatarText, isAbsent && { color: '#EF4444' }]}>{getInitials(item.name)}</Text>
+            </View>
+            <View style={{ marginLeft: 16 }}>
+              <Text style={styles.studentName} numberOfLines={1}>{item.name}</Text>
+              <Text style={styles.rollNoText}>{item.roll_no}</Text>
+            </View>
           </View>
           
-          {isAbsent ? (
-            <View style={[styles.attendanceBadge, { backgroundColor: '#FEE2E2', borderColor: '#FECACA' }]}>
-              <Text style={[styles.attendanceText, { color: Colors.error }]}>Absent (SMS Sent)</Text>
-            </View>
-          ) : (
-            <View style={[styles.attendanceBadge, { backgroundColor: '#DCFCE7', borderColor: '#86EFAC' }]}>
-              <Text style={[styles.attendanceText, { color: Colors.success }]}>Present</Text>
-            </View>
-          )}
-        </View>
-      </View>
+          <View style={[styles.statusPill, isAbsent ? styles.statusPillAbsent : styles.statusPillPresent]}>
+            <View style={[styles.statusDot, isAbsent ? { backgroundColor: '#EF4444' } : { backgroundColor: '#10B981' }]} />
+            <Text style={[styles.statusText, isAbsent ? { color: '#EF4444' } : { color: '#10B981' }]}>
+              {isAbsent ? 'Absent' : 'Present'}
+            </Text>
+          </View>
+        </TouchableOpacity>
+      </Animated.View>
     );
   };
 
-  if (loading) {
-    return (
-      <SafeAreaView style={styles.container}>
-        <View style={{ flex: 1, justifyContent: 'center' }}>
-          <BreatheLoader message="Loading student directory..." />
-        </View>
-      </SafeAreaView>
-    );
-  }
+  const totalPresent = students.length - markedAbsentees.size;
+  const totalAbsent = markedAbsentees.size;
 
   return (
-    <SafeAreaView style={styles.container}>
-      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
-        <View style={styles.header}>
-          <View style={styles.headerTop}>
-            <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
-              <Icon name="arrow-back" size={28} color={Colors.text} />
-            </TouchableOpacity>
-            <Text style={styles.title}>{classDetails.className}</Text>
-            <View style={{ width: 28 }} />
-          </View>
-          <Text style={styles.subtitle}>Attendance Roster</Text>
+    <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
+      <StatusBar barStyle="dark-content" />
+      
+      {/* Glassmorphism Header */}
+      <View style={styles.header}>
+        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
+          <Icon name="arrow-back-ios" size={20} color="#0F172A" />
+        </TouchableOpacity>
+        <View style={styles.headerTitleBox}>
+          <Text style={styles.headerTitle}>{classDetails.className}</Text>
+          <Text style={styles.headerSubtitle}>{classDetails.subject}</Text>
         </View>
-
-        <View style={styles.bulkSmsContainer}>
-          <Text style={styles.bulkSmsLabel}>Mark Absent & Send SMS</Text>
-          <Text style={styles.bulkSmsDesc}>Enter last few digits of roll numbers separated by commas (e.g. 201, 202)</Text>
-          <View style={styles.bulkInputWrapper}>
-            <TextInput
-              style={styles.bulkInput}
-              placeholder="e.g. 201, 202, 205"
-              placeholderTextColor={Colors.textSecondary}
-              value={absentRollNumbers}
-              onChangeText={setAbsentRollNumbers}
-              keyboardType="numbers-and-punctuation"
-            />
-          </View>
-          <TouchableOpacity 
-            style={[styles.notifyBtn, isSending && { opacity: 0.7 }]}
-            onPress={handleNotifyParents}
-            disabled={isSending}
-          >
-            <Icon name="sms" size={20} color="#fff" style={{ marginRight: 8 }} />
-            <Text style={styles.notifyBtnText}>{isSending ? 'Sending...' : 'Notify Parents'}</Text>
-          </TouchableOpacity>
-        </View>
-
-        <View style={styles.listContainer}>
-          <Animated.FlatList
-            data={students}
-          keyExtractor={(item: any) => item.id}
-          renderItem={renderStudent}
-          showsVerticalScrollIndicator={false}
-          contentContainerStyle={{ paddingBottom: 20 }}
-          itemLayoutAnimation={Layout.springify()}
-          ListEmptyComponent={() => (
-            <Text style={styles.emptyText}>No students found.</Text>
-          )}
-        />
+        <View style={{ width: 40 }} />
       </View>
+
+      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
+        
+        {/* Summary & Search Area */}
+        <View style={styles.topSection}>
+          <View style={styles.summaryRow}>
+            <View style={styles.summaryCard}>
+               <Text style={[styles.summaryCount, { color: '#10B981' }]}>{totalPresent}</Text>
+               <Text style={styles.summaryLabel}>Present</Text>
+            </View>
+            <View style={styles.summaryCard}>
+               <Text style={[styles.summaryCount, { color: '#EF4444' }]}>{totalAbsent}</Text>
+               <Text style={styles.summaryLabel}>Absent</Text>
+            </View>
+            <View style={styles.summaryCard}>
+               <Text style={[styles.summaryCount, { color: '#0F172A' }]}>{students.length}</Text>
+               <Text style={styles.summaryLabel}>Total</Text>
+            </View>
+          </View>
+
+          <View style={styles.searchContainer}>
+            <Icon name="search" size={22} color="#94A3B8" style={{ marginLeft: 16 }} />
+            <TextInput
+              style={styles.searchInput}
+              placeholder="Search roll number (e.g. 101)"
+              placeholderTextColor="#94A3B8"
+              value={searchQuery}
+              onChangeText={setSearchQuery}
+            />
+            {searchQuery.length > 0 && (
+              <TouchableOpacity onPress={() => setSearchQuery('')} style={{ padding: 8 }}>
+                <Icon name="close" size={20} color="#94A3B8" />
+              </TouchableOpacity>
+            )}
+          </View>
+        </View>
+
+        {/* Student List */}
+        {loading ? (
+          <View style={styles.centerContainer}>
+            <ActivityIndicator size="large" color="#F97316" />
+          </View>
+        ) : (
+          <FlatList
+            data={displayedStudents}
+            keyExtractor={(item) => item.roll_no}
+            renderItem={renderStudent}
+            contentContainerStyle={styles.listContent}
+            showsVerticalScrollIndicator={false}
+          />
+        )}
       </KeyboardAvoidingView>
+
+      {/* Notify Parents Button */}
+      <View style={styles.bottomFooter}>
+        <TouchableOpacity 
+          activeOpacity={0.8} 
+          onPress={handleNotifyParents}
+          disabled={isSending}
+        >
+          <LinearGradient
+            colors={markedAbsentees.size > 0 ? ['#F97316', '#EA580C'] : ['#E2E8F0', '#CBD5E1']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 0 }}
+            style={styles.notifyBtn}
+          >
+            {isSending ? (
+              <ActivityIndicator color="#ffffff" />
+            ) : (
+              <>
+                <Icon name="send" size={20} color={markedAbsentees.size > 0 ? "#ffffff" : "#94A3B8"} style={{ marginRight: 8 }} />
+                <Text style={[styles.notifyBtnText, markedAbsentees.size === 0 && { color: '#94A3B8' }]}>
+                  {markedAbsentees.size > 0 ? `Notify ${markedAbsentees.size} Parents` : 'No Absentees'}
+                </Text>
+              </>
+            )}
+          </LinearGradient>
+        </TouchableOpacity>
+      </View>
     </SafeAreaView>
   );
 }
@@ -236,149 +286,195 @@ export default function StudentDirectoryList() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.surface,
-    
+    backgroundColor: '#FAFAFA',
   },
   header: {
-    paddingHorizontal: 24,
-    paddingVertical: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    backgroundColor: 'rgba(255, 255, 255, 0.9)',
+    borderBottomWidth: 1,
+    borderBottomColor: '#F1F5F9',
+    zIndex: 10,
+  },
+  backBtn: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: '#F8FAFC',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingLeft: 6,
+  },
+  headerTitleBox: {
+    alignItems: 'center',
+  },
+  headerTitle: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: '#0F172A',
+  },
+  headerSubtitle: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#F97316',
+    marginTop: 2,
+  },
+  topSection: {
+    paddingHorizontal: 20,
+    paddingTop: 20,
+    paddingBottom: 10,
     backgroundColor: '#ffffff',
     borderBottomWidth: 1,
     borderBottomColor: '#F1F5F9',
   },
-  headerTop: {
+  summaryRow: {
     flexDirection: 'row',
-    alignItems: 'center',
     justifyContent: 'space-between',
+    marginBottom: 20,
   },
-  backBtn: {
-    padding: 4,
-    marginLeft: -4,
+  summaryCard: {
+    flex: 1,
+    backgroundColor: '#F8FAFC',
+    borderRadius: 20,
+    paddingVertical: 16,
+    alignItems: 'center',
+    marginHorizontal: 4,
+    borderWidth: 1,
+    borderColor: '#F1F5F9',
   },
-  title: {
-    fontSize: 22,
-    fontWeight: '800',
-    color: '#0F172A',
-  },
-  subtitle: {
-    fontSize: 14,
-    color: '#64748B',
-    fontWeight: '600',
-    marginTop: 8,
-    textAlign: 'center',
-  },
-  bulkSmsContainer: {
-    padding: 20,
-    backgroundColor: '#ffffff',
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.border,
-  },
-  bulkSmsLabel: {
-    fontSize: 16,
-    fontWeight: '800',
-    color: '#0F172A',
+  summaryCount: {
+    fontSize: 24,
+    fontWeight: '900',
     marginBottom: 4,
   },
-  bulkSmsDesc: {
-    fontSize: 13,
+  summaryLabel: {
+    fontSize: 12,
+    fontWeight: '700',
     color: '#64748B',
-    marginBottom: 12,
   },
-  bulkInputWrapper: {
-    backgroundColor: '#F8FAFC',
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    borderRadius: 12,
-    marginBottom: 16,
-  },
-  bulkInput: {
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    fontSize: 16,
-    color: '#0F172A',
-  },
-  notifyBtn: {
-    backgroundColor: Colors.primary,
+  searchContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 14,
-    borderRadius: 12,
-    shadowColor: Colors.primary,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 4,
+    backgroundColor: '#F1F5F9',
+    borderRadius: 16,
+    height: 52,
   },
-  notifyBtnText: {
-    color: '#ffffff',
-    fontSize: 16,
-    fontWeight: '800',
-  },
-  listContainer: {
+  searchInput: {
     flex: 1,
-    backgroundColor: Colors.background,
-    padding: 24,
+    height: '100%',
+    paddingHorizontal: 12,
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#0F172A',
+  },
+  centerContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  listContent: {
+    padding: 20,
+    paddingBottom: 40,
   },
   studentCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: Colors.surface,
-    borderRadius: 16,
+    justifyContent: 'space-between',
+    backgroundColor: '#ffffff',
+    borderRadius: 24,
     padding: 16,
     marginBottom: 12,
-    borderWidth: 1,
-    borderColor: Colors.border,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.03,
+    shadowRadius: 8,
     elevation: 2,
+    borderWidth: 1,
+    borderColor: 'transparent',
   },
-  studentAvatar: {
+  studentCardAbsent: {
+    backgroundColor: '#FEF2F2',
+    borderColor: '#FECACA',
+  },
+  studentInfoLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  avatar: {
     width: 48,
     height: 48,
     borderRadius: 24,
-    backgroundColor: '#E0F2FE',
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: 16,
   },
   avatarText: {
-    fontSize: 20,
+    fontSize: 15,
     fontWeight: '800',
-    color: Colors.primary,
-  },
-  studentInfo: {
-    flex: 1,
+    color: '#64748B',
   },
   studentName: {
-    fontSize: 18,
-    fontWeight: '800',
-    color: Colors.text,
-    marginBottom: 4,
-  },
-  studentId: {
-    fontSize: 14,
-    color: Colors.textSecondary,
-    fontWeight: '600',
-  },
-  emptyText: {
-    textAlign: 'center',
-    marginTop: 40,
-    color: Colors.textSecondary,
     fontSize: 16,
+    fontWeight: '700',
+    color: '#1E293B',
+    marginBottom: 4,
+    paddingRight: 10,
   },
-  attendanceBadge: {
+  rollNoText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#94A3B8',
+  },
+  statusPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
     paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 12,
-    backgroundColor: '#F8FAFC',
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
+    paddingVertical: 8,
+    borderRadius: 20,
   },
-  attendanceText: {
-    fontSize: 14,
+  statusPillPresent: {
+    backgroundColor: '#ECFDF5',
+  },
+  statusPillAbsent: {
+    backgroundColor: '#FEF2F2',
+    borderWidth: 1,
+    borderColor: '#FECACA',
+  },
+  statusDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    marginRight: 6,
+  },
+  statusText: {
+    fontSize: 12,
+    fontWeight: '800',
+  },
+  bottomFooter: {
+    paddingHorizontal: 20,
+    paddingVertical: Platform.OS === 'ios' ? 24 : 16,
+    backgroundColor: '#ffffff',
+    borderTopWidth: 1,
+    borderTopColor: '#F1F5F9',
+  },
+  notifyBtn: {
+    flexDirection: 'row',
+    height: 60,
+    borderRadius: 30,
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#F97316',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.25,
+    shadowRadius: 16,
+    elevation: 8,
+  },
+  notifyBtnText: {
+    color: '#ffffff',
+    fontSize: 16,
     fontWeight: '800',
   }
 });
