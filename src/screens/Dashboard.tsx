@@ -209,81 +209,82 @@ export default function Dashboard() {
                <Text style={{ marginTop: 10, color: '#64748B', fontWeight: '600' }}>No classes scheduled for today.</Text>
              </View>
           ) : (
-            (showAllClasses ? classes : classes.filter(cls => getClassStatus(cls.period) !== 'past')).length === 0 ? (
-               <View style={[styles.classCard, { alignItems: 'center', padding: 30 }]}>
-                 <Icon name="check-circle" size={48} color="#4ADE80" />
-                 <Text style={{ marginTop: 10, color: '#64748B', fontWeight: '600' }}>All classes completed for today!</Text>
-               </View>
-            ) : (
-              (showAllClasses ? classes : classes.filter(cls => getClassStatus(cls.period) !== 'past')).map((cls, index) => {
-                const timeSlots = ['08:45 AM - 09:40 AM', '09:40 AM - 10:35 AM', '10:50 AM - 11:45 AM', '11:45 AM - 12:40 PM', '01:30 PM - 02:25 PM', '02:25 PM - 03:20 PM', '03:20 PM - 04:15 PM'];
-                const timeString = timeSlots[cls.period - 1] || `Period ${cls.period}`;
-                const status = getClassStatus(cls.period);
-                const isOngoing = status === 'ongoing';
-                const isPast = status === 'past';
-                
+            (() => {
+              const activeClass = classes.find(cls => getClassStatus(cls.period) === 'ongoing' || getClassStatus(cls.period) === 'upcoming');
+              if (!activeClass) {
                 return (
-                  <TouchableOpacity 
-                    key={cls.id} 
-                    activeOpacity={0.8}
-                    onPress={() => {
-                      if (isOngoing) {
-                        navigation.navigate('StudentDirectoryList', { 
-                          classDetails: { subject: cls.Subject ? cls.Subject.title : 'Subject', className: cls.section } 
-                        });
-                      } else {
-                        Alert.alert("Time Restricted", "Attendance marking is strictly time-based. You can only mark attendance during the active ongoing class period.");
-                      }
-                    }}
-                    style={[styles.classCard, isPast && { opacity: 0.7, borderColor: '#CBD5E1' }]}
-                  >
-                    <View style={styles.classTopRow}>
-                      <View style={styles.timeBadge}>
-                        <Icon name="access-time" size={14} color={isPast ? "#94A3B8" : "#F97316"} style={{marginRight: 6}} />
-                        <Text style={[styles.timeText, isPast && { color: '#94A3B8' }]}>{timeString}</Text>
-                      </View>
-                      <View style={{flexDirection: 'row', alignItems: 'center'}}>
-                        {isOngoing && <View style={styles.ongoingBadge}><Text style={styles.ongoingText}>ONGOING</Text></View>}
-                        {isPast && <View style={[styles.ongoingBadge, { backgroundColor: '#94A3B8' }]}><Text style={styles.ongoingText}>COMPLETED</Text></View>}
-                        <View style={styles.sectionBadge}><Text style={styles.sectionText}>{cls.section}</Text></View>
-                      </View>
-                    </View>
-
-                    <Text style={styles.classTitle}>{cls.Subject ? cls.Subject.title : 'Subject Title'}</Text>
-                    
-                    <View style={styles.classBottomRow}>
-                      <View style={styles.classDetailsBox}>
-                        <View style={styles.detailItem}>
-                          <Icon name="badge" size={18} color="#94A3B8" />
-                          <View style={{marginLeft: 12}}>
-                            <Text style={styles.detailValue}>{cls.Subject ? cls.Subject.code : '-'}</Text>
-                            <Text style={styles.detailLabel}>Course Code</Text>
-                          </View>
-                        </View>
-                        <View style={styles.detailDivider} />
-                        <View style={styles.detailItem}>
-                          <Icon name="business" size={18} color="#94A3B8" />
-                          <View style={{marginLeft: 12}}>
-                            <Text style={styles.detailValue}>{facultyDept} Block</Text>
-                            <Text style={styles.detailLabel}>Location</Text>
-                          </View>
-                        </View>
-                      </View>
-                      <View style={styles.arrowButton}>
-                        <Icon name="arrow-forward" size={24} color="#F97316" />
-                      </View>
-                    </View>
-                  </TouchableOpacity>
+                  <View style={[styles.classCard, { alignItems: 'center', padding: 30 }]}>
+                    <Icon name="check-circle" size={48} color="#4ADE80" />
+                    <Text style={{ marginTop: 10, color: '#64748B', fontWeight: '600' }}>All classes completed for today!</Text>
+                  </View>
                 );
-              })
-            )
+              }
+
+              const timeSlots = ['08:45 AM - 09:40 AM', '09:40 AM - 10:35 AM', '10:50 AM - 11:45 AM', '11:45 AM - 12:40 PM', '01:30 PM - 02:25 PM', '02:25 PM - 03:20 PM', '03:20 PM - 04:15 PM'];
+              const timeString = timeSlots[activeClass.period - 1] || `Period ${activeClass.period}`;
+              const status = getClassStatus(activeClass.period);
+              const isOngoing = status === 'ongoing';
+              const isUpcoming = status === 'upcoming';
+              
+              return (
+                <TouchableOpacity 
+                  key={activeClass.id} 
+                  activeOpacity={0.8}
+                  onPress={() => {
+                    if (isOngoing) {
+                      navigation.navigate('StudentDirectoryList', { 
+                        classDetails: { subject: activeClass.Subject ? activeClass.Subject.title : 'Subject', className: activeClass.section } 
+                      });
+                    } else {
+                      Alert.alert("Time Restricted", "Attendance marking is strictly time-based. You can only mark attendance during the active ongoing class period.");
+                    }
+                  }}
+                  style={[styles.classCard, isUpcoming && { borderColor: '#E2E8F0', shadowOpacity: 0.04 }]}
+                >
+                  <View style={styles.classTopRow}>
+                    <View style={styles.timeBadge}>
+                      <Icon name="access-time" size={14} color="#F97316" style={{marginRight: 6}} />
+                      <Text style={styles.timeText}>{timeString}</Text>
+                    </View>
+                    <View style={{flexDirection: 'row', alignItems: 'center'}}>
+                      {isOngoing && <View style={styles.ongoingBadge}><Text style={styles.ongoingText}>ONGOING</Text></View>}
+                      {isUpcoming && <View style={[styles.ongoingBadge, { backgroundColor: '#38BDF8' }]}><Text style={styles.ongoingText}>UPCOMING</Text></View>}
+                      <View style={styles.sectionBadge}><Text style={styles.sectionText}>{activeClass.section}</Text></View>
+                    </View>
+                  </View>
+
+                  <Text style={styles.classTitle}>{activeClass.Subject ? activeClass.Subject.title : 'Subject Title'}</Text>
+                  
+                  <View style={styles.classBottomRow}>
+                    <View style={styles.classDetailsBox}>
+                      <View style={styles.detailItem}>
+                        <Icon name="badge" size={18} color="#94A3B8" />
+                        <View style={{marginLeft: 12}}>
+                          <Text style={styles.detailValue}>{activeClass.Subject ? activeClass.Subject.code : '-'}</Text>
+                          <Text style={styles.detailLabel}>Course Code</Text>
+                        </View>
+                      </View>
+                      <View style={styles.detailDivider} />
+                      <View style={styles.detailItem}>
+                        <Icon name="business" size={18} color="#94A3B8" />
+                        <View style={{marginLeft: 12}}>
+                          <Text style={styles.detailValue}>{facultyDept} Block</Text>
+                          <Text style={styles.detailLabel}>Location</Text>
+                        </View>
+                      </View>
+                    </View>
+                    <View style={[styles.arrowButton, !isOngoing && { backgroundColor: '#F1F5F9' }]}>
+                      <Icon name="arrow-forward" size={24} color={isOngoing ? "#F97316" : "#94A3B8"} />
+                    </View>
+                  </View>
+                </TouchableOpacity>
+              );
+            })()
           )}
           
           {classes.length > 0 && !isHoliday && (
-            <TouchableOpacity style={styles.seeAllBtn} onPress={() => setShowAllClasses(!showAllClasses)}>
-              <Text style={styles.seeAllText}>
-                {showAllClasses ? 'Hide Past Schedule' : 'See All Classes'}
-              </Text>
+            <TouchableOpacity style={styles.seeAllBtn} onPress={() => navigation.navigate('FullSchedule', { classes, facultyDept })}>
+              <Text style={styles.seeAllText}>See Full Schedule</Text>
             </TouchableOpacity>
           )}
         </Animated.View>
@@ -292,7 +293,7 @@ export default function Dashboard() {
         <Animated.View entering={FadeInUp.delay(250).duration(500)} style={styles.overviewSection}>
           <View style={styles.sectionHeader}>
              <Text style={styles.sectionTitleLabel}>Notified Overview</Text>
-             <TouchableOpacity><Text style={styles.viewAllText}>View Log</Text></TouchableOpacity>
+             <TouchableOpacity onPress={() => navigation.navigate('ViewLog')}><Text style={styles.viewAllText}>View Log</Text></TouchableOpacity>
           </View>
           <View style={styles.overviewCard}>
              <View style={styles.progressCircleWrap}>

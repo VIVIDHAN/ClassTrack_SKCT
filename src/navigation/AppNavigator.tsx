@@ -19,6 +19,8 @@ import HelpSupport from '../screens/HelpSupport';
 import About from '../screens/About';
 import Notifications from '../screens/Notifications';
 import NotFound from '../screens/NotFound';
+import ViewLog from '../screens/ViewLog';
+import FullSchedule from '../screens/FullSchedule';
 import { Colors } from '../constants/Colors';
 
 const Stack = createNativeStackNavigator();
@@ -44,6 +46,8 @@ export default function AppNavigator() {
         <Stack.Screen name="HelpSupport" component={HelpSupport} />
         <Stack.Screen name="About" component={About} />
         <Stack.Screen name="NotFound" component={NotFound} />
+        <Stack.Screen name="ViewLog" component={ViewLog} />
+        <Stack.Screen name="FullSchedule" component={FullSchedule} />
       </Stack.Navigator>
     </NavigationContainer>
   );
