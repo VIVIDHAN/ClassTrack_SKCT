@@ -37,6 +37,7 @@ export default function Dashboard() {
   const [isHoliday, setIsHoliday] = useState(false);
   const [holidayName, setHolidayName] = useState('');
   const [dayOrderStr, setDayOrderStr] = useState('');
+  const [eventName, setEventName] = useState('');
 
   useFocusEffect(
     React.useCallback(() => {
@@ -56,6 +57,7 @@ export default function Dashboard() {
               const romanDays = ['I', 'II', 'III', 'IV', 'V'];
               setDayOrderStr(`Day Order ${romanDays[day - 1]}`);
               setIsHoliday(false);
+              setEventName(calData.event_name || '');
 
               const response = await fetch(`${API_BASE_URL}/timetable?day=${day}&teacher_id=${profile.id}`);
               const data = await response.json();
@@ -64,6 +66,7 @@ export default function Dashboard() {
               setClasses([]);
               setIsHoliday(true);
               setHolidayName(calData?.holiday_name || "Holiday");
+              setEventName(calData?.event_name || '');
               setDayOrderStr('');
             }
             
@@ -160,6 +163,21 @@ export default function Dashboard() {
         </Animated.View>
 
 
+
+        {/* Academic Event Card */}
+        {eventName ? (
+          <Animated.View entering={FadeInUp.delay(100).duration(500)} style={[styles.upcomingCard, { marginBottom: 24, backgroundColor: '#EFF6FF', borderColor: '#BFDBFE' }]}>
+            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+              <View style={[styles.gridIconWrap, { backgroundColor: '#3B82F6', marginBottom: 0, marginRight: 16 }]}>
+                <Icon name="campaign" size={28} color="#ffffff" />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={{ fontSize: 12, color: '#2563EB', fontWeight: '800', marginBottom: 4, letterSpacing: 1 }}>TODAY'S EVENT</Text>
+                <Text style={{ fontSize: 16, color: '#1E3A8A', fontWeight: '700' }}>{eventName}</Text>
+              </View>
+            </View>
+          </Animated.View>
+        ) : null}
 
         {/* Upcoming Classes */}
         <Animated.View entering={FadeInUp.delay(150).duration(500)} style={styles.upcomingContainer}>

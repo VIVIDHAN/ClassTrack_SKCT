@@ -51,7 +51,8 @@ const CalendarDay = sequelize.define('CalendarDay', {
   date: { type: DataTypes.DATEONLY, primaryKey: true },
   day_order: { type: DataTypes.INTEGER, allowNull: true },
   is_holiday: { type: DataTypes.BOOLEAN, defaultValue: false },
-  holiday_name: { type: DataTypes.STRING, allowNull: true }
+  holiday_name: { type: DataTypes.STRING, allowNull: true },
+  event_name: { type: DataTypes.STRING, allowNull: true }
 });
 
 // Relationships
