@@ -4,6 +4,7 @@ import Animated, { FadeInDown, FadeInUp, withRepeat, withTiming, useSharedValue,
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Icon from 'react-native-vector-icons/MaterialIcons';
 import { Colors } from '../constants/Colors';
+import { API_BASE_URL } from '../constants/Config';
 import { useNavigation } from '@react-navigation/native';
 
 const { width, height } = Dimensions.get('window');
