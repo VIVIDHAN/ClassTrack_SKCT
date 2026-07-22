@@ -47,8 +47,15 @@ const Quote = sequelize.define('Quote', {
   text: { type: DataTypes.STRING, allowNull: false }
 });
 
+const CalendarDay = sequelize.define('CalendarDay', {
+  date: { type: DataTypes.DATEONLY, primaryKey: true },
+  day_order: { type: DataTypes.INTEGER, allowNull: true },
+  is_holiday: { type: DataTypes.BOOLEAN, defaultValue: false },
+  holiday_name: { type: DataTypes.STRING, allowNull: true }
+});
+
 // Relationships
 Timetable.belongsTo(Subject, { foreignKey: 'subject_id' });
 Timetable.belongsTo(Teacher, { foreignKey: 'teacher_id' });
 
-module.exports = { sequelize, Teacher, Student, Subject, Timetable, Quote };
+module.exports = { sequelize, Teacher, Student, Subject, Timetable, Quote, CalendarDay };

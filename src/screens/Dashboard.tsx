@@ -34,6 +34,9 @@ export default function Dashboard() {
 
   const [classes, setClasses] = useState<any[]>([]);
   const [dailyQuote, setDailyQuote] = useState("The beautiful thing about learning is that no one can take it away from you.");
+  const [isHoliday, setIsHoliday] = useState(false);
+  const [holidayName, setHolidayName] = useState('');
+  const [dayOrderStr, setDayOrderStr] = useState('');
 
   useFocusEffect(
     React.useCallback(() => {
@@ -45,12 +48,24 @@ export default function Dashboard() {
             setFacultyName(profile.name);
             setFacultyDept(profile.department || 'IT');
 
-            let day = new Date().getDay(); // 0 is Sunday, 1 is Monday
-            if (day === 0 || day === 6) day = 1; // Default to Monday if weekend
+            const calResponse = await fetch(`${API_BASE_URL}/calendar/today`);
+            const calData = await calResponse.json();
 
-            const response = await fetch(`${API_BASE_URL}/timetable?day=${day}&teacher_id=${profile.id}`);
-            const data = await response.json();
-            setClasses(Array.isArray(data) ? data : []);
+            if (calData && !calData.is_holiday && calData.day_order) {
+              const day = calData.day_order;
+              const romanDays = ['I', 'II', 'III', 'IV', 'V'];
+              setDayOrderStr(`Day Order ${romanDays[day - 1]}`);
+              setIsHoliday(false);
+
+              const response = await fetch(`${API_BASE_URL}/timetable?day=${day}&teacher_id=${profile.id}`);
+              const data = await response.json();
+              setClasses(Array.isArray(data) ? data : []);
+            } else {
+              setClasses([]);
+              setIsHoliday(true);
+              setHolidayName(calData?.holiday_name || "Holiday");
+              setDayOrderStr('');
+            }
             
             try {
               const quoteRes = await fetch(`${API_BASE_URL}/quote/daily`);
@@ -148,9 +163,22 @@ export default function Dashboard() {
 
         {/* Upcoming Classes */}
         <Animated.View entering={FadeInUp.delay(150).duration(500)} style={styles.upcomingContainer}>
-          <Text style={styles.sectionTitleLabel}>Today's Schedule</Text>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+            <Text style={styles.sectionTitleLabel}>Today's Schedule</Text>
+            {dayOrderStr ? (
+              <View style={[styles.upcomingBadge, { paddingHorizontal: 10, paddingVertical: 4 }]}>
+                <Text style={[styles.upcomingBadgeText, { fontSize: 11 }]}>{dayOrderStr}</Text>
+              </View>
+            ) : null}
+          </View>
           
-          {classes.filter(cls => getClassStatus(cls.period) !== 'past').length === 0 ? (
+          {isHoliday ? (
+             <View style={[styles.upcomingCard, { alignItems: 'center', padding: 30, backgroundColor: '#FEF3C7', borderColor: '#FDE68A' }]}>
+               <Icon name="celebration" size={48} color="#F59E0B" />
+               <Text style={{ marginTop: 12, color: '#92400E', fontWeight: '800', fontSize: 18 }}>{holidayName}</Text>
+               <Text style={{ marginTop: 4, color: '#B45309', fontWeight: '600' }}>No classes scheduled for today.</Text>
+             </View>
+          ) : classes.filter(cls => getClassStatus(cls.period) !== 'past').length === 0 ? (
              <View style={[styles.upcomingCard, { alignItems: 'center', padding: 30 }]}>
                <Icon name="event-available" size={48} color="#CBD5E1" />
                <Text style={{ marginTop: 10, color: '#64748B', fontWeight: '600' }}>No more classes scheduled for today.</Text>
