@@ -32,17 +32,31 @@ export default function Dashboard() {
     }
   };
 
+  const [classes, setClasses] = useState<any[]>([]);
+
   useFocusEffect(
     React.useCallback(() => {
-      fetch(`${API_BASE_URL}/timetable?day=1&section=III IT G`)
-        .then(res => res.json())
-        .then(data => {
-          if (data && data.length > 0 && data[0].Teacher) {
-            setFacultyName(data[0].Teacher.name);
-            setFacultyDept(data[0].Teacher.department || 'IT');
+      const loadDashboard = async () => {
+        try {
+          const profileStr = await AsyncStorage.getItem('teacherProfile');
+          if (profileStr) {
+            const profile = JSON.parse(profileStr);
+            setFacultyName(profile.name);
+            setFacultyDept(profile.department || 'IT');
+
+            let day = new Date().getDay(); // 0 is Sunday, 1 is Monday
+            if (day === 0 || day === 6) day = 1; // Default to Monday if weekend
+
+            const response = await fetch(`${API_BASE_URL}/timetable?day=${day}&teacher_id=${profile.id}`);
+            const data = await response.json();
+            setClasses(Array.isArray(data) ? data : []);
           }
-        })
-        .catch(err => console.log('Failed to fetch faculty:', err));
+        } catch (error) {
+          console.error('Failed to load dashboard:', error);
+        }
+      };
+      
+      loadDashboard();
     }, [])
   );
   return (
@@ -102,30 +116,46 @@ export default function Dashboard() {
 
         {/* Upcoming Classes */}
         <Animated.View entering={FadeInUp.delay(150).duration(500)} style={styles.upcomingContainer}>
-          <Text style={styles.sectionTitleLabel}>Upcoming Classes</Text>
-          <View style={styles.upcomingCard}>
-            <View style={styles.upcomingHeader}>
-              <View style={styles.upcomingBadge}>
-                <Icon name="schedule" size={16} color={Colors.primary} style={{ marginRight: 4 }} />
-                <Text style={styles.upcomingBadgeText}>10:00 AM - 11:00 AM</Text>
-              </View>
-              <View style={styles.attendanceBadge}>
-                <Text style={styles.attendanceBadgeText}>85% Avg</Text>
-              </View>
-            </View>
-            <Text style={styles.upcomingSubject}>Cloud Computing & Distributed Systems</Text>
-            <View style={styles.upcomingFooter}>
-              <View style={styles.footerItem}>
-                <Icon name="door-front" size={20} color="#64748B" />
-                <Text style={styles.footerItemText}>Room 204</Text>
-              </View>
-              <View style={styles.footerDivider} />
-              <View style={styles.footerItem}>
-                <Icon name="domain" size={20} color="#64748B" />
-                <Text style={styles.footerItemText}>IT Block, 2nd Floor</Text>
-              </View>
-            </View>
-          </View>
+          <Text style={styles.sectionTitleLabel}>Today's Schedule</Text>
+          
+          {classes.length === 0 ? (
+             <View style={[styles.upcomingCard, { alignItems: 'center', padding: 30 }]}>
+               <Icon name="event-available" size={48} color="#CBD5E1" />
+               <Text style={{ marginTop: 10, color: '#64748B', fontWeight: '600' }}>No classes scheduled for today.</Text>
+             </View>
+          ) : (
+            classes.map((cls, index) => {
+              // Convert period to roughly time slot
+              const timeSlots = ['08:45 AM - 09:40 AM', '09:40 AM - 10:35 AM', '10:50 AM - 11:45 AM', '11:45 AM - 12:40 PM', '01:30 PM - 02:25 PM', '02:25 PM - 03:20 PM', '03:20 PM - 04:15 PM'];
+              const timeString = timeSlots[cls.period - 1] || `Period ${cls.period}`;
+              
+              return (
+                <View key={cls.id} style={[styles.upcomingCard, { marginBottom: 16 }]}>
+                  <View style={styles.upcomingHeader}>
+                    <View style={styles.upcomingBadge}>
+                      <Icon name="schedule" size={16} color={Colors.primary} style={{ marginRight: 4 }} />
+                      <Text style={styles.upcomingBadgeText}>{timeString}</Text>
+                    </View>
+                    <View style={[styles.attendanceBadge, { backgroundColor: '#3B82F6' }]}>
+                      <Text style={styles.attendanceBadgeText}>{cls.section}</Text>
+                    </View>
+                  </View>
+                  <Text style={styles.upcomingSubject}>{cls.Subject ? cls.Subject.title : 'Subject'}</Text>
+                  <View style={styles.upcomingFooter}>
+                    <View style={styles.footerItem}>
+                      <Icon name="badge" size={20} color="#64748B" />
+                      <Text style={styles.footerItemText}>{cls.Subject ? cls.Subject.code : '-'}</Text>
+                    </View>
+                    <View style={styles.footerDivider} />
+                    <View style={styles.footerItem}>
+                      <Icon name="domain" size={20} color="#64748B" />
+                      <Text style={styles.footerItemText}>{facultyDept} Block</Text>
+                    </View>
+                  </View>
+                </View>
+              );
+            })
+          )}
         </Animated.View>
 
         {/* Daily Wisdom */}

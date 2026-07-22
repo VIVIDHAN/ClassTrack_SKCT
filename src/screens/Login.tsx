@@ -39,6 +39,8 @@ export default function Login() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [errorMsg, setErrorMsg] = useState('');
   const passwordRef = useRef<TextInput>(null);
 
   const [resetEmail, setResetEmail] = useState('');
@@ -84,12 +86,31 @@ export default function Login() {
   });
 
   const handleLogin = async () => {
+    if (!email || !password) {
+      setErrorMsg('Please enter your email and password');
+      return;
+    }
+    setLoading(true);
+    setErrorMsg('');
     try {
-      await AsyncStorage.setItem('userToken', 'logged_in_token');
-      navigation.replace('Dashboard');
-    } catch (e) {
-      console.log('Error saving token', e);
-      navigation.replace('Dashboard');
+      const response = await fetch(`${API_BASE_URL}/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: email.trim(), password })
+      });
+      const data = await response.json();
+      
+      if (data.success) {
+        await AsyncStorage.setItem('userToken', 'logged_in_token');
+        await AsyncStorage.setItem('teacherProfile', JSON.stringify(data.user));
+        navigation.replace('Dashboard');
+      } else {
+        setErrorMsg(data.error || 'Invalid credentials');
+      }
+    } catch (err) {
+      setErrorMsg('Network error. Check your connection.');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -164,10 +185,12 @@ export default function Login() {
                 </View>
               </View>
 
-              <View style={{ height: 20 }} />
+              <View style={{ height: 16, alignItems: 'center' }}>
+                {errorMsg ? <Text style={{color: '#EF4444', fontSize: 13, fontWeight: '600'}}>{errorMsg}</Text> : null}
+              </View>
 
-              <TouchableOpacity style={styles.loginButton} onPress={handleLogin} activeOpacity={0.8}>
-                <Text style={styles.loginButtonText}>Sign In</Text>
+              <TouchableOpacity style={styles.loginButton} onPress={handleLogin} activeOpacity={0.8} disabled={loading}>
+                <Text style={styles.loginButtonText}>{loading ? 'Signing In...' : 'Sign In'}</Text>
               </TouchableOpacity>
 
               <View style={styles.termsContainer}>
