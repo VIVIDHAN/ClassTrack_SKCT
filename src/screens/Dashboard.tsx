@@ -309,25 +309,25 @@ export default function Dashboard() {
             <View style={styles.notificationInner}>
                <View style={styles.statBlockFull}>
                  <View style={[styles.statIconBox, { backgroundColor: '#FFF5ED' }]}><Icon name="send" size={20} color="#EA580C" /></View>
-                 <View>
+                 <View style={{ alignItems: 'center' }}>
                    <Text style={[styles.statValueLarge, { color: '#EA580C' }]}>{totalNotified < 10 ? `0${totalNotified}` : totalNotified}</Text>
-                   <Text style={styles.statLabelLarge}>Notifications Sent{'\n'}(Today)</Text>
+                   <Text style={styles.statLabelLarge}>Sent</Text>
                  </View>
                </View>
                <View style={styles.verticalDivider} />
                <View style={styles.statBlockFull}>
                  <View style={[styles.statIconBox, { backgroundColor: '#ECFDF5' }]}><Icon name="people" size={20} color="#10B981" /></View>
-                 <View>
+                 <View style={{ alignItems: 'center' }}>
                    <Text style={[styles.statValueLarge, { color: '#10B981' }]}>24</Text>
-                   <Text style={styles.statLabelLarge}>Present Count{'\n'}(Today)</Text>
+                   <Text style={styles.statLabelLarge}>Present</Text>
                  </View>
                </View>
                <View style={styles.verticalDivider} />
                <View style={styles.statBlockFull}>
                  <View style={[styles.statIconBox, { backgroundColor: '#FEF2F2' }]}><Icon name="person-off" size={20} color="#EF4444" /></View>
-                 <View>
+                 <View style={{ alignItems: 'center' }}>
                    <Text style={[styles.statValueLarge, { color: '#EF4444' }]}>02</Text>
-                   <Text style={styles.statLabelLarge}>Absent Count{'\n'}(Today)</Text>
+                   <Text style={styles.statLabelLarge}>Absent</Text>
                  </View>
                </View>
             </View>
@@ -438,10 +438,10 @@ const styles = StyleSheet.create({
   todayDropdown: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#F8FAFC', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 16 },
   todayText: { fontFamily: 'Poppins-Bold', color: '#64748B', fontSize: 12, marginRight: 4 },
   notificationInner: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#ffffff', padding: 10, borderRadius: 20 },
-  statBlockFull: { flex: 1, flexDirection: 'row', alignItems: 'center' },
-  statIconBox: { width: 44, height: 44, borderRadius: 22, justifyContent: 'center', alignItems: 'center', marginRight: 12 },
-  statValueLarge: { fontFamily: 'Poppins-Bold', fontSize: 24, marginBottom: 2 },
-  statLabelLarge: { fontFamily: 'Poppins-Medium', fontSize: 10, color: '#64748B', lineHeight: 14 },
+  statBlockFull: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+  statIconBox: { width: 44, height: 44, borderRadius: 22, justifyContent: 'center', alignItems: 'center', marginBottom: 12 },
+  statValueLarge: { fontFamily: 'Poppins-Bold', fontSize: 24, marginBottom: 2, textAlign: 'center' },
+  statLabelLarge: { fontFamily: 'Poppins-Medium', fontSize: 11, color: '#64748B', lineHeight: 14, textAlign: 'center' },
   verticalDivider: { width: 1, height: 40, backgroundColor: '#F1F5F9', marginHorizontal: 12 },
 
   wisdomSection: { paddingHorizontal: 24, marginTop: 32 },
