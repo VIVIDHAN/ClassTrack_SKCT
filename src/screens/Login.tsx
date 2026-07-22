@@ -4,6 +4,9 @@ import Animated, { FadeInDown, FadeInUp, withRepeat, withTiming, useSharedValue,
 import Icon from 'react-native-vector-icons/Feather';
 import { Colors } from '../constants/Colors';
 import { useNavigation } from '@react-navigation/native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { API_BASE_URL } from '../constants/Config';
+import { ActivityIndicator } from 'react-native';
 
 const { width, height } = Dimensions.get('window');
 
@@ -37,10 +40,36 @@ export default function Login() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [errorMsg, setErrorMsg] = useState('');
   const passwordRef = useRef<TextInput>(null);
 
-  const handleLogin = () => {
-    navigation.replace('MainTabs');
+  const handleLogin = async () => {
+    if (!email || !password) {
+      setErrorMsg('Please enter your email and password');
+      return;
+    }
+    setLoading(true);
+    setErrorMsg('');
+    try {
+      const response = await fetch(`${API_BASE_URL}/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: email.trim(), password })
+      });
+      const data = await response.json();
+      
+      if (data.success) {
+        await AsyncStorage.setItem('teacherProfile', JSON.stringify(data.user));
+        navigation.replace('MainTabs');
+      } else {
+        setErrorMsg(data.error || 'Invalid credentials');
+      }
+    } catch (err) {
+      setErrorMsg('Network error. Check your connection.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -104,10 +133,12 @@ export default function Login() {
             </View>
           </View>
 
-          <View style={{ height: 16 }} />
+          <View style={{ height: 16 }}>
+            {errorMsg ? <Text style={styles.errorText}>{errorMsg}</Text> : null}
+          </View>
 
-          <TouchableOpacity style={styles.loginButton} onPress={handleLogin} activeOpacity={0.8}>
-            <Text style={styles.loginButtonText}>Sign In</Text>
+          <TouchableOpacity style={styles.loginButton} onPress={handleLogin} activeOpacity={0.8} disabled={loading}>
+            {loading ? <ActivityIndicator color="#fff" /> : <Text style={styles.loginButtonText}>Sign In</Text>}
           </TouchableOpacity>
         </Animated.View>
         </ScrollView>
@@ -227,4 +258,10 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     letterSpacing: 1,
   },
+  errorText: {
+    color: '#EF4444',
+    textAlign: 'center',
+    fontSize: 13,
+    fontWeight: '600',
+  }
 });

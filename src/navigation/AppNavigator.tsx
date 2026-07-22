@@ -7,9 +7,6 @@ import Icon from 'react-native-vector-icons/MaterialIcons';
 import Splash from '../screens/Splash';
 import Login from '../screens/Login';
 import Dashboard from '../screens/Dashboard';
-import Attendance from '../screens/Attendance';
-import Success from '../screens/Success';
-import History from '../screens/History';
 import Profile from '../screens/Profile';
 import Settings from '../screens/Settings';
 import PersonalDetails from '../screens/PersonalDetails';
@@ -43,14 +40,12 @@ function BottomTabs() {
         tabBarIcon: ({ color, size }) => {
           let iconName = '';
           if (route.name === 'Dashboard') iconName = 'dashboard';
-          else if (route.name === 'History') iconName = 'history';
           else if (route.name === 'Profile') iconName = 'person';
           return <Icon name={iconName} size={size + 2} color={color} />;
         },
       })}
     >
       <Tab.Screen name="Dashboard" component={Dashboard} />
-      <Tab.Screen name="History" component={History} />
       <Tab.Screen name="Profile" component={Profile} />
     </Tab.Navigator>
   );
@@ -63,8 +58,6 @@ export default function AppNavigator() {
         <Stack.Screen name="Splash" component={Splash} />
         <Stack.Screen name="Login" component={Login} />
         <Stack.Screen name="MainTabs" component={BottomTabs} />
-        <Stack.Screen name="Attendance" component={Attendance} />
-        <Stack.Screen name="Success" component={Success} />
         <Stack.Screen name="Notifications" component={Notifications} />
         <Stack.Screen name="Settings" component={Settings} />
         <Stack.Screen name="PersonalDetails" component={PersonalDetails} />

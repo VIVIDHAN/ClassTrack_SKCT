@@ -45,13 +45,4 @@ const Timetable = sequelize.define('Timetable', {
 Timetable.belongsTo(Subject, { foreignKey: 'subject_id' });
 Timetable.belongsTo(Teacher, { foreignKey: 'teacher_id' });
 
-const Attendance = sequelize.define('Attendance', {
-  id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
-  date: { type: DataTypes.DATEONLY, allowNull: false },
-  status: { type: DataTypes.ENUM('Present', 'Absent', 'OD'), allowNull: false, defaultValue: 'Present' }
-});
-
-Attendance.belongsTo(Student, { foreignKey: 'student_id' });
-Attendance.belongsTo(Timetable, { foreignKey: 'timetable_id' });
-
-module.exports = { sequelize, Teacher, Student, Subject, Timetable, Attendance };
+module.exports = { sequelize, Teacher, Student, Subject, Timetable };

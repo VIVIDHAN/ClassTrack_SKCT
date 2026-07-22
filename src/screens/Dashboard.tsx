@@ -1,61 +1,123 @@
 import React from 'react';
 import { View, Text, StyleSheet, FlatList, TouchableOpacity, SafeAreaView, Platform, StatusBar } from 'react-native';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import Animated, { FadeInUp, FadeInRight } from 'react-native-reanimated';
 import Icon from 'react-native-vector-icons/MaterialIcons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Colors } from '../constants/Colors';
-import { DUMMY_USER } from '../constants/DummyData';
 import { API_BASE_URL } from '../constants/Config';
+
+// Time mappings based on the college timetable image
+const getPeriodTime = (period: number) => {
+  switch(period) {
+    case 1: return { label: '8:15 AM - 9:15 AM', start: 8.25, end: 9.25 };
+    case 2: return { label: '9:15 AM - 10:15 AM', start: 9.25, end: 10.25 };
+    case 3: return { label: '10:45 AM - 11:45 AM', start: 10.75, end: 11.75 };
+    case 4: return { label: '11:45 AM - 12:45 PM', start: 11.75, end: 12.75 };
+    case 5: return { label: '1:45 PM - 2:45 PM', start: 13.75, end: 14.75 };
+    default: return { label: 'Unknown', start: 0, end: 24 };
+  }
+};
+
+const getClassStatus = (startHr: number, endHr: number) => {
+  const now = new Date();
+  const currentHr = now.getHours() + (now.getMinutes() / 60);
+  
+  if (currentHr > endHr) return 'completed';
+  if (currentHr >= startHr && currentHr <= endHr) return 'current';
+  return 'upcoming';
+};
 
 export default function Dashboard() {
   const navigation = useNavigation<any>();
   const [classes, setClasses] = React.useState<any[]>([]);
   const [loading, setLoading] = React.useState(true);
+  const [teacher, setTeacher] = React.useState<any>(null);
+  const [todayDay, setTodayDay] = React.useState(1);
 
-  React.useEffect(() => {
-    fetch(`${API_BASE_URL}/timetable?day=1&section=III IT G`)
-      .then(res => res.json())
-      .then(data => {
-        const mapped = data.map((item: any) => ({
-          id: String(item.id),
-          time: `Period ${item.period}`,
-          className: item.section,
-          subject: item.Subject.title,
-          timetable_id: item.id
-        }));
-        setClasses(mapped);
-        setLoading(false);
-      })
-      .catch(err => {
-        console.error(err);
-        setLoading(false);
-      });
-  }, []);
+  useFocusEffect(
+    React.useCallback(() => {
+      const loadDashboard = async () => {
+        try {
+          const profileStr = await AsyncStorage.getItem('teacherProfile');
+          if (!profileStr) {
+            navigation.replace('Login');
+            return;
+          }
+          const profile = JSON.parse(profileStr);
+          setTeacher(profile);
 
-  const renderClassItem = ({ item, index }: { item: any, index: number }) => (
-    <Animated.View entering={FadeInRight.delay(index * 100).duration(400)}>
-      <TouchableOpacity 
-        style={styles.classCard}
-        onPress={() => navigation.navigate('Attendance', { classDetails: item })}
-        activeOpacity={0.7}
-      >
-        <View style={styles.cardLeft}>
-          <View style={styles.timeRow}>
-            <Icon name="schedule" size={16} color={Colors.textSecondary} style={{ marginRight: 6 }} />
-            <Text style={styles.classTime}>{item.time}</Text>
-          </View>
-          <Text style={styles.className}>{item.className}</Text>
-          <Text style={styles.subjectName}>{item.subject}</Text>
-        </View>
-        <View style={styles.cardRight}>
-          <View style={styles.takeAttendanceBtn}>
-            <Text style={styles.takeAttendanceText}>Mark</Text>
-            <Icon name="chevron-right" size={18} color="#ffffff" />
-          </View>
-        </View>
-      </TouchableOpacity>
-    </Animated.View>
+          // Calculate day (1=Mon, 5=Fri). If weekend (0, 6), default to 1 for testing.
+          let day = new Date().getDay();
+          if (day === 0 || day === 6) day = 1; 
+          setTodayDay(day);
+
+          const res = await fetch(`${API_BASE_URL}/timetable?day=${day}&teacher_id=${profile.id}`);
+          const data = await res.json();
+
+          const mapped = data.map((item: any) => {
+            const timeInfo = getPeriodTime(item.period);
+            return {
+              id: String(item.id),
+              period: item.period,
+              timeLabel: timeInfo.label,
+              status: getClassStatus(timeInfo.start, timeInfo.end),
+              className: item.section,
+              subject: item.Subject.title,
+              timetable_id: item.id
+            };
+          });
+          
+          setClasses(mapped);
+        } catch (err) {
+          console.error('Error loading dashboard:', err);
+        } finally {
+          setLoading(false);
+        }
+      };
+
+      loadDashboard();
+    }, [])
   );
+
+  const renderClassItem = ({ item, index }: { item: any, index: number }) => {
+    const isCurrent = item.status === 'current';
+    const isCompleted = item.status === 'completed';
+
+    return (
+      <Animated.View entering={FadeInRight.delay(index * 100).duration(400)}>
+        <TouchableOpacity 
+          style={[
+            styles.classCard,
+            isCurrent && styles.currentClassCard,
+            isCompleted && styles.completedClassCard
+          ]}
+          activeOpacity={0.7}
+        >
+          <View style={styles.cardLeft}>
+            <View style={styles.timeRow}>
+              <Icon name="schedule" size={16} color={isCurrent ? Colors.primary : Colors.textSecondary} style={{ marginRight: 6 }} />
+              <Text style={[styles.classTime, isCurrent && { color: Colors.primary }]}>
+                {item.timeLabel} {isCurrent && '(Ongoing)'}
+              </Text>
+            </View>
+            <Text style={[styles.className, isCompleted && { color: Colors.textSecondary }]}>{item.className}</Text>
+            <Text style={styles.subjectName}>{item.subject}</Text>
+          </View>
+        </TouchableOpacity>
+      </Animated.View>
+    );
+  };
+
+  if (loading || !teacher) {
+    return (
+      <SafeAreaView style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
+        <Text style={{ color: Colors.textSecondary }}>Loading your schedule...</Text>
+      </SafeAreaView>
+    );
+  }
+
+  const upcomingClasses = classes.filter(c => c.status !== 'completed').length;
 
   return (
     <SafeAreaView style={styles.container}>
@@ -73,10 +135,10 @@ export default function Dashboard() {
         <View style={styles.facultyCard}>
           <View style={styles.facultyCardContent}>
             <Text style={styles.greeting}>Welcome back,</Text>
-            <Text style={styles.name}>Prof. {DUMMY_USER.name}</Text>
+            <Text style={styles.name}>Prof. {teacher.name.split(' ')[0]}</Text>
             <View style={styles.departmentBadge}>
               <Icon name="domain" size={16} color="#ffffff" style={{ marginRight: 6 }} />
-              <Text style={styles.subtitle}>{DUMMY_USER.department}</Text>
+              <Text style={styles.subtitle}>{teacher.department} Department</Text>
             </View>
           </View>
           <View style={styles.facultyIconWrapper}>
@@ -87,19 +149,21 @@ export default function Dashboard() {
 
       <View style={styles.statsOverview}>
         <View style={styles.statBox}>
-          <Text style={styles.statBoxLabel}>Classes Today</Text>
-          <Text style={styles.statBoxValue}>{loading ? '-' : classes.length}</Text>
+          <Text style={styles.statBoxLabel}>Total Today</Text>
+          <Text style={styles.statBoxValue}>{classes.length}</Text>
         </View>
         <View style={styles.statBox}>
-          <Text style={styles.statBoxLabel}>Pending</Text>
-          <Text style={[styles.statBoxValue, { color: Colors.primary }]}>{loading ? '-' : classes.length}</Text>
+          <Text style={styles.statBoxLabel}>Upcoming</Text>
+          <Text style={[styles.statBoxValue, { color: Colors.primary }]}>{upcomingClasses}</Text>
         </View>
       </View>
 
       <View style={styles.listContainer}>
-        <Text style={styles.sectionTitle}>Schedule</Text>
-        {loading ? (
-          <Text style={{ textAlign: 'center', marginTop: 20, color: Colors.textSecondary }}>Loading live schedule...</Text>
+        <Text style={styles.sectionTitle}>Day {todayDay} Schedule</Text>
+        {classes.length === 0 ? (
+          <Text style={{ textAlign: 'center', marginTop: 20, color: Colors.textSecondary }}>
+            No classes scheduled for today.
+          </Text>
         ) : (
           <FlatList
             data={classes}
@@ -135,7 +199,7 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.background,
   },
   facultyCard: {
-    backgroundColor: '#0F172A', // Deep slate for professional look
+    backgroundColor: '#0F172A',
     borderRadius: 20,
     padding: 24,
     flexDirection: 'row',
@@ -170,15 +234,11 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#E2E8F0',
   },
-  profileIconText: {
-    fontSize: 22,
-  },
   collegeName: {
     flex: 1,
     fontSize: 14,
     fontWeight: '800',
     color: '#0F172A',
-    letterSpacing: 0,
   },
   notificationBtn: {
     width: 44,
@@ -264,14 +324,22 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: Colors.border,
     borderLeftWidth: 4,
-    borderLeftColor: Colors.primary,
+    borderLeftColor: Colors.border,
     alignItems: 'center',
     justifyContent: 'space-between',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.04,
-    shadowRadius: 6,
-    elevation: 2,
+  },
+  currentClassCard: {
+    borderLeftColor: Colors.primary,
+    backgroundColor: '#F0F9FF', // slight blue tint
+    borderColor: '#E0F2FE',
+    shadowColor: Colors.primary,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  completedClassCard: {
+    opacity: 0.6,
   },
   cardLeft: {
     flex: 1,
@@ -296,22 +364,5 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: Colors.textSecondary,
     fontWeight: '600',
-  },
-  cardRight: {
-    marginLeft: 16,
-  },
-  takeAttendanceBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: Colors.primary,
-    paddingVertical: 8,
-    paddingHorizontal: 14,
-    borderRadius: 16,
-  },
-  takeAttendanceText: {
-    color: '#ffffff',
-    fontWeight: '700',
-    fontSize: 13,
-    marginRight: 4,
   }
 });

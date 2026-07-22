@@ -1,10 +1,10 @@
 const XLSX = require('xlsx');
-const { sequelize, Teacher, Student, Subject, Timetable, Attendance } = require('./db');
+const { sequelize, Teacher, Student, Subject, Timetable } = require('./db');
 const path = require('path');
 
 const importExcel = async () => {
   try {
-    const filePath = '/Users/vividhan/Downloads/ClassTrack_Master_Data.xlsx';
+    const filePath = '/Users/vividhan/Desktop/ClassTrack/ClassTrack_Master_Data (1).xlsx';
     console.log(`Reading Excel file from ${filePath}...`);
     const workbook = XLSX.readFile(filePath);
 
