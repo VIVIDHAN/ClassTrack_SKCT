@@ -156,7 +156,11 @@ export default function Dashboard() {
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
       {/* Header */}
       <View style={styles.appBar}>
-        <View style={{ width: 44 }} />
+        <TouchableOpacity style={styles.appBarBtn} onPress={() => setIsSidebarOpen(true)}>
+          <View style={styles.menuBox}>
+            <Icon name="menu" size={24} color="#EA580C" />
+          </View>
+        </TouchableOpacity>
         
         <View style={styles.headerLogoContainer}>
           <Image source={require('../assets/logo.png')} style={{ height: 40, width: 220 }} resizeMode="contain" />
@@ -164,7 +168,7 @@ export default function Dashboard() {
 
         <TouchableOpacity style={styles.appBarBtn} onPress={() => navigation.navigate('Notifications')}>
           <View style={styles.bellBox}>
-            <Icon name="notifications-none" size={24} color="#0F172A" />
+            <Icon name="notifications-none" size={24} color="#1E293B" />
             <View style={styles.notificationDot} />
           </View>
         </TouchableOpacity>
@@ -186,11 +190,11 @@ export default function Dashboard() {
               style={StyleSheet.absoluteFill}
             />
             <View style={{ zIndex: 2 }}>
-              <Text style={styles.greeting}>Good Morning,</Text>
+              <Text style={styles.greeting}>GOOD MORNING,</Text>
               <Text style={styles.name}>{getFormatName(facultyName)}</Text>
               
               <View style={styles.departmentBadge}>
-                <Icon name="business" size={16} color="#F97316" style={{ marginRight: 6 }} />
+                <Icon name="business" size={16} color="#EA580C" style={{ marginRight: 6 }} />
                 <Text style={styles.departmentText}>{facultyDept} Department</Text>
               </View>
             </View>
@@ -258,7 +262,7 @@ export default function Dashboard() {
                       <Text style={styles.timeText}>{timeString}</Text>
                     </View>
                     <View style={{flexDirection: 'row', alignItems: 'center'}}>
-                      {isOngoing && <View style={styles.ongoingBadge}><Text style={styles.ongoingText}>ONGOING</Text></View>}
+                      {isOngoing && <View style={styles.ongoingBadge}><Icon name="fiber-manual-record" size={10} color="#ffffff" style={{marginRight: 4}} /><Text style={styles.ongoingText}>ONGOING</Text></View>}
                       {isUpcoming && <View style={[styles.ongoingBadge, { backgroundColor: '#38BDF8' }]}><Text style={styles.ongoingText}>UPCOMING</Text></View>}
                       <View style={styles.sectionBadge}><Text style={styles.sectionText}>{activeClass.section}</Text></View>
                     </View>
@@ -267,25 +271,23 @@ export default function Dashboard() {
                   <Text style={styles.classTitle}>{activeClass.Subject ? activeClass.Subject.title : 'Subject Title'}</Text>
                   
                   <View style={styles.classBottomRow}>
-                    <View style={styles.classDetailsBox}>
-                      <View style={styles.detailItem}>
-                        <Icon name="badge" size={18} color="#94A3B8" />
-                        <View style={{marginLeft: 12}}>
-                          <Text style={styles.detailValue}>{activeClass.Subject ? activeClass.Subject.code : '-'}</Text>
-                          <Text style={styles.detailLabel}>Course Code</Text>
-                        </View>
-                      </View>
-                      <View style={styles.detailDivider} />
-                      <View style={styles.detailItem}>
-                        <Icon name="business" size={18} color="#94A3B8" />
-                        <View style={{marginLeft: 12}}>
-                          <Text style={styles.detailValue}>{facultyDept} Block</Text>
-                          <Text style={styles.detailLabel}>Location</Text>
-                        </View>
+                    <View style={styles.detailItem}>
+                      <Icon name="badge" size={20} color="#DC2626" />
+                      <View style={{marginLeft: 12}}>
+                        <Text style={styles.detailValue}>{activeClass.Subject ? activeClass.Subject.code : '-'}</Text>
+                        <Text style={styles.detailLabel}>Course Code</Text>
                       </View>
                     </View>
-                    <View style={[styles.arrowButton, !isOngoing && { backgroundColor: '#F1F5F9' }]}>
-                      <Icon name="arrow-forward" size={24} color={isOngoing ? "#F97316" : "#94A3B8"} />
+                    <View style={styles.detailDivider} />
+                    <View style={styles.detailItem}>
+                      <Icon name="business" size={20} color="#DC2626" />
+                      <View style={{marginLeft: 12}}>
+                        <Text style={styles.detailValue}>{facultyDept} Block</Text>
+                        <Text style={styles.detailLabel}>Location</Text>
+                      </View>
+                    </View>
+                    <View style={[styles.arrowButton, !isOngoing && { backgroundColor: '#E2E8F0' }]}>
+                      <Icon name="arrow-forward" size={20} color={isOngoing ? "#ffffff" : "#94A3B8"} />
                     </View>
                   </View>
                 </TouchableOpacity>
@@ -300,44 +302,50 @@ export default function Dashboard() {
           )}
         </Animated.View>
 
-        {/* Notified Overview */}
+        {/* Notification Overview */}
         <Animated.View entering={FadeInUp.delay(250).duration(500)} style={styles.overviewSection}>
-          <View style={styles.sectionHeader}>
-             <Text style={styles.sectionTitleLabel}>Notified Overview</Text>
-             <TouchableOpacity onPress={() => navigation.navigate('ViewLog')}><Text style={styles.viewAllText}>View Log</Text></TouchableOpacity>
-          </View>
-          <View style={styles.overviewCard}>
-             <View style={styles.progressCircleWrap}>
-               <View style={styles.progressCircle}>
-                 <Text style={[styles.progressValue, { fontSize: 32 }]}>{totalNotified}</Text>
-                 <Text style={styles.progressLabel}>Sent</Text>
-               </View>
-             </View>
-             
-             <View style={styles.statBlocks}>
-               <View style={[styles.statBlock, { flex: 1.5 }]}>
-                 <Text style={[styles.statValue, {color: '#EF4444'}]}>{totalNotified}</Text>
-                 <View style={styles.statLabelRow}>
-                    <View style={[styles.dot, {backgroundColor: '#EF4444'}]} />
-                    <Text style={styles.statLabelText}>Absent Notified</Text>
+          <LinearGradient colors={['#EA580C', '#9A3412']} start={{x: 0, y: 0}} end={{x: 1, y: 1}} style={styles.notificationCard}>
+            <View style={styles.notificationHeader}>
+               <Text style={styles.notificationTitle}>Notification Overview</Text>
+               <TouchableOpacity style={styles.todayDropdown}>
+                 <Text style={styles.todayText}>Today</Text>
+                 <Icon name="keyboard-arrow-down" size={16} color="#ffffff" />
+               </TouchableOpacity>
+            </View>
+
+            <View style={styles.notificationInner}>
+               <View style={styles.statBlockFull}>
+                 <View style={styles.statIconBox}><Icon name="send" size={20} color="#ffffff" /></View>
+                 <View>
+                   <Text style={styles.statValueLarge}>{totalNotified < 10 ? `0${totalNotified}` : totalNotified}</Text>
+                   <Text style={styles.statLabelLarge}>Notifications Sent{'\n'}(Today)</Text>
                  </View>
                </View>
-               <View style={[styles.statBlock, { flex: 1, opacity: 0.5 }]}>
-                 <Text style={[styles.statValue, {color: '#16A34A'}]}>-</Text>
-                 <View style={styles.statLabelRow}>
-                    <View style={[styles.dot, {backgroundColor: '#16A34A'}]} />
-                    <Text style={styles.statLabelText}>Present</Text>
+               <View style={styles.verticalDivider} />
+               <View style={styles.statBlockFull}>
+                 <View style={styles.statIconBox}><Icon name="people" size={20} color="#ffffff" /></View>
+                 <View>
+                   <Text style={styles.statValueLarge}>24</Text>
+                   <Text style={styles.statLabelLarge}>Present Count{'\n'}(Today)</Text>
                  </View>
                </View>
-             </View>
-          </View>
+               <View style={styles.verticalDivider} />
+               <View style={styles.statBlockFull}>
+                 <View style={styles.statIconBox}><Icon name="person-off" size={20} color="#ffffff" /></View>
+                 <View>
+                   <Text style={styles.statValueLarge}>02</Text>
+                   <Text style={styles.statLabelLarge}>Absent Count{'\n'}(Today)</Text>
+                 </View>
+               </View>
+            </View>
+          </LinearGradient>
         </Animated.View>
 
         {/* Daily Wisdom */}
         <Animated.View entering={FadeInUp.delay(300).duration(500)} style={styles.wisdomSection}>
           <View style={styles.sectionHeader}>
-            <Text style={[styles.sectionTitleLabel, { color: '#F97316' }]}>Daily Wisdom</Text>
-            <Icon name="format-quote" size={32} color="rgba(249, 115, 22, 0.4)" />
+            <Text style={[styles.sectionTitleLabel, { color: '#DC2626' }]}>Daily Wisdom</Text>
+            <Icon name="format-quote" size={32} color="#DC2626" />
           </View>
           <View style={styles.wisdomCard}>
              <Text style={styles.wisdomQuote}>"{dailyQuote}"</Text>
@@ -348,12 +356,12 @@ export default function Dashboard() {
 
       {/* Bottom Navigation */}
       <View style={styles.bottomNav}>
-        <TouchableOpacity style={styles.navItem} onPress={() => navigation.navigate('Settings')}>
-           <Icon name="settings" size={26} color="#94A3B8" />
-           <Text style={styles.navText}>Settings</Text>
+        <TouchableOpacity style={styles.navItem} onPress={() => navigation.navigate('ViewLog')}>
+           <Icon name="assignment" size={26} color="#94A3B8" />
+           <Text style={styles.navText}>Logs</Text>
         </TouchableOpacity>
         <TouchableOpacity style={styles.navItemActive}>
-           <Icon name="home" size={26} color="#F97316" />
+           <Icon name="home" size={26} color="#DC2626" />
            <Text style={styles.navTextActive}>Home</Text>
         </TouchableOpacity>
         <TouchableOpacity style={styles.navItem} onPress={() => navigation.navigate('Profile')}>
@@ -393,15 +401,16 @@ const styles = StyleSheet.create({
   appBar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingTop: 10, paddingBottom: 15, backgroundColor: '#FAFAFA' },
   appBarBtn: { padding: 4 },
   headerLogoContainer: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center' },
-  bellBox: { position: 'relative', width: 44, height: 44, borderRadius: 22, backgroundColor: '#ffffff', justifyContent: 'center', alignItems: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 8, elevation: 2 },
-  notificationDot: { position: 'absolute', top: 12, right: 12, width: 8, height: 8, borderRadius: 4, backgroundColor: '#EF4444', borderWidth: 1, borderColor: '#ffffff' },
+  menuBox: { position: 'relative', width: 48, height: 48, borderRadius: 12, backgroundColor: '#FFF5ED', justifyContent: 'center', alignItems: 'center', shadowColor: '#EA580C', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 8, elevation: 2 },
+  bellBox: { position: 'relative', width: 48, height: 48, borderRadius: 12, backgroundColor: '#FFF5ED', justifyContent: 'center', alignItems: 'center', shadowColor: '#EA580C', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 8, elevation: 2 },
+  notificationDot: { position: 'absolute', top: 12, right: 12, width: 10, height: 10, borderRadius: 5, backgroundColor: '#DC2626', borderWidth: 2, borderColor: '#FFF5ED' },
   
   welcomeContainer: { paddingHorizontal: 24, paddingTop: 16, paddingBottom: 16 },
-  welcomeCard: { borderRadius: 32, padding: 32, overflow: 'hidden', shadowColor: '#F97316', shadowOffset: { width: 0, height: 12 }, shadowOpacity: 0.2, shadowRadius: 24, elevation: 12, minHeight: 200 },
-  greeting: { fontSize: 18, color: '#334155', fontWeight: '700', marginBottom: 6 },
-  name: { fontSize: 34, fontWeight: '900', color: '#0F172A', marginBottom: 24, letterSpacing: -0.5 },
-  departmentBadge: { flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.95)', paddingHorizontal: 16, paddingVertical: 10, borderRadius: 16, alignSelf: 'flex-start', shadowColor: '#000', shadowOffset: {width: 0, height: 4}, shadowOpacity: 0.05, shadowRadius: 8 },
-  departmentText: { fontSize: 14, color: '#F97316', fontWeight: '800' },
+  welcomeCard: { borderRadius: 32, padding: 32, overflow: 'hidden', shadowColor: '#EA580C', shadowOffset: { width: 0, height: 12 }, shadowOpacity: 0.2, shadowRadius: 24, elevation: 12, minHeight: 200 },
+  greeting: { fontSize: 13, color: '#475569', fontWeight: '800', marginBottom: 6, letterSpacing: 1.5, textTransform: 'uppercase' },
+  name: { fontSize: 32, fontWeight: '900', color: '#0F172A', marginBottom: 20, letterSpacing: -0.5 },
+  departmentBadge: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#FFF5ED', paddingHorizontal: 16, paddingVertical: 10, borderRadius: 12, alignSelf: 'flex-start' },
+  departmentText: { fontSize: 13, color: '#EA580C', fontWeight: '800' },
 
   scheduleSection: { paddingHorizontal: 24, marginTop: 24 },
   sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 },
@@ -409,52 +418,49 @@ const styles = StyleSheet.create({
   dayOrderBadge: { backgroundColor: '#FFF5ED', paddingHorizontal: 14, paddingVertical: 8, borderRadius: 16 },
   dayOrderText: { color: '#F97316', fontSize: 13, fontWeight: '800' },
   
-  classCard: { backgroundColor: '#ffffff', borderRadius: 32, padding: 28, shadowColor: '#0F172A', shadowOffset: { width: 0, height: 12 }, shadowOpacity: 0.06, shadowRadius: 24, elevation: 8, marginBottom: 20 },
-  classTopRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 },
-  timeBadge: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#F8FAFC', paddingHorizontal: 14, paddingVertical: 10, borderRadius: 14 },
-  timeText: { color: '#475569', fontSize: 14, fontWeight: '800' },
-  ongoingBadge: { backgroundColor: '#F97316', paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20, marginRight: 8 },
+  classCard: { backgroundColor: '#ffffff', borderRadius: 28, padding: 24, shadowColor: '#DC2626', shadowOffset: { width: 0, height: 12 }, shadowOpacity: 0.08, shadowRadius: 24, elevation: 8, marginBottom: 20, borderWidth: 1.5, borderColor: '#DC2626' },
+  classTopRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 },
+  timeBadge: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#FEF2F2', paddingHorizontal: 14, paddingVertical: 10, borderRadius: 24 },
+  timeText: { color: '#DC2626', fontSize: 13, fontWeight: '800' },
+  ongoingBadge: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#DC2626', paddingHorizontal: 16, paddingVertical: 10, borderRadius: 24, marginRight: 8 },
   ongoingText: { color: '#ffffff', fontSize: 12, fontWeight: '900', letterSpacing: 0.5 },
-  sectionBadge: { backgroundColor: '#EFF6FF', paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20 },
-  sectionText: { color: '#3B82F6', fontSize: 12, fontWeight: '900' },
+  sectionBadge: { backgroundColor: '#DC2626', paddingHorizontal: 16, paddingVertical: 10, borderRadius: 24 },
+  sectionText: { color: '#ffffff', fontSize: 12, fontWeight: '900' },
   
-  classTitle: { fontSize: 24, fontWeight: '900', color: '#0F172A', marginBottom: 28, lineHeight: 32 },
-  classBottomRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  classDetailsBox: { flex: 1, flexDirection: 'row', backgroundColor: '#F8FAFC', padding: 16, borderRadius: 24, marginRight: 16 },
-  detailItem: { flex: 1, flexDirection: 'row', alignItems: 'center' },
-  detailValue: { fontSize: 15, fontWeight: '800', color: '#0F172A', marginBottom: 4 },
-  detailLabel: { fontSize: 12, color: '#64748B', fontWeight: '700' },
-  detailDivider: { width: 1, height: 32, backgroundColor: '#E2E8F0', marginHorizontal: 16 },
-  arrowButton: { width: 56, height: 56, borderRadius: 28, backgroundColor: '#FFF5ED', justifyContent: 'center', alignItems: 'center' },
+  classTitle: { fontSize: 24, fontWeight: '900', color: '#0F172A', marginBottom: 28, lineHeight: 32, width: '80%' },
+  classBottomRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#FFF5ED', paddingHorizontal: 16, paddingVertical: 14, borderRadius: 20 },
+  detailItem: { flexDirection: 'row', alignItems: 'center' },
+  detailValue: { fontSize: 14, fontWeight: '900', color: '#0F172A', marginBottom: 2 },
+  detailLabel: { fontSize: 11, color: '#64748B', fontWeight: '700' },
+  detailDivider: { width: 1, height: 32, backgroundColor: '#F97316', opacity: 0.2, marginHorizontal: 16 },
+  arrowButton: { width: 44, height: 44, borderRadius: 22, backgroundColor: '#F97316', justifyContent: 'center', alignItems: 'center' },
 
   seeAllBtn: { alignSelf: 'center', paddingVertical: 12, marginTop: -4 },
   seeAllText: { color: '#F97316', fontSize: 15, fontWeight: '800' },
 
-  overviewSection: { paddingHorizontal: 24, marginTop: 32 },
-  viewAllText: { color: '#F97316', fontSize: 15, fontWeight: '800' },
-  overviewCard: { flexDirection: 'row', backgroundColor: '#ffffff', borderRadius: 32, padding: 28, alignItems: 'center', shadowColor: '#0F172A', shadowOffset: { width: 0, height: 12 }, shadowOpacity: 0.05, shadowRadius: 24, elevation: 6 },
-  progressCircleWrap: { marginRight: 32 },
-  progressCircle: { width: 100, height: 100, borderRadius: 50, borderWidth: 8, borderColor: '#F97316', borderTopColor: '#FFE4D6', justifyContent: 'center', alignItems: 'center', transform: [{ rotate: '45deg' }] },
-  progressValue: { fontSize: 24, fontWeight: '900', color: '#0F172A', transform: [{ rotate: '-45deg' }] },
-  progressLabel: { fontSize: 13, color: '#64748B', fontWeight: '700', transform: [{ rotate: '-45deg' }], marginTop: -2 },
-  
-  statBlocks: { flex: 1, flexDirection: 'row', justifyContent: 'space-between' },
-  statBlock: { alignItems: 'center', backgroundColor: '#F8FAFC', paddingVertical: 16, paddingHorizontal: 12, borderRadius: 20, minWidth: 64, marginHorizontal: 6 },
-  statValue: { fontSize: 22, fontWeight: '900', marginBottom: 8 },
-  statLabelRow: { flexDirection: 'row', alignItems: 'center' },
-  dot: { width: 8, height: 8, borderRadius: 4, marginRight: 6 },
-  statLabelText: { fontSize: 11, color: '#64748B', fontWeight: '700' },
+  overviewSection: { paddingHorizontal: 24, marginTop: 24 },
+  notificationCard: { borderRadius: 28, padding: 24, shadowColor: '#EA580C', shadowOffset: { width: 0, height: 12 }, shadowOpacity: 0.3, shadowRadius: 24, elevation: 8 },
+  notificationHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 },
+  notificationTitle: { fontSize: 18, fontWeight: '800', color: '#ffffff' },
+  todayDropdown: { flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.2)', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 16 },
+  todayText: { color: '#ffffff', fontSize: 12, fontWeight: '700', marginRight: 4 },
+  notificationInner: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: 'rgba(0,0,0,0.1)', padding: 20, borderRadius: 20 },
+  statBlockFull: { flex: 1, flexDirection: 'row', alignItems: 'center' },
+  statIconBox: { width: 44, height: 44, borderRadius: 22, backgroundColor: 'rgba(255,255,255,0.15)', justifyContent: 'center', alignItems: 'center', marginRight: 12 },
+  statValueLarge: { fontSize: 24, fontWeight: '900', color: '#ffffff', marginBottom: 2 },
+  statLabelLarge: { fontSize: 10, color: 'rgba(255,255,255,0.8)', fontWeight: '600', lineHeight: 14 },
+  verticalDivider: { width: 1, height: 40, backgroundColor: 'rgba(255,255,255,0.2)', marginHorizontal: 12 },
 
-  wisdomSection: { paddingHorizontal: 24, marginTop: 40 },
-  wisdomCard: { backgroundColor: '#ffffff', borderRadius: 32, padding: 32, shadowColor: '#0F172A', shadowOffset: { width: 0, height: 12 }, shadowOpacity: 0.05, shadowRadius: 24, elevation: 6 },
-  wisdomQuote: { fontSize: 19, color: '#334155', fontStyle: 'italic', lineHeight: 30, fontWeight: '600', marginBottom: 20 },
-  wisdomAuthor: { fontSize: 14, color: '#94A3B8', fontWeight: '800', textAlign: 'right' },
+  wisdomSection: { paddingHorizontal: 24, marginTop: 32 },
+  wisdomCard: { backgroundColor: '#ffffff', borderRadius: 28, padding: 32, shadowColor: '#DC2626', shadowOffset: { width: 0, height: 12 }, shadowOpacity: 0.08, shadowRadius: 24, elevation: 6, borderWidth: 1, borderColor: '#FEF2F2' },
+  wisdomQuote: { fontSize: 17, color: '#0F172A', fontStyle: 'italic', lineHeight: 28, fontWeight: '700', marginBottom: 20 },
+  wisdomAuthor: { fontSize: 13, color: '#64748B', fontWeight: '800', textAlign: 'right' },
 
-  bottomNav: { position: 'absolute', bottom: 0, left: 0, right: 0, flexDirection: 'row', backgroundColor: '#ffffff', paddingVertical: 16, paddingHorizontal: 32, justifyContent: 'space-between', alignItems: 'center', borderTopLeftRadius: 30, borderTopRightRadius: 30, shadowColor: '#000', shadowOffset: { width: 0, height: -10 }, shadowOpacity: 0.05, shadowRadius: 20, elevation: 15, paddingBottom: Platform.OS === 'ios' ? 32 : 16 },
-  navItem: { alignItems: 'center', padding: 8 },
-  navText: { fontSize: 11, color: '#94A3B8', fontWeight: '600', marginTop: 4 },
-  navItemActive: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#FFF5ED', paddingHorizontal: 20, paddingVertical: 12, borderRadius: 24 },
-  navTextActive: { fontSize: 13, color: '#F97316', fontWeight: '800', marginLeft: 8 },
+  bottomNav: { position: 'absolute', bottom: 0, left: 0, right: 0, flexDirection: 'row', backgroundColor: '#ffffff', paddingVertical: 16, paddingHorizontal: 24, justifyContent: 'space-between', alignItems: 'center', borderTopLeftRadius: 32, borderTopRightRadius: 32, shadowColor: '#000', shadowOffset: { width: 0, height: -10 }, shadowOpacity: 0.05, shadowRadius: 20, elevation: 15, paddingBottom: Platform.OS === 'ios' ? 32 : 16 },
+  navItem: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+  navText: { fontSize: 12, color: '#64748B', fontWeight: '700', marginTop: 6 },
+  navItemActive: { flex: 1.5, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', backgroundColor: '#FEF2F2', paddingVertical: 14, borderRadius: 24 },
+  navTextActive: { fontSize: 14, color: '#DC2626', fontWeight: '900', marginLeft: 8 },
 
   modalOverlay: { flex: 1, backgroundColor: 'rgba(15, 23, 42, 0.6)', justifyContent: 'center', alignItems: 'center', padding: 24 },
   modalCard: { backgroundColor: '#ffffff', borderRadius: 24, padding: 24, width: '100%', alignItems: 'center' },
