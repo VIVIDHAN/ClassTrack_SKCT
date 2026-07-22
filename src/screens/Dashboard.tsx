@@ -38,6 +38,7 @@ export default function Dashboard() {
   const [holidayName, setHolidayName] = useState('');
   const [dayOrderStr, setDayOrderStr] = useState('');
   const [eventName, setEventName] = useState('');
+  const [showAllClasses, setShowAllClasses] = useState(false);
 
   useFocusEffect(
     React.useCallback(() => {
@@ -182,12 +183,22 @@ export default function Dashboard() {
         {/* Upcoming Classes */}
         <Animated.View entering={FadeInUp.delay(150).duration(500)} style={styles.upcomingContainer}>
           <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-            <Text style={styles.sectionTitleLabel}>Today's Schedule</Text>
-            {dayOrderStr ? (
-              <View style={[styles.upcomingBadge, { paddingHorizontal: 10, paddingVertical: 4 }]}>
-                <Text style={[styles.upcomingBadgeText, { fontSize: 11 }]}>{dayOrderStr}</Text>
-              </View>
-            ) : null}
+            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+              <Text style={styles.sectionTitleLabel}>Today's Schedule</Text>
+              {dayOrderStr ? (
+                <View style={[styles.upcomingBadge, { paddingHorizontal: 10, paddingVertical: 4, marginLeft: 8 }]}>
+                  <Text style={[styles.upcomingBadgeText, { fontSize: 11 }]}>{dayOrderStr}</Text>
+                </View>
+              ) : null}
+            </View>
+            
+            {classes.length > 0 && !isHoliday && (
+              <TouchableOpacity onPress={() => setShowAllClasses(!showAllClasses)}>
+                <Text style={{ color: Colors.primary, fontWeight: '700', fontSize: 14 }}>
+                  {showAllClasses ? 'Hide Past' : 'See All'}
+                </Text>
+              </TouchableOpacity>
+            )}
           </View>
           
           {isHoliday ? (
@@ -196,43 +207,59 @@ export default function Dashboard() {
                <Text style={{ marginTop: 12, color: '#92400E', fontWeight: '800', fontSize: 18 }}>{holidayName}</Text>
                <Text style={{ marginTop: 4, color: '#B45309', fontWeight: '600' }}>No classes scheduled for today.</Text>
              </View>
-          ) : classes.filter(cls => getClassStatus(cls.period) !== 'past').length === 0 ? (
+          ) : classes.length === 0 ? (
              <View style={[styles.upcomingCard, { alignItems: 'center', padding: 30 }]}>
                <Icon name="event-available" size={48} color="#CBD5E1" />
-               <Text style={{ marginTop: 10, color: '#64748B', fontWeight: '600' }}>No more classes scheduled for today.</Text>
+               <Text style={{ marginTop: 10, color: '#64748B', fontWeight: '600' }}>No classes scheduled for today.</Text>
              </View>
           ) : (
-            classes.filter(cls => getClassStatus(cls.period) !== 'past').map((cls, index) => {
-              // Convert period to roughly time slot
-              const timeSlots = ['08:45 AM - 09:40 AM', '09:40 AM - 10:35 AM', '10:50 AM - 11:45 AM', '11:45 AM - 12:40 PM', '01:30 PM - 02:25 PM', '02:25 PM - 03:20 PM', '03:20 PM - 04:15 PM'];
-              const timeString = timeSlots[cls.period - 1] || `Period ${cls.period}`;
-              const status = getClassStatus(cls.period);
-              const isOngoing = status === 'ongoing';
-              
-              return (
-                <TouchableOpacity 
-                  key={cls.id} 
-                  activeOpacity={0.8}
-                  onPress={() => navigation.navigate('StudentDirectoryList', { 
-                    classDetails: { subject: cls.Subject ? cls.Subject.title : 'Subject', className: cls.section } 
-                  })}
-                  style={[
-                    styles.upcomingCard, 
-                    { marginBottom: 16 },
-                    isOngoing && { borderColor: Colors.primary, borderWidth: 2, shadowColor: Colors.primary, shadowOpacity: 0.15 }
-                  ]}
-                >
-                  <View style={styles.upcomingHeader}>
-                    <View style={styles.upcomingBadge}>
-                      <Icon name="schedule" size={16} color={Colors.primary} style={{ marginRight: 4 }} />
-                      <Text style={styles.upcomingBadgeText}>{timeString}</Text>
-                    </View>
-                    <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+            (showAllClasses ? classes : classes.filter(cls => getClassStatus(cls.period) !== 'past')).length === 0 ? (
+               <View style={[styles.upcomingCard, { alignItems: 'center', padding: 30 }]}>
+                 <Icon name="check-circle" size={48} color="#4ADE80" />
+                 <Text style={{ marginTop: 10, color: '#64748B', fontWeight: '600' }}>All classes completed for today!</Text>
+               </View>
+            ) : (
+              (showAllClasses ? classes : classes.filter(cls => getClassStatus(cls.period) !== 'past')).map((cls, index) => {
+                // Convert period to roughly time slot
+                const timeSlots = ['08:45 AM - 09:40 AM', '09:40 AM - 10:35 AM', '10:50 AM - 11:45 AM', '11:45 AM - 12:40 PM', '01:30 PM - 02:25 PM', '02:25 PM - 03:20 PM', '03:20 PM - 04:15 PM'];
+                const timeString = timeSlots[cls.period - 1] || `Period ${cls.period}`;
+                const status = getClassStatus(cls.period);
+                const isOngoing = status === 'ongoing';
+                const isPast = status === 'past';
+                
+                return (
+                  <TouchableOpacity 
+                    key={cls.id} 
+                    activeOpacity={0.8}
+                    onPress={() => {
+                      if (isOngoing) {
+                        navigation.navigate('StudentDirectoryList', { 
+                          classDetails: { subject: cls.Subject ? cls.Subject.title : 'Subject', className: cls.section } 
+                        });
+                      } else {
+                        Alert.alert("Time Restricted", "Attendance marking is strictly time-based. You can only mark attendance during the active ongoing class period.");
+                      }
+                    }}
+                    style={[
+                      styles.upcomingCard, 
+                      { marginBottom: 16 },
+                      isOngoing && { borderColor: Colors.primary, borderWidth: 2, shadowColor: Colors.primary, shadowOpacity: 0.15 },
+                      isPast && { opacity: 0.6 }
+                    ]}
+                  >
+                    <View style={styles.upcomingHeader}>
+                      <View style={[styles.upcomingBadge, isPast && { backgroundColor: '#F1F5F9' }]}>
+                        <Icon name="schedule" size={16} color={isPast ? '#94A3B8' : Colors.primary} style={{ marginRight: 4 }} />
+                        <Text style={[styles.upcomingBadgeText, isPast && { color: '#64748B' }]}>{timeString}</Text>
+                      </View>
                       {isOngoing && (
-                        <View style={[styles.attendanceBadge, { backgroundColor: '#EF4444', marginRight: 8, flexDirection: 'row', alignItems: 'center' }]}>
-                          <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: '#ffffff', marginRight: 4 }} />
-                          <Text style={styles.attendanceBadgeText}>ONGOING</Text>
+                        <View style={styles.liveIndicator}>
+                          <View style={styles.liveDot} />
+                          <Text style={styles.liveText}>ONGOING</Text>
                         </View>
+                      )}
+                      {isPast && (
+                        <Text style={{ fontSize: 12, fontWeight: '700', color: '#94A3B8' }}>COMPLETED</Text>
                       )}
                       <View style={[styles.attendanceBadge, { backgroundColor: '#3B82F6' }]}>
                         <Text style={styles.attendanceBadgeText}>{cls.section}</Text>
