@@ -55,8 +55,17 @@ const CalendarDay = sequelize.define('CalendarDay', {
   event_name: { type: DataTypes.STRING, allowNull: true }
 });
 
+const AttendanceLog = sequelize.define('AttendanceLog', {
+  id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
+  date: { type: DataTypes.DATEONLY, allowNull: false },
+  section: { type: DataTypes.STRING, allowNull: false },
+  absent_count: { type: DataTypes.INTEGER, allowNull: false, defaultValue: 0 },
+  absent_roll_numbers: { type: DataTypes.TEXT }
+});
+
 // Relationships
 Timetable.belongsTo(Subject, { foreignKey: 'subject_id' });
 Timetable.belongsTo(Teacher, { foreignKey: 'teacher_id' });
+AttendanceLog.belongsTo(Teacher, { foreignKey: 'teacher_id' });
 
-module.exports = { sequelize, Teacher, Student, Subject, Timetable, Quote, CalendarDay };
+module.exports = { sequelize, Teacher, Student, Subject, Timetable, Quote, CalendarDay, AttendanceLog };

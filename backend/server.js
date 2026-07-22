@@ -1,7 +1,7 @@
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
-const { sequelize, Teacher, Student, Subject, Timetable, Quote, CalendarDay } = require('./db');
+const { sequelize, Teacher, Student, Subject, Timetable, Quote, CalendarDay, AttendanceLog } = require('./db');
 
 const app = express();
 app.use(cors());
@@ -89,6 +89,56 @@ app.get('/api/calendar/today', async (req, res) => {
       // Fallback: If no calendar data exists for this date, assume it's a holiday
       res.json({ date: dateStr, day_order: null, is_holiday: true, holiday_name: 'Not Scheduled' });
     }
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// 5. Save Attendance Notification Log
+app.post('/api/attendance/notify', async (req, res) => {
+  try {
+    const { teacher_id, section, absent_count, absent_roll_numbers } = req.body;
+    
+    // Get today's date in IST
+    const now = new Date();
+    now.setMinutes(now.getMinutes() + 330);
+    const dateStr = now.toISOString().split('T')[0];
+
+    const log = await AttendanceLog.create({
+      teacher_id,
+      date: dateStr,
+      section,
+      absent_count,
+      absent_roll_numbers
+    });
+
+    res.json({ success: true, log });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// 6. Get Attendance Overview for Today
+app.get('/api/attendance/overview/today', async (req, res) => {
+  try {
+    const { teacher_id } = req.query;
+    
+    // Get today's date in IST
+    const now = new Date();
+    now.setMinutes(now.getMinutes() + 330);
+    const dateStr = now.toISOString().split('T')[0];
+
+    const logs = await AttendanceLog.findAll({
+      where: { teacher_id, date: dateStr }
+    });
+
+    const totalAbsent = logs.reduce((sum, log) => sum + log.absent_count, 0);
+
+    res.json({
+      date: dateStr,
+      total_notified_absent: totalAbsent,
+      logs
+    });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

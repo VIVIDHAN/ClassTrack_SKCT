@@ -27,6 +27,8 @@ export default function Dashboard() {
   const [eventName, setEventName] = useState('');
   const [showAllClasses, setShowAllClasses] = useState(false);
   const [currentTime, setCurrentTime] = useState(new Date());
+  
+  const [totalNotified, setTotalNotified] = useState(0);
 
   const handleLogout = async () => {
     try {
@@ -49,6 +51,16 @@ export default function Dashboard() {
             const profile = JSON.parse(profileStr);
             setFacultyName(profile.name);
             setFacultyDept(profile.department || 'IT');
+            
+            try {
+              const overviewRes = await fetch(`${API_BASE_URL}/attendance/overview/today?teacher_id=${profile.id}`);
+              if (overviewRes.ok) {
+                const overviewData = await overviewRes.json();
+                setTotalNotified(overviewData.total_notified_absent || 0);
+              }
+            } catch (err) {
+              console.log("Could not load notified overview", err);
+            }
 
             const calResponse = await fetch(`${API_BASE_URL}/calendar/today`);
             const calData = await calResponse.json();
@@ -133,20 +145,14 @@ export default function Dashboard() {
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
       {/* Header */}
       <View style={styles.appBar}>
-        <TouchableOpacity style={styles.appBarBtn} onPress={() => setIsSidebarOpen(true)}>
-          <Icon name="menu" size={28} color="#0F172A" />
-        </TouchableOpacity>
+        <View style={{ width: 44 }} />
         
         <View style={styles.headerLogoContainer}>
-          <Icon name="import-contacts" size={32} color="#F97316" style={{ marginRight: 8 }} />
-          <View>
-            <Text style={{ fontSize: 13, fontWeight: '900', color: '#1E293B', letterSpacing: 0.5, lineHeight: 16 }}>SRI KRISHNA</Text>
-            <Text style={{ fontSize: 11, fontWeight: '700', color: '#1E293B', lineHeight: 14 }}>INSTITUTIONS</Text>
-          </View>
+          <Image source={require('../assets/logo.png')} style={{ height: 40, width: 220 }} resizeMode="contain" />
         </View>
 
         <TouchableOpacity style={styles.appBarBtn} onPress={() => navigation.navigate('Notifications')}>
-          <View style={{position: 'relative', width: 44, height: 44, borderRadius: 22, backgroundColor: '#ffffff', justifyContent: 'center', alignItems: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 8, elevation: 2 }}>
+          <View style={styles.bellBox}>
             <Icon name="notifications-none" size={24} color="#0F172A" />
             <View style={styles.notificationDot} />
           </View>
@@ -156,15 +162,18 @@ export default function Dashboard() {
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 120 }}>
         {/* Welcome Banner */}
         <Animated.View entering={FadeInUp.delay(100).duration(500)} style={styles.welcomeContainer}>
-          <LinearGradient 
-            colors={['#FFF5ED', '#FFE4D6']} 
-            start={{ x: 0, y: 0 }} 
-            end={{ x: 1, y: 1 }} 
-            style={styles.welcomeCard}
-          >
-            <View style={styles.buildingBg}>
-              <Icon name="location-city" size={160} color="rgba(249, 115, 22, 0.12)" />
-            </View>
+          <View style={styles.welcomeCard}>
+            <Image 
+              source={require('../assets/dashboardbg image.jpg')} 
+              style={[StyleSheet.absoluteFill, { width: '100%', height: '100%' }]} 
+              resizeMode="cover"
+            />
+            <LinearGradient 
+              colors={['rgba(255,245,237,0.95)', 'rgba(255,228,214,0.7)']} 
+              start={{ x: 0, y: 0 }} 
+              end={{ x: 1, y: 1 }} 
+              style={StyleSheet.absoluteFill}
+            />
             <View style={{ zIndex: 2 }}>
               <Text style={styles.greeting}>Good Morning,</Text>
               <Text style={styles.name}>{getFormatName(facultyName)}</Text>
@@ -174,43 +183,6 @@ export default function Dashboard() {
                 <Text style={styles.departmentText}>{facultyDept} Department</Text>
               </View>
             </View>
-          </LinearGradient>
-        </Animated.View>
-
-        {/* Quick Actions Grid */}
-        <Animated.View entering={FadeInUp.delay(150).duration(500)} style={styles.gridContainer}>
-          <View style={styles.rowGrid}>
-            <TouchableOpacity style={styles.gridItem}>
-              <View style={styles.gridIconBox}>
-                <Icon name="qr-code-scanner" size={26} color="#F97316" />
-              </View>
-              <Text style={styles.gridTitle}>Mark</Text>
-              <Text style={styles.gridSubtitle}>Attendance</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.gridItem}>
-              <View style={styles.gridIconBox}>
-                <Icon name="calendar-today" size={26} color="#F97316" />
-              </View>
-              <Text style={styles.gridTitle}>My</Text>
-              <Text style={styles.gridSubtitle}>Schedule</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.gridItem}>
-              <View style={styles.gridIconBox}>
-                <Icon name="bar-chart" size={26} color="#F97316" />
-              </View>
-              <Text style={styles.gridTitle}>Attendance</Text>
-              <Text style={styles.gridSubtitle}>Summary</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.gridItem}>
-              <View style={styles.gridIconBox}>
-                <Icon name="event-note" size={26} color="#F97316" />
-                <View style={styles.leaveTickBadge}>
-                   <Icon name="check-circle" size={12} color="#ffffff" />
-                </View>
-              </View>
-              <Text style={styles.gridTitle}>Leave</Text>
-              <Text style={styles.gridSubtitle}>Request</Text>
-            </TouchableOpacity>
           </View>
         </Animated.View>
 
@@ -316,40 +288,33 @@ export default function Dashboard() {
           )}
         </Animated.View>
 
-        {/* Attendance Overview */}
+        {/* Notified Overview */}
         <Animated.View entering={FadeInUp.delay(250).duration(500)} style={styles.overviewSection}>
           <View style={styles.sectionHeader}>
-             <Text style={styles.sectionTitleLabel}>Attendance Overview</Text>
-             <TouchableOpacity><Text style={styles.viewAllText}>View All</Text></TouchableOpacity>
+             <Text style={styles.sectionTitleLabel}>Notified Overview</Text>
+             <TouchableOpacity><Text style={styles.viewAllText}>View Log</Text></TouchableOpacity>
           </View>
           <View style={styles.overviewCard}>
              <View style={styles.progressCircleWrap}>
                <View style={styles.progressCircle}>
-                 <Text style={styles.progressValue}>92%</Text>
-                 <Text style={styles.progressLabel}>Present</Text>
+                 <Text style={[styles.progressValue, { fontSize: 32 }]}>{totalNotified}</Text>
+                 <Text style={styles.progressLabel}>Sent</Text>
                </View>
              </View>
              
              <View style={styles.statBlocks}>
-               <View style={styles.statBlock}>
-                 <Text style={[styles.statValue, {color: '#16A34A'}]}>23</Text>
+               <View style={[styles.statBlock, { flex: 1.5 }]}>
+                 <Text style={[styles.statValue, {color: '#EF4444'}]}>{totalNotified}</Text>
+                 <View style={styles.statLabelRow}>
+                    <View style={[styles.dot, {backgroundColor: '#EF4444'}]} />
+                    <Text style={styles.statLabelText}>Absent Notified</Text>
+                 </View>
+               </View>
+               <View style={[styles.statBlock, { flex: 1, opacity: 0.5 }]}>
+                 <Text style={[styles.statValue, {color: '#16A34A'}]}>-</Text>
                  <View style={styles.statLabelRow}>
                     <View style={[styles.dot, {backgroundColor: '#16A34A'}]} />
                     <Text style={styles.statLabelText}>Present</Text>
-                 </View>
-               </View>
-               <View style={styles.statBlock}>
-                 <Text style={[styles.statValue, {color: '#EF4444'}]}>02</Text>
-                 <View style={styles.statLabelRow}>
-                    <View style={[styles.dot, {backgroundColor: '#EF4444'}]} />
-                    <Text style={styles.statLabelText}>Absent</Text>
-                 </View>
-               </View>
-               <View style={styles.statBlock}>
-                 <Text style={[styles.statValue, {color: '#F59E0B'}]}>01</Text>
-                 <View style={styles.statLabelRow}>
-                    <View style={[styles.dot, {backgroundColor: '#F59E0B'}]} />
-                    <Text style={styles.statLabelText}>Late</Text>
                  </View>
                </View>
              </View>
@@ -369,11 +334,11 @@ export default function Dashboard() {
         </Animated.View>
       </ScrollView>
 
-      {/* Bottom Navigation (Mockup overlay) */}
+      {/* Bottom Navigation */}
       <View style={styles.bottomNav}>
-        <TouchableOpacity style={styles.navItem}>
-           <Icon name="description" size={26} color="#94A3B8" />
-           <Text style={styles.navText}>Logs</Text>
+        <TouchableOpacity style={styles.navItem} onPress={() => navigation.navigate('Settings')}>
+           <Icon name="settings" size={26} color="#94A3B8" />
+           <Text style={styles.navText}>Settings</Text>
         </TouchableOpacity>
         <TouchableOpacity style={styles.navItemActive}>
            <Icon name="home" size={26} color="#F97316" />
@@ -384,70 +349,6 @@ export default function Dashboard() {
            <Text style={styles.navText}>Profile</Text>
         </TouchableOpacity>
       </View>
-
-      {/* CUSTOM SIDEBAR OVERLAY */}
-      {isSidebarOpen && (
-        <View style={StyleSheet.absoluteFill}>
-          <Pressable style={styles.sidebarOverlay} onPress={() => setIsSidebarOpen(false)} />
-          <Animated.View 
-            entering={SlideInLeft.duration(300).easing(Easing.out(Easing.poly(4)))}
-            exiting={SlideOutLeft.duration(300)}
-            style={styles.sidebarContainer}
-          >
-            <View style={styles.sidebarHeader}>
-              <View style={{ width: 28 }} />
-              <View style={{ flex: 1, alignItems: 'center' }}>
-                <Text style={{ fontSize: 16, fontWeight: '900', color: '#1E293B' }}>SRI KRISHNA</Text>
-              </View>
-              <TouchableOpacity onPress={() => setIsSidebarOpen(false)}>
-                <Icon name="close" size={28} color="#0F172A" />
-              </TouchableOpacity>
-            </View>
-            
-            <View style={styles.sidebarMenu}>
-              <TouchableOpacity style={styles.sidebarMenuItem} onPress={() => setIsSidebarOpen(false)}>
-                <Icon name="space-dashboard" size={24} color={Colors.primary} />
-                <Text style={[styles.sidebarMenuText, { color: Colors.primary }]}>Dashboard</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity 
-                style={styles.sidebarMenuItem} 
-                onPress={() => {
-                  setIsSidebarOpen(false);
-                  navigation.navigate('Profile');
-                }}
-              >
-                <Icon name="account-circle" size={24} color="#64748B" />
-                <Text style={styles.sidebarMenuText}>Profile</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity 
-                style={styles.sidebarMenuItem} 
-                onPress={() => {
-                  setIsSidebarOpen(false);
-                  navigation.navigate('Settings');
-                }}
-              >
-                <Icon name="settings" size={24} color="#64748B" />
-                <Text style={styles.sidebarMenuText}>Settings</Text>
-              </TouchableOpacity>
-              
-              <View style={styles.sidebarDivider} />
-
-              <TouchableOpacity 
-                style={styles.sidebarMenuItem} 
-                onPress={() => {
-                  setIsSidebarOpen(false);
-                  setLogoutModalVisible(true);
-                }}
-              >
-                <Icon name="logout" size={24} color={Colors.error} />
-                <Text style={[styles.sidebarMenuText, { color: Colors.error }]}>Log Out</Text>
-              </TouchableOpacity>
-            </View>
-          </Animated.View>
-        </View>
-      )}
 
       {/* CUSTOM LOGOUT MODAL */}
       <Modal transparent visible={logoutModalVisible} animationType="fade">
@@ -480,25 +381,17 @@ const styles = StyleSheet.create({
   appBar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingTop: 10, paddingBottom: 15, backgroundColor: '#FAFAFA' },
   appBarBtn: { padding: 4 },
   headerLogoContainer: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center' },
+  bellBox: { position: 'relative', width: 44, height: 44, borderRadius: 22, backgroundColor: '#ffffff', justifyContent: 'center', alignItems: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 8, elevation: 2 },
   notificationDot: { position: 'absolute', top: 12, right: 12, width: 8, height: 8, borderRadius: 4, backgroundColor: '#EF4444', borderWidth: 1, borderColor: '#ffffff' },
   
   welcomeContainer: { paddingHorizontal: 20, paddingTop: 10, paddingBottom: 10 },
-  welcomeCard: { borderRadius: 28, padding: 28, overflow: 'hidden', shadowColor: '#F97316', shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.15, shadowRadius: 16, elevation: 8 },
-  buildingBg: { position: 'absolute', right: -30, bottom: -20, opacity: 0.8 },
+  welcomeCard: { borderRadius: 28, padding: 28, overflow: 'hidden', shadowColor: '#F97316', shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.15, shadowRadius: 16, elevation: 8, minHeight: 180 },
   greeting: { fontSize: 15, color: '#334155', fontWeight: '600', marginBottom: 4 },
   name: { fontSize: 28, fontWeight: '900', color: '#0F172A', marginBottom: 20, letterSpacing: -0.5 },
-  departmentBadge: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#FFF0E5', paddingHorizontal: 12, paddingVertical: 8, borderRadius: 12, alignSelf: 'flex-start', borderWidth: 1, borderColor: '#FFE4D6' },
+  departmentBadge: { flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(255,240,229,0.9)', paddingHorizontal: 12, paddingVertical: 8, borderRadius: 12, alignSelf: 'flex-start', borderWidth: 1, borderColor: '#FFE4D6' },
   departmentText: { fontSize: 13, color: '#F97316', fontWeight: '700' },
-  
-  gridContainer: { paddingHorizontal: 20, marginTop: 15 },
-  rowGrid: { flexDirection: 'row', justifyContent: 'space-between' },
-  gridItem: { flex: 1, backgroundColor: '#ffffff', paddingVertical: 18, paddingHorizontal: 8, borderRadius: 24, marginHorizontal: 4, alignItems: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.04, shadowRadius: 12, elevation: 2, borderWidth: 1, borderColor: '#F8FAFC' },
-  gridIconBox: { width: 50, height: 50, borderRadius: 16, backgroundColor: '#FFF5ED', justifyContent: 'center', alignItems: 'center', marginBottom: 12 },
-  gridTitle: { fontSize: 13, fontWeight: '800', color: '#1E293B', textAlign: 'center' },
-  gridSubtitle: { fontSize: 11, color: '#64748B', fontWeight: '600', textAlign: 'center', marginTop: 2 },
-  leaveTickBadge: { position: 'absolute', bottom: -2, right: -2, backgroundColor: '#F97316', borderRadius: 10, borderWidth: 2, borderColor: '#FFF5ED' },
 
-  scheduleSection: { paddingHorizontal: 20, marginTop: 28 },
+  scheduleSection: { paddingHorizontal: 20, marginTop: 20 },
   sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 },
   sectionTitleLabel: { fontSize: 18, fontWeight: '800', color: '#1E293B' },
   dayOrderBadge: { backgroundColor: '#FFF5ED', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 16 },
@@ -534,7 +427,7 @@ const styles = StyleSheet.create({
   progressLabel: { fontSize: 11, color: '#64748B', fontWeight: '600', transform: [{ rotate: '-45deg' }], marginTop: -2 },
   
   statBlocks: { flex: 1, flexDirection: 'row', justifyContent: 'space-between' },
-  statBlock: { alignItems: 'center', backgroundColor: '#F8FAFC', paddingVertical: 12, paddingHorizontal: 12, borderRadius: 16, minWidth: 60 },
+  statBlock: { alignItems: 'center', backgroundColor: '#F8FAFC', paddingVertical: 12, paddingHorizontal: 12, borderRadius: 16, minWidth: 60, marginHorizontal: 4 },
   statValue: { fontSize: 18, fontWeight: '900', marginBottom: 6 },
   statLabelRow: { flexDirection: 'row', alignItems: 'center' },
   dot: { width: 6, height: 6, borderRadius: 3, marginRight: 4 },
@@ -550,14 +443,6 @@ const styles = StyleSheet.create({
   navText: { fontSize: 11, color: '#94A3B8', fontWeight: '600', marginTop: 4 },
   navItemActive: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#FFF5ED', paddingHorizontal: 20, paddingVertical: 12, borderRadius: 24 },
   navTextActive: { fontSize: 13, color: '#F97316', fontWeight: '800', marginLeft: 8 },
-
-  sidebarOverlay: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(15, 23, 42, 0.4)', zIndex: 99 },
-  sidebarContainer: { position: 'absolute', top: 0, left: 0, bottom: 0, width: width * 0.75, backgroundColor: '#ffffff', zIndex: 100, borderTopRightRadius: 30, borderBottomRightRadius: 30, paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight : 40 },
-  sidebarHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 24, borderBottomWidth: 1, borderBottomColor: '#F1F5F9' },
-  sidebarMenu: { padding: 24 },
-  sidebarMenuItem: { flexDirection: 'row', alignItems: 'center', paddingVertical: 16, borderBottomWidth: 1, borderBottomColor: '#F1F5F9' },
-  sidebarMenuText: { fontSize: 16, fontWeight: '700', color: '#64748B', marginLeft: 16 },
-  sidebarDivider: { height: 1, backgroundColor: '#E2E8F0', marginVertical: 16 },
 
   modalOverlay: { flex: 1, backgroundColor: 'rgba(15, 23, 42, 0.6)', justifyContent: 'center', alignItems: 'center', padding: 24 },
   modalCard: { backgroundColor: '#ffffff', borderRadius: 24, padding: 24, width: '100%', alignItems: 'center' },
