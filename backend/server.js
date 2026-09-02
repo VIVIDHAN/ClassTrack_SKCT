@@ -78,12 +78,54 @@ app.get('/api/timetable', async (req, res) => {
   }
 });
 
+// ==========================================
+// SMS TESTING MODE CONFIGURATION
+// ==========================================
+// Set process.env.SMS_TEST_MODE=false in .env (or change SMS_TEST_MODE = false below)
+// to switch to real parent phone numbers without rebuilding the APK.
+let SMS_TEST_MODE = process.env.SMS_TEST_MODE !== 'false';
+const SMS_TEST_PHONE = process.env.SMS_TEST_PHONE || '9442211279';
+
+// Check / toggle SMS mode via API
+app.get('/api/sms-mode', (req, res) => {
+  const activeMode = process.env.SMS_TEST_MODE !== 'false' && SMS_TEST_MODE;
+  res.json({
+    test_mode: activeMode,
+    test_phone: SMS_TEST_PHONE,
+    status: activeMode ? 'TESTING (Redirected to 9442211279)' : 'LIVE (Sent to real parents)'
+  });
+});
+
+app.post('/api/sms-mode', (req, res) => {
+  const { test_mode } = req.body;
+  if (typeof test_mode === 'boolean') {
+    SMS_TEST_MODE = test_mode;
+  }
+  res.json({
+    success: true,
+    test_mode: SMS_TEST_MODE,
+    status: SMS_TEST_MODE ? 'TESTING (Redirected to 9442211279)' : 'LIVE (Sent to real parents)'
+  });
+});
+
 // 2. Get Students for a section
 app.get('/api/students', async (req, res) => {
   try {
     const { section } = req.query;
     const students = await Student.findAll({ where: { section }, order: [['roll_no', 'ASC']] });
-    res.json(students);
+
+    const isTestMode = process.env.SMS_TEST_MODE !== 'false' && SMS_TEST_MODE;
+
+    const formatted = students.map(s => {
+      const data = s.toJSON();
+      if (isTestMode) {
+        data.original_parent_phone = data.parent_phone;
+        data.parent_phone = SMS_TEST_PHONE;
+      }
+      return data;
+    });
+
+    res.json(formatted);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
