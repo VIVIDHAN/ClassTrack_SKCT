@@ -1,5 +1,5 @@
 import React, { useState, useCallback } from 'react';
-import { View, Text, StyleSheet, FlatList, Platform, StatusBar, Share, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, FlatList, Platform, StatusBar, Share, TouchableOpacity, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import { useFocusEffect } from '@react-navigation/native';
@@ -8,6 +8,7 @@ import Icon from 'react-native-vector-icons/MaterialIcons';
 import { Colors } from '../constants/Colors';
 import { API_BASE_URL } from '../constants/Config';
 import BreatheLoader from '../components/BreatheLoader';
+import { ATTENDANCE_HISTORY } from '../constants/DummyData';
 
 export default function History() {
   const navigation = useNavigation<any>();
@@ -17,24 +18,34 @@ export default function History() {
   useFocusEffect(
     useCallback(() => {
       setLoading(true);
-      fetch(`${API_BASE_URL}/history`)
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 3000);
+
+      fetch(`${API_BASE_URL}/history`, { signal: controller.signal })
         .then(res => res.json())
         .then(data => {
-          const mapped = data.map((item: any) => ({
-            id: String(item.id),
-            date: new Date(item.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
-            className: item.Timetable.section,
-            subject: item.Timetable.Subject.title,
-            absentCount: item.absentCount || 0,
-            smsSent: true
-          }));
-          setHistory(mapped);
+          clearTimeout(timeoutId);
+          if (Array.isArray(data) && data.length > 0) {
+            const mapped = data.map((item: any) => ({
+              id: String(item.id),
+              date: new Date(item.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+              className: item.Timetable?.section || 'III IT G',
+              subject: item.Timetable?.Subject?.title || 'IT Subject',
+              absentCount: item.absentCount || 0,
+              smsSent: true
+            }));
+            setHistory(mapped);
+          } else {
+            setHistory(ATTENDANCE_HISTORY);
+          }
           setLoading(false);
         })
-        .catch(err => {
-          console.error(err);
+        .catch(() => {
+          setHistory(ATTENDANCE_HISTORY);
           setLoading(false);
         });
+
+      return () => clearTimeout(timeoutId);
     }, [])
   );
 

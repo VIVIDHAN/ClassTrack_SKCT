@@ -6,7 +6,9 @@ import Animated, { FadeInRight } from 'react-native-reanimated';
 import Icon from 'react-native-vector-icons/MaterialIcons';
 import { Colors } from '../constants/Colors';
 import { API_BASE_URL } from '../constants/Config';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import BreatheLoader from '../components/BreatheLoader';
+import { TODAY_CLASSES, DIRECTORY_CLASSES } from '../constants/DummyData';
 
 export default function ClassesList() {
   const navigation = useNavigation<any>();
@@ -17,53 +19,110 @@ export default function ClassesList() {
   const [loading, setLoading] = React.useState(true);
 
   React.useEffect(() => {
-    if (mode === 'directory') {
-      const days = [1, 2, 3, 4, 5];
-      Promise.all(days.map(d => fetch(`${API_BASE_URL}/timetable?day=${d}&section=III IT G`).then(r => r.json())))
-        .then(results => {
+    let isMounted = true;
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 3500);
+
+    const loadData = async () => {
+      try {
+        const stored = await AsyncStorage.getItem('loggedInTeacher');
+        const teacher = stored ? JSON.parse(stored) : { id: 3, name: 'Ms. B Narmatha' };
+        const teacherId = teacher.id || 3;
+
+        if (mode === 'directory') {
+          const days = [1, 2, 3, 4, 5];
+          const results = await Promise.all(
+            days.map(d => 
+              fetch(`${API_BASE_URL}/timetable?day=${d}&section=III IT G`, { signal: controller.signal })
+                .then(r => r.json())
+                .catch(() => null)
+            )
+          );
+
+          if (!isMounted) return;
+          clearTimeout(timeoutId);
+
           let uniqueClasses = new Map();
           results.forEach((res) => {
             if (Array.isArray(res)) {
               res.forEach(item => {
-                let key = item.section + '-' + item.Subject.title;
-                if (!uniqueClasses.has(key)) {
-                  uniqueClasses.set(key, {
-                    id: String(item.id),
-                    time: null,
-                    className: item.section,
-                    subject: item.Subject.title,
-                    timetable_id: item.id
-                  });
+                if (item && item.Subject) {
+                  let key = item.section + '-' + item.Subject.title;
+                  if (!uniqueClasses.has(key)) {
+                    uniqueClasses.set(key, {
+                      id: String(item.id),
+                      time: null,
+                      className: item.section,
+                      subject: item.Subject.title,
+                      timetable_id: item.id
+                    });
+                  }
                 }
               });
             }
           });
-          setClasses(Array.from(uniqueClasses.values()));
+
+          if (uniqueClasses.size > 0) {
+            setClasses(Array.from(uniqueClasses.values()));
+          } else {
+            setClasses(DIRECTORY_CLASSES);
+          }
           setLoading(false);
-        })
-        .catch(err => {
-          console.error(err);
+        } else {
+          // Attendance Mode: Fetch this teacher's classes for current day
+          const jsDay = new Date().getDay();
+          const currentDay = (jsDay >= 1 && jsDay <= 5) ? jsDay : 1;
+
+          const res = await fetch(`${API_BASE_URL}/timetable?teacher_id=${teacherId}&day=${currentDay}`, { signal: controller.signal });
+          clearTimeout(timeoutId);
+          const data = await res.json();
+
+          if (!isMounted) return;
+
+          if (Array.isArray(data) && data.length > 0) {
+            const mapped = data.map((item: any) => ({
+              id: String(item.id),
+              time: `Period ${item.period}`,
+              className: item.section,
+              subject: item.Subject ? item.Subject.title : 'Course',
+              timetable_id: item.id
+            }));
+            setClasses(mapped);
+          } else {
+            // Teacher specific fallback
+            if (teacherId === 3 || teacher.name?.toLowerCase().includes('narmatha')) {
+              setClasses([
+                { id: '4', time: 'Period 4 (11:35 - 12:25)', className: 'III IT G', subject: 'Applied Cryptography', timetable_id: 4 },
+                { id: '5', time: 'Period 5 (01:25 - 02:15)', className: 'III IT G', subject: 'Applied Cryptography', timetable_id: 5 },
+              ]);
+            } else if (teacherId === 4 || teacher.name?.toLowerCase().includes('saranya')) {
+              setClasses([
+                { id: '3', time: 'Period 3 (10:45 - 11:35)', className: 'III IT G', subject: 'Distributed Computing', timetable_id: 3 },
+              ]);
+            } else if (teacherId === 2 || teacher.name?.toLowerCase().includes('guranna')) {
+              setClasses([
+                { id: '1', time: 'Period 1 (08:45 - 09:35)', className: 'III IT G', subject: 'Software Testing', timetable_id: 1 },
+                { id: '2', time: 'Period 2 (09:35 - 10:25)', className: 'III IT G', subject: 'Software Testing', timetable_id: 2 },
+              ]);
+            } else {
+              setClasses(TODAY_CLASSES);
+            }
+          }
           setLoading(false);
-        });
-    } else {
-      fetch(`${API_BASE_URL}/timetable?day=1&section=III IT G`)
-        .then(res => res.json())
-        .then(data => {
-          const mapped = data.map((item: any) => ({
-            id: String(item.id),
-            time: `Period ${item.period}`,
-            className: item.section,
-            subject: item.Subject.title,
-            timetable_id: item.id
-          }));
-          setClasses(mapped);
-          setLoading(false);
-        })
-        .catch(err => {
-          console.error(err);
-          setLoading(false);
-        });
-    }
+        }
+      } catch (e) {
+        if (!isMounted) return;
+        setClasses(mode === 'directory' ? DIRECTORY_CLASSES : TODAY_CLASSES);
+        setLoading(false);
+      }
+    };
+
+    loadData();
+
+    return () => {
+      isMounted = false;
+      clearTimeout(timeoutId);
+    };
   }, [mode]);
 
   const renderClassItem = ({ item, index }: { item: any, index: number }) => (

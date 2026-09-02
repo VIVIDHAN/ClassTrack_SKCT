@@ -75,18 +75,18 @@ const seed = async () => {
     const defaultTeacher = await Teacher.create({
       name: 'Default Faculty',
       email: 'name@skct.edu.in',
-      password: 'SKCT@123admin', // Stored plainly for prototype
+      password: 'AdminSKCT@123',
       department: 'IT'
     });
 
-    const guranna = await Teacher.create({ name: 'Mr. Guranna', email: 'guranna@skct.edu.in', password: 'SKCT@123admin', department: 'IT' });
-    const narmatha = await Teacher.create({ name: 'Ms. B Narmatha', email: 'narmatha@skct.edu.in', password: 'SKCT@123admin', department: 'IT' });
-    const saranya = await Teacher.create({ name: 'Ms. S Saranya', email: 'saranya@skct.edu.in', password: 'SKCT@123admin', department: 'IT' });
-    const edwin = await Teacher.create({ name: 'Dr G Edwin Prem Kumar', email: 'edwin@skct.edu.in', password: 'SKCT@123admin', department: 'IT' });
-    const ratheesh = await Teacher.create({ name: 'Mr A M Ratheeshkumar', email: 'ratheesh@skct.edu.in', password: 'SKCT@123admin', department: 'IT' });
-    const mouneesh = await Teacher.create({ name: 'Mr Mouneesh', email: 'mouneesh@skct.edu.in', password: 'SKCT@123admin', department: 'IT' });
-    const crown = await Teacher.create({ name: 'Mr Crown', email: 'crown@skct.edu.in', password: 'SKCT@123admin', department: 'IT' });
-    const gayathri = await Teacher.create({ name: 'Ms Gayathri', email: 'gayathri@skct.edu.in', password: 'SKCT@123admin', department: 'IT' });
+    const guranna = await Teacher.create({ name: 'Mr. Guranna', email: 'guranna@skct.edu.in', password: 'AdminSKCT@123', department: 'IT' });
+    const narmatha = await Teacher.create({ name: 'Ms. B Narmatha', email: 'narmatha@skct.edu.in', password: 'AdminSKCT@123', department: 'IT' });
+    const saranya = await Teacher.create({ name: 'Ms. S Saranya', email: 'saranya@skct.edu.in', password: 'AdminSKCT@123', department: 'IT' });
+    const edwin = await Teacher.create({ name: 'Dr G Edwin Prem Kumar', email: 'edwin@skct.edu.in', password: 'AdminSKCT@123', department: 'IT' });
+    const ratheesh = await Teacher.create({ name: 'Mr A M Ratheeshkumar', email: 'ratheesh@skct.edu.in', password: 'AdminSKCT@123', department: 'IT' });
+    const mouneesh = await Teacher.create({ name: 'Mr Mouneesh', email: 'mouneesh@skct.edu.in', password: 'AdminSKCT@123', department: 'IT' });
+    const crown = await Teacher.create({ name: 'Mr Crown', email: 'crown@skct.edu.in', password: 'AdminSKCT@123', department: 'IT' });
+    const gayathri = await Teacher.create({ name: 'Ms Gayathri', email: 'gayathri@skct.edu.in', password: 'AdminSKCT@123', department: 'IT' });
 
     // 2. Create Students
     const studentsDataE = [

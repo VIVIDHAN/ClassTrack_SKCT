@@ -16,13 +16,20 @@ export default function Dashboard() {
   const navigation = useNavigation<any>();
   
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-  const [facultyName, setFacultyName] = useState('Faculty Member');
-  const [facultyDept, setFacultyDept] = useState('Loading...');
+  const [facultyName, setFacultyName] = useState('Ms. B Narmatha');
+  const [facultyDept, setFacultyDept] = useState('Information Technology');
+  const [upcomingClass, setUpcomingClass] = useState<any>({
+    subject: 'Applied Cryptography',
+    time: 'Period 4 (11:35 - 12:25)',
+    section: 'III IT G',
+    room: 'Room 204'
+  });
   const [logoutModalVisible, setLogoutModalVisible] = useState(false);
 
   const handleLogout = async () => {
     try {
       await AsyncStorage.removeItem('userToken');
+      await AsyncStorage.removeItem('loggedInTeacher');
       setLogoutModalVisible(false);
       navigation.replace('Login');
     } catch (e) {
@@ -34,15 +41,52 @@ export default function Dashboard() {
 
   useFocusEffect(
     React.useCallback(() => {
-      fetch(`${API_BASE_URL}/timetable?day=1&section=III IT G`)
-        .then(res => res.json())
-        .then(data => {
-          if (data && data.length > 0 && data[0].Teacher) {
-            setFacultyName(data[0].Teacher.name);
-            setFacultyDept(data[0].Teacher.department || 'IT');
+      const loadTeacherDashboard = async () => {
+        try {
+          const stored = await AsyncStorage.getItem('loggedInTeacher');
+          let teacherId = 3;
+          if (stored) {
+            const teacher = JSON.parse(stored);
+            setFacultyName(teacher.name);
+            setFacultyDept(teacher.department || 'Information Technology');
+            teacherId = teacher.id;
           }
-        })
-        .catch(err => console.log('Failed to fetch faculty:', err));
+
+          const controller = new AbortController();
+          const timeoutId = setTimeout(() => controller.abort(), 3000);
+
+          // Get Day of week (1 to 5, default to 1 for Monday)
+          const jsDay = new Date().getDay();
+          const currentDay = (jsDay >= 1 && jsDay <= 5) ? jsDay : 1;
+
+          const res = await fetch(`${API_BASE_URL}/timetable?teacher_id=${teacherId}&day=${currentDay}`, { signal: controller.signal });
+          clearTimeout(timeoutId);
+          const data = await res.json();
+
+          if (Array.isArray(data) && data.length > 0) {
+            const first = data[0];
+            setUpcomingClass({
+              subject: first.Subject ? first.Subject.title : 'IT Course',
+              time: `Period ${first.period}`,
+              section: first.section,
+              room: `Room 20${first.period || 4}`
+            });
+          } else {
+            // Default fallback based on teacher
+            if (teacherId === 3) {
+              setUpcomingClass({ subject: 'Applied Cryptography', time: 'Period 4 (11:35 - 12:25)', section: 'III IT G', room: 'Room 204' });
+            } else if (teacherId === 4) {
+              setUpcomingClass({ subject: 'Distributed Computing', time: 'Period 3 (10:45 - 11:35)', section: 'III IT G', room: 'Room 202' });
+            } else if (teacherId === 2) {
+              setUpcomingClass({ subject: 'Software Testing', time: 'Period 1 (08:45 - 09:35)', section: 'III IT G', room: 'Room 201' });
+            }
+          }
+        } catch (err) {
+          console.log('Failed to fetch faculty classes:', err);
+        }
+      };
+
+      loadTeacherDashboard();
     }, [])
   );
   return (
@@ -124,6 +168,23 @@ export default function Dashboard() {
               <Text style={styles.gridSubtitle}>Student info</Text>
             </TouchableOpacity>
           </View>
+
+          <TouchableOpacity 
+            style={[styles.fullWidthCard, { backgroundColor: '#FEF3C7', borderColor: '#FDE68A', marginTop: 12 }]} 
+            onPress={() => navigation.navigate('AttendanceReport')}
+            activeOpacity={0.8}
+          >
+            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+              <View style={[styles.gridIconWrap, { backgroundColor: '#F59E0B', marginBottom: 0, marginRight: 16 }]}>
+                <Icon name="assessment" size={30} color="#ffffff" />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.gridTitle}>Attendance Report</Text>
+                <Text style={styles.gridSubtitle}>Date-range student % & analytics</Text>
+              </View>
+              <Icon name="chevron-right" size={24} color="#F59E0B" />
+            </View>
+          </TouchableOpacity>
         </View>
 
         {/* Upcoming Classes */}
@@ -133,17 +194,17 @@ export default function Dashboard() {
             <View style={styles.upcomingHeader}>
               <View style={styles.upcomingBadge}>
                 <Icon name="schedule" size={16} color={Colors.primary} style={{ marginRight: 4 }} />
-                <Text style={styles.upcomingBadgeText}>10:00 AM - 11:00 AM</Text>
+                <Text style={styles.upcomingBadgeText}>{upcomingClass.time} • {upcomingClass.section}</Text>
               </View>
               <View style={styles.attendanceBadge}>
-                <Text style={styles.attendanceBadgeText}>85% Avg</Text>
+                <Text style={styles.attendanceBadgeText}>Live Sync</Text>
               </View>
             </View>
-            <Text style={styles.upcomingSubject}>Cloud Computing & Distributed Systems</Text>
+            <Text style={styles.upcomingSubject}>{upcomingClass.subject}</Text>
             <View style={styles.upcomingFooter}>
               <View style={styles.footerItem}>
                 <Icon name="door-front" size={20} color="#64748B" />
-                <Text style={styles.footerItemText}>Room 204</Text>
+                <Text style={styles.footerItemText}>{upcomingClass.room}</Text>
               </View>
               <View style={styles.footerDivider} />
               <View style={styles.footerItem}>
@@ -188,6 +249,17 @@ export default function Dashboard() {
               <TouchableOpacity style={styles.sidebarMenuItem} onPress={() => setIsSidebarOpen(false)}>
                 <Icon name="space-dashboard" size={24} color={Colors.primary} />
                 <Text style={[styles.sidebarMenuText, { color: Colors.primary }]}>Dashboard</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity 
+                style={styles.sidebarMenuItem} 
+                onPress={() => {
+                  setIsSidebarOpen(false);
+                  navigation.navigate('AttendanceReport');
+                }}
+              >
+                <Icon name="assessment" size={24} color="#64748B" />
+                <Text style={styles.sidebarMenuText}>Attendance Report</Text>
               </TouchableOpacity>
 
               <TouchableOpacity 

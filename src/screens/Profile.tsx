@@ -18,22 +18,23 @@ export default function Profile() {
 
   useFocusEffect(
     React.useCallback(() => {
-      setLoading(true);
-      fetch(`${API_BASE_URL}/timetable?day=1&section=III IT G`)
-        .then(res => res.json())
-        .then(data => {
-          if (data && data.length > 0 && data[0].Teacher) {
-            setFacultyName(data[0].Teacher.name);
-            if (data[0].Teacher.email) setFacultyEmail(data[0].Teacher.email);
-            if (data[0].Teacher.phone) setFacultyPhone(data[0].Teacher.phone);
+      const loadProfile = async () => {
+        try {
+          const stored = await AsyncStorage.getItem('loggedInTeacher');
+          if (stored) {
+            const teacher = JSON.parse(stored);
+            if (teacher.name) setFacultyName(teacher.name);
+            if (teacher.email) setFacultyEmail(teacher.email);
+            if (teacher.department) setFacultyDept(teacher.department);
           }
-        })
-        .catch(err => console.log('Failed to fetch faculty profile:', err))
-        .finally(() => {
-          setTimeout(() => {
-            setLoading(false);
-          }, 1000);
-        });
+        } catch (e) {
+          console.log('Error reading profile:', e);
+        } finally {
+          setLoading(false);
+        }
+      };
+
+      loadProfile();
     }, [])
   );
 

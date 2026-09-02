@@ -7,6 +7,7 @@ import Icon from 'react-native-vector-icons/MaterialIcons';
 import { Colors } from '../constants/Colors';
 import { API_BASE_URL } from '../constants/Config';
 import BreatheLoader from '../components/BreatheLoader';
+import { SKCT_STUDENTS_G } from '../constants/DummyData';
 
 export default function Attendance() {
   const navigation = useNavigation<any>();
@@ -19,24 +20,34 @@ export default function Attendance() {
   const [fastMarkModalVisible, setFastMarkModalVisible] = useState(false);
 
   React.useEffect(() => {
-    fetch(`${API_BASE_URL}/students?section=${classDetails.className}`)
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 3000);
+
+    fetch(`${API_BASE_URL}/students?section=${encodeURIComponent(classDetails.className)}`, { signal: controller.signal })
       .then(res => res.json())
       .then(data => {
-        const mapped = data.map((s: any) => ({
-          id: s.roll_no || s.rollNo,
-          db_id: s.id,
-          name: s.name,
-          phone: s.parentPhone || s.parent_phone,
-          isAbsent: false,
-          isOnDuty: false
-        }));
-        setStudents(mapped);
+        clearTimeout(timeoutId);
+        if (Array.isArray(data) && data.length > 0) {
+          const mapped = data.map((s: any) => ({
+            id: s.roll_no || s.rollNo,
+            db_id: s.id,
+            name: s.name,
+            phone: s.parent_phone || s.parentPhone || s.phone,
+            isAbsent: false,
+            isOnDuty: false
+          }));
+          setStudents(mapped);
+        } else {
+          setStudents(SKCT_STUDENTS_G);
+        }
         setLoading(false);
       })
-      .catch(err => {
-        console.error(err);
+      .catch(() => {
+        setStudents(SKCT_STUDENTS_G);
         setLoading(false);
       });
+
+    return () => clearTimeout(timeoutId);
   }, [classDetails.className]);
 
   const sortStudents = (list: any[]) => {
