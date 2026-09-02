@@ -12,6 +12,7 @@ import StudentDirectoryList from '../screens/StudentDirectoryList';
 import StudentProfile from '../screens/StudentProfile';
 import Attendance from '../screens/Attendance';
 import AttendanceReport from '../screens/AttendanceReport';
+import FacultyTimetable from '../screens/FacultyTimetable';
 import Success from '../screens/Success';
 import History from '../screens/History';
 import Profile from '../screens/Profile';
@@ -42,6 +43,7 @@ export default function AppNavigator() {
         <Stack.Screen name="History" component={History} />
         <Stack.Screen name="Profile" component={Profile} />
         <Stack.Screen name="Attendance" component={Attendance} />
+        <Stack.Screen name="FacultyTimetable" component={FacultyTimetable} />
         <Stack.Screen name="AttendanceReport" component={AttendanceReport} />
         <Stack.Screen name="Success" component={Success} />
         <Stack.Screen name="Notifications" component={Notifications} />

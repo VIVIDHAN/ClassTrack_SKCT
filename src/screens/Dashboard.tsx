@@ -26,6 +26,12 @@ export default function Dashboard() {
   });
   const [logoutModalVisible, setLogoutModalVisible] = useState(false);
 
+  const todayDate = new Date().toLocaleDateString('en-GB', {
+    weekday: 'short',
+    day: 'numeric',
+    month: 'short',
+  });
+
   const handleLogout = async () => {
     try {
       await AsyncStorage.removeItem('userToken');
@@ -115,7 +121,13 @@ export default function Dashboard() {
         <Animated.View entering={FadeInUp.delay(100).duration(500)} style={styles.welcomeContainer}>
           <View style={styles.facultyCard}>
             <View style={styles.facultyCardContent}>
-              <Text style={styles.greeting}>Good Morning,</Text>
+              <View style={styles.greetingRow}>
+                <Text style={styles.greeting}>Good Morning,</Text>
+                <View style={styles.dateBadge}>
+                  <Icon name="event" size={13} color={Colors.primary} style={{ marginRight: 4 }} />
+                  <Text style={styles.dateText}>{todayDate}</Text>
+                </View>
+              </View>
               <Text style={styles.name}>{facultyName}</Text>
               <View style={styles.departmentBadge}>
                 <Icon name="business" size={16} color={Colors.primary} style={{ marginRight: 6 }} />
@@ -170,19 +182,19 @@ export default function Dashboard() {
           </View>
 
           <TouchableOpacity 
-            style={[styles.fullWidthCard, { backgroundColor: '#FEF3C7', borderColor: '#FDE68A', marginTop: 12 }]} 
-            onPress={() => navigation.navigate('AttendanceReport')}
+            style={[styles.fullWidthCard, { backgroundColor: '#EEF2FF', borderColor: '#C7D2FE', marginTop: 12 }]} 
+            onPress={() => navigation.navigate('FacultyTimetable')}
             activeOpacity={0.8}
           >
             <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-              <View style={[styles.gridIconWrap, { backgroundColor: '#F59E0B', marginBottom: 0, marginRight: 16 }]}>
-                <Icon name="assessment" size={30} color="#ffffff" />
+              <View style={[styles.gridIconWrap, { backgroundColor: '#4F46E5', marginBottom: 0, marginRight: 16 }]}>
+                <Icon name="calendar-month" size={30} color="#ffffff" />
               </View>
               <View style={{ flex: 1 }}>
-                <Text style={styles.gridTitle}>Attendance Report</Text>
-                <Text style={styles.gridSubtitle}>Date-range student % & analytics</Text>
+                <Text style={styles.gridTitle}>My Timetable</Text>
+                <Text style={styles.gridSubtitle}>Weekly schedule & period plans</Text>
               </View>
-              <Icon name="chevron-right" size={24} color="#F59E0B" />
+              <Icon name="chevron-right" size={24} color="#4F46E5" />
             </View>
           </TouchableOpacity>
         </View>
@@ -255,11 +267,11 @@ export default function Dashboard() {
                 style={styles.sidebarMenuItem} 
                 onPress={() => {
                   setIsSidebarOpen(false);
-                  navigation.navigate('AttendanceReport');
+                  navigation.navigate('FacultyTimetable');
                 }}
               >
-                <Icon name="assessment" size={24} color="#64748B" />
-                <Text style={styles.sidebarMenuText}>Attendance Report</Text>
+                <Icon name="calendar-month" size={24} color="#64748B" />
+                <Text style={styles.sidebarMenuText}>My Timetable</Text>
               </TouchableOpacity>
 
               <TouchableOpacity 
@@ -336,7 +348,10 @@ const styles = StyleSheet.create({
   welcomeContainer: { padding: 20, paddingTop: 24 },
   facultyCard: { backgroundColor: '#ffffff', borderRadius: 24, padding: 24, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', shadowColor: Colors.primary, shadowOffset: { width: 0, height: 12 }, shadowOpacity: 0.08, shadowRadius: 24, elevation: 8, overflow: 'hidden', borderWidth: 1, borderColor: 'rgba(255, 93, 56, 0.1)' },
   facultyCardContent: { flex: 1, zIndex: 2 },
+  greetingRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   greeting: { fontSize: 14, color: '#64748B', fontWeight: '600', textTransform: 'uppercase', letterSpacing: 1.5 },
+  dateBadge: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#F8FAFC', paddingHorizontal: 10, paddingVertical: 5, borderRadius: 10, borderWidth: 1, borderColor: '#E2E8F0' },
+  dateText: { fontSize: 12, fontWeight: '700', color: '#475569' },
   name: { fontSize: 26, fontWeight: '900', color: '#0F172A', marginTop: 6, marginBottom: 16, letterSpacing: -0.5 },
   departmentBadge: { flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(255, 93, 56, 0.1)', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 12, alignSelf: 'flex-start' },
   subtitle: { fontSize: 13, color: Colors.primary, fontWeight: '700' },
