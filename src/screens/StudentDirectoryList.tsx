@@ -106,7 +106,7 @@ export default function StudentDirectoryList() {
           <Text style={styles.title}>{classDetails.className}</Text>
           <View style={{ width: 28 }} />
         </View>
-        <Text style={styles.subtitle}>Directory</Text>
+        <Text style={styles.subtitle}>{classDetails.subject ? `${classDetails.subject} • Directory` : 'Directory'}</Text>
       </View>
 
       <View style={styles.searchContainer}>

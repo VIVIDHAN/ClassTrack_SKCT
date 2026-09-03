@@ -12,6 +12,7 @@ export default function Profile() {
   const navigation = useNavigation<any>();
   const [facultyName, setFacultyName] = React.useState('Faculty Member');
   const [facultyEmail, setFacultyEmail] = React.useState('faculty@skct.edu.in');
+  const [facultyDept, setFacultyDept] = React.useState('Information Technology');
   const [facultyPhone, setFacultyPhone] = React.useState('+91 98765 43210');
   const [loading, setLoading] = React.useState(true);
   const [logoutModalVisible, setLogoutModalVisible] = React.useState(false);
