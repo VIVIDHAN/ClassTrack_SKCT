@@ -46,21 +46,17 @@ const PERIOD_TIMINGS: { [key: number]: string } = {
 };
 
 const DAYS = [
-  { day: 1, label: 'Mon', full: 'Monday' },
-  { day: 2, label: 'Tue', full: 'Tuesday' },
-  { day: 3, label: 'Wed', full: 'Wednesday' },
-  { day: 4, label: 'Thu', full: 'Thursday' },
-  { day: 5, label: 'Fri', full: 'Friday' },
+  { day: 1, label: 'Day 1', full: 'Day Order 1' },
+  { day: 2, label: 'Day 2', full: 'Day Order 2' },
+  { day: 3, label: 'Day 3', full: 'Day Order 3' },
+  { day: 4, label: 'Day 4', full: 'Day Order 4' },
+  { day: 5, label: 'Day 5', full: 'Day Order 5' },
 ];
 
 export default function FacultyTimetable() {
   const navigation = useNavigation<any>();
 
-  // Detect today's day (1 = Monday ... 5 = Friday)
-  const currentDayIndex = new Date().getDay(); // 0 = Sun, 1 = Mon ...
-  const defaultDay = currentDayIndex >= 1 && currentDayIndex <= 5 ? currentDayIndex : 1;
-
-  const [selectedDay, setSelectedDay] = useState(defaultDay);
+  const [selectedDay, setSelectedDay] = useState(3);
   const [teacher, setTeacher] = useState<any>(null);
   const [timetableByDay, setTimetableByDay] = useState<{ [day: number]: TimetableItem[] }>({
     1: [],
@@ -72,9 +68,9 @@ export default function FacultyTimetable() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
-  // Load teacher from storage
+  // Load teacher from storage and active day order
   useEffect(() => {
-    const getTeacher = async () => {
+    const init = async () => {
       try {
         const stored = await AsyncStorage.getItem('loggedInTeacher');
         if (stored) {
@@ -85,8 +81,17 @@ export default function FacultyTimetable() {
       } catch (e) {
         setTeacher({ id: 3, name: 'Ms. B Narmatha', department: 'Information Technology' });
       }
+
+      // Sync active Day Order from backend
+      try {
+        const dayRes = await fetch(`${API_BASE_URL}/day-order`);
+        const dayData = await dayRes.json();
+        if (dayData && dayData.day_order) {
+          setSelectedDay(dayData.day_order);
+        }
+      } catch (e) {}
     };
-    getTeacher();
+    init();
   }, []);
 
   // Fetch timetable for all 5 days for this teacher

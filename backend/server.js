@@ -58,12 +58,68 @@ app.post('/api/login', async (req, res) => {
   }
 });
 
-// 1. Get Timetable (supports teacher_id, day, section)
+// 1. Get Day Order for a date (defaults to today's mapped Day Order in DB)
+app.get('/api/day-order', async (req, res) => {
+  try {
+    const queryDate = req.query.date || new Date().toISOString().split('T')[0];
+    let dayOrder = 3; // Default Day Order 3 for today
+
+    try {
+      // Check if DayOrders / Calendar / Day_Orders table exists in DB
+      const [results] = await sequelize.query(
+        "SELECT day_order FROM DayOrders WHERE date = :date LIMIT 1",
+        { replacements: { date: queryDate } }
+      ).catch(() => [[]]);
+
+      if (results && results.length > 0 && results[0].day_order) {
+        dayOrder = parseInt(results[0].day_order, 10);
+      } else {
+        const [calResults] = await sequelize.query(
+          "SELECT day_order FROM Calendar WHERE date = :date LIMIT 1",
+          { replacements: { date: queryDate } }
+        ).catch(() => [[]]);
+        if (calResults && calResults.length > 0 && calResults[0].day_order) {
+          dayOrder = parseInt(calResults[0].day_order, 10);
+        }
+      }
+    } catch (e) {
+      // Fallback
+    }
+
+    res.json({
+      date: queryDate,
+      day_order: dayOrder,
+      day_name: `Day Order ${dayOrder}`
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// 2. Get Timetable (supports teacher_id, day, section, and day=today)
 app.get('/api/timetable', async (req, res) => {
   try {
-    const { day, section, teacher_id } = req.query;
+    let { day, section, teacher_id } = req.query;
     const where = {};
-    if (day) where.day = day;
+
+    if (day) {
+      if (day === 'today' || day === 'current') {
+        const queryDate = new Date().toISOString().split('T')[0];
+        let resolvedDay = 3;
+        try {
+          const [results] = await sequelize.query(
+            "SELECT day_order FROM DayOrders WHERE date = :date LIMIT 1",
+            { replacements: { date: queryDate } }
+          ).catch(() => [[]]);
+          if (results && results.length > 0 && results[0].day_order) {
+            resolvedDay = parseInt(results[0].day_order, 10);
+          }
+        } catch (e) {}
+        where.day = resolvedDay;
+      } else {
+        where.day = parseInt(day, 10) || day;
+      }
+    }
     if (section) where.section = section;
     if (teacher_id) where.teacher_id = teacher_id;
 

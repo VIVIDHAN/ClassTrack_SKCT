@@ -21,6 +21,7 @@ export default function Dashboard() {
   const [facultyDept, setFacultyDept] = useState('Information Technology');
   const [allClasses, setAllClasses] = useState<any[]>([]);
   const [currentTime, setCurrentTime] = useState(new Date());
+  const [todayDayOrder, setTodayDayOrder] = useState<number>(3);
   const [logoutModalVisible, setLogoutModalVisible] = useState(false);
 
   // Auto-refresh clock every 15 seconds to update ongoing/upcoming states accurately
@@ -66,6 +67,15 @@ export default function Dashboard() {
           const controller = new AbortController();
           const timeoutId = setTimeout(() => controller.abort(), 3500);
 
+          // Fetch Day Order from backend
+          try {
+            const dayRes = await fetch(`${API_BASE_URL}/day-order`, { signal: controller.signal });
+            const dayData = await dayRes.json();
+            if (dayData && dayData.day_order) {
+              setTodayDayOrder(dayData.day_order);
+            }
+          } catch (e) {}
+
           // Fetch all timetable slots for this teacher across all days
           const res = await fetch(`${API_BASE_URL}/timetable?teacher_id=${teacherId}`, { signal: controller.signal });
           clearTimeout(timeoutId);
@@ -86,14 +96,14 @@ export default function Dashboard() {
     }, [])
   );
 
-  // Evaluate ongoing and upcoming classes according to current local time
+  // Evaluate ongoing and upcoming classes according to active DB Day Order (e.g. Day Order 3)
   const scheduleState = useMemo(() => {
-    const jsDay = currentTime.getDay(); // 0 = Sun, 1 = Mon ... 6 = Sat
+    const jsDay = currentTime.getDay(); // 0 = Sun, 6 = Sat
     const isWeekend = jsDay === 0 || jsDay === 6;
-    const currentDay = isWeekend ? 1 : jsDay;
+    const currentDay = isWeekend ? 1 : todayDayOrder;
     const currentMinutes = currentTime.getHours() * 60 + currentTime.getMinutes();
 
-    // Classes for today (only if not weekend)
+    // Classes for today (filtered by active DB Day Order)
     const todayRaw = !isWeekend ? allClasses.filter((c: any) => c.day === currentDay) : [];
 
     const enrichedToday = todayRaw.map((item: any) => {
@@ -224,7 +234,7 @@ export default function Dashboard() {
                 <Text style={styles.greeting}>Good Morning,</Text>
                 <View style={styles.dateBadge}>
                   <Icon name="event" size={13} color={Colors.primary} style={{ marginRight: 4 }} />
-                  <Text style={styles.dateText}>{todayDate}</Text>
+                  <Text style={styles.dateText}>{todayDate} • Day Order {todayDayOrder}</Text>
                 </View>
               </View>
               <Text style={styles.name}>{facultyName}</Text>

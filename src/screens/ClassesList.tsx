@@ -65,9 +65,15 @@ export default function ClassesList() {
           }
           setLoading(false);
         } else {
-          // Attendance Mode: Fetch this teacher's classes for current day
-          const jsDay = new Date().getDay();
-          const currentDay = (jsDay >= 1 && jsDay <= 5) ? jsDay : 1;
+          // Attendance Mode: Fetch this teacher's classes for today's active Day Order
+          let currentDay = 3;
+          try {
+            const dayRes = await fetch(`${API_BASE_URL}/day-order`, { signal: controller.signal });
+            const dayData = await dayRes.json();
+            if (dayData && dayData.day_order) {
+              currentDay = dayData.day_order;
+            }
+          } catch (e) {}
 
           const res = await fetch(`${API_BASE_URL}/timetable?teacher_id=${teacherId}&day=${currentDay}`, { signal: controller.signal });
           clearTimeout(timeoutId);
