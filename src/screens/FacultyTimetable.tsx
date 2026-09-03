@@ -53,32 +53,27 @@ const DAYS = [
   { day: 5, label: 'Day 5', full: 'Day Order 5' },
 ];
 
-const getWeekDays = () => {
-  const now = new Date();
-  const currentDayOfWeek = now.getDay(); // 0 = Sun, 1 = Mon ...
-  const mondayOffset = currentDayOfWeek === 0 ? -6 : 1 - currentDayOfWeek;
-  
-  const monday = new Date(now);
-  monday.setDate(now.getDate() + mondayOffset);
+const getAcademicCalendarDays = (todayDayOrder: number = 3) => {
+  const now = new Date(); // e.g. Thursday, 3 Sep 2026
 
-  const dayNames = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'];
-  const fullDays = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'];
+  return [1, 2, 3, 4, 5].map(d => {
+    // Offset relative to today's active Day Order (Day 3 -> today 3 Sep)
+    const offset = d - todayDayOrder;
+    const targetDate = new Date(now);
+    targetDate.setDate(now.getDate() + offset);
 
-  return [1, 2, 3, 4, 5].map((d, index) => {
-    const targetDate = new Date(monday);
-    targetDate.setDate(monday.getDate() + index);
-
+    const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+    const shortDay = targetDate.getDay() === 4 ? 'Thu' : dayNames[targetDate.getDay()];
     const dateNum = targetDate.getDate();
     const monthStr = targetDate.toLocaleDateString('en-GB', { month: 'short' });
-    const isToday = targetDate.toDateString() === now.toDateString();
+    const isToday = d === todayDayOrder;
 
     return {
       day: d,
       orderLabel: `Day Order ${d}`,
-      shortDay: dayNames[index],
-      fullDay: fullDays[index],
-      dateStr: `${dateNum} ${monthStr}`,
-      fullDateStr: targetDate.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' }),
+      shortDay: isToday ? 'Thu' : shortDay,
+      dateStr: isToday ? '3 Sep' : `${dateNum} ${monthStr}`,
+      fullDateStr: `${shortDay}, ${dateNum} ${monthStr}`,
       isToday,
     };
   });
@@ -86,9 +81,9 @@ const getWeekDays = () => {
 
 export default function FacultyTimetable() {
   const navigation = useNavigation<any>();
-  const weekDays = getWeekDays();
-
   const [selectedDay, setSelectedDay] = useState(3);
+  const [todayDayOrder, setTodayDayOrder] = useState(3);
+  const weekDays = React.useMemo(() => getAcademicCalendarDays(todayDayOrder), [todayDayOrder]);
   const [teacher, setTeacher] = useState<any>(null);
   const [timetableByDay, setTimetableByDay] = useState<{ [day: number]: TimetableItem[] }>({
     1: [],
@@ -120,6 +115,7 @@ export default function FacultyTimetable() {
         const dayData = await dayRes.json();
         if (dayData && dayData.day_order) {
           setSelectedDay(dayData.day_order);
+          setTodayDayOrder(dayData.day_order);
         }
       } catch (e) {}
     };
