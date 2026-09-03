@@ -255,51 +255,45 @@ export default function FacultyTimetable() {
         </View>
       </Animated.View>
 
-      {/* DAY SELECTOR HORIZONTAL SCROLLVIEW */}
-      <View style={styles.daySelectorWrapper}>
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.daySelectorScrollContent}
-        >
-          {weekDays.map(d => {
-            const isSelected = selectedDay === d.day;
-            const classCount = (timetableByDay[d.day] || []).length;
-            return (
-              <TouchableOpacity
-                key={d.day}
-                style={[styles.dayCardTab, isSelected && styles.dayCardTabActive]}
-                onPress={() => setSelectedDay(d.day)}
-                activeOpacity={0.75}
+      {/* DAY SELECTOR SEGMENTED TABS */}
+      <View style={styles.daySelectorContainer}>
+        {weekDays.map(d => {
+          const isSelected = selectedDay === d.day;
+          const classCount = (timetableByDay[d.day] || []).length;
+          return (
+            <TouchableOpacity
+              key={d.day}
+              style={[styles.dayTab, isSelected && styles.dayTabActive]}
+              onPress={() => setSelectedDay(d.day)}
+              activeOpacity={0.7}
+            >
+              {/* Line 1: Day & Date e.g. "Thu, 3 Sep" */}
+              <Text 
+                style={[styles.dayTabLabel, isSelected && styles.dayTabLabelActive]}
+                numberOfLines={1}
+                adjustsFontSizeToFit
               >
-                {/* Top: Day and Date */}
-                <View style={styles.dayCardTopRow}>
-                  <Text style={[styles.dayCardDateText, isSelected && styles.dayCardDateTextActive]}>
-                    {d.shortDay}, {d.dateStr}
-                  </Text>
-                  {d.isToday && (
-                    <View style={[styles.todayBadge, isSelected && styles.todayBadgeActive]}>
-                      <Text style={[styles.todayBadgeText, isSelected && styles.todayBadgeTextActive]}>TODAY</Text>
-                    </View>
-                  )}
-                </View>
+                {d.shortDay}, {d.dateStr}
+              </Text>
 
-                {/* Middle: Day Order */}
-                <Text style={[styles.dayCardOrderText, isSelected && styles.dayCardOrderTextActive]}>
-                  {d.orderLabel}
-                </Text>
+              {/* Line 2: Day Order e.g. "Day 3" */}
+              <Text style={[styles.dayTabSub, isSelected && styles.dayTabSubActive]}>
+                Day {d.day}
+              </Text>
 
-                {/* Bottom: Period count */}
-                <View style={[styles.dayCardPeriodPill, isSelected && styles.dayCardPeriodPillActive]}>
-                  <Icon name="schedule" size={11} color={isSelected ? '#34D399' : '#059669'} style={{ marginRight: 3 }} />
-                  <Text style={[styles.dayCardPeriodText, isSelected && styles.dayCardPeriodTextActive]}>
-                    {classCount} {classCount === 1 ? 'Period' : 'Periods'}
+              {/* Line 3: Period count circle */}
+              {classCount > 0 ? (
+                <View style={[styles.dayDot, isSelected && styles.dayDotActive]}>
+                  <Text style={[styles.dayDotText, isSelected && styles.dayDotTextActive]}>
+                    {classCount}
                   </Text>
                 </View>
-              </TouchableOpacity>
-            );
-          })}
-        </ScrollView>
+              ) : (
+                <View style={[styles.dayDotEmpty, isSelected && styles.dayDotEmptyActive]} />
+              )}
+            </TouchableOpacity>
+          );
+        })}
       </View>
 
       {/* TIMETABLE CONTENT */}
@@ -565,99 +559,89 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#34D399',
   },
-  daySelectorWrapper: {
+  daySelectorContainer: {
+    flexDirection: 'row',
+    marginHorizontal: 16,
     marginBottom: 16,
-  },
-  daySelectorScrollContent: {
-    paddingHorizontal: 16,
-    paddingVertical: 4,
-  },
-  dayCardTab: {
-    width: 140,
     backgroundColor: '#FFFFFF',
-    borderRadius: 18,
-    padding: 12,
-    marginRight: 10,
-    borderWidth: 1.5,
+    borderRadius: 22,
+    padding: 6,
+    borderWidth: 1,
     borderColor: '#E2E8F0',
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 3 },
+    shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.04,
-    shadowRadius: 6,
+    shadowRadius: 10,
     elevation: 2,
-  },
-  dayCardTabActive: {
-    backgroundColor: '#0F172A',
-    borderColor: Colors.primary,
-    shadowColor: Colors.primary,
-    shadowOpacity: 0.2,
-    shadowRadius: 8,
-    elevation: 4,
-  },
-  dayCardTopRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 6,
   },
-  dayCardDateText: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#64748B',
+  dayTab: {
+    flex: 1,
+    paddingVertical: 12,
+    paddingHorizontal: 2,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 16,
   },
-  dayCardDateTextActive: {
-    color: '#94A3B8',
-  },
-  todayBadge: {
-    backgroundColor: 'rgba(255, 93, 56, 0.12)',
-    paddingHorizontal: 5,
-    paddingVertical: 2,
-    borderRadius: 6,
-  },
-  todayBadgeActive: {
+  dayTabActive: {
     backgroundColor: Colors.primary,
+    shadowColor: Colors.primary,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.35,
+    shadowRadius: 8,
+    elevation: 5,
   },
-  todayBadgeText: {
-    fontSize: 9,
-    fontWeight: '900',
-    color: Colors.primary,
-    letterSpacing: 0.5,
-  },
-  todayBadgeTextActive: {
-    color: '#FFF',
-  },
-  dayCardOrderText: {
-    fontSize: 14,
-    fontWeight: '900',
-    color: '#0F172A',
-    marginBottom: 8,
+  dayTabLabel: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#334155',
+    textAlign: 'center',
     letterSpacing: -0.2,
   },
-  dayCardOrderTextActive: {
+  dayTabLabelActive: {
     color: '#FFFFFF',
+    fontWeight: '900',
   },
-  dayCardPeriodPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#ECFDF5',
-    paddingHorizontal: 7,
-    paddingVertical: 3,
-    borderRadius: 8,
-    alignSelf: 'flex-start',
-    borderWidth: 1,
-    borderColor: '#A7F3D0',
-  },
-  dayCardPeriodPillActive: {
-    backgroundColor: 'rgba(16, 185, 129, 0.25)',
-    borderColor: 'rgba(16, 185, 129, 0.4)',
-  },
-  dayCardPeriodText: {
+  dayTabSub: {
     fontSize: 11,
-    fontWeight: '700',
-    color: '#047857',
+    color: '#94A3B8',
+    marginTop: 2,
+    fontWeight: '600',
+    textAlign: 'center',
   },
-  dayCardPeriodTextActive: {
-    color: '#34D399',
+  dayTabSubActive: {
+    color: 'rgba(255, 255, 255, 0.9)',
+    fontWeight: '700',
+  },
+  dayDot: {
+    marginTop: 6,
+    backgroundColor: '#EEF2FF',
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  dayDotActive: {
+    backgroundColor: '#FFFFFF',
+  },
+  dayDotText: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: Colors.primary,
+  },
+  dayDotTextActive: {
+    color: Colors.primary,
+  },
+  dayDotEmpty: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#E2E8F0',
+    marginTop: 13,
+  },
+  dayDotEmptyActive: {
+    backgroundColor: 'rgba(255, 255, 255, 0.5)',
   },
   loadingContainer: {
     flex: 1,
