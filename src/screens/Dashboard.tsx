@@ -32,10 +32,11 @@ export default function Dashboard() {
     return () => clearInterval(timer);
   }, []);
 
-  const todayDate = new Date().toLocaleDateString('en-GB', {
-    weekday: 'short',
+  const formattedDateAndDay = currentTime.toLocaleDateString('en-GB', {
+    weekday: 'long',
     day: 'numeric',
     month: 'short',
+    year: 'numeric',
   });
 
   const handleLogout = async () => {
@@ -230,17 +231,36 @@ export default function Dashboard() {
         <Animated.View entering={FadeInUp.delay(100).duration(500)} style={styles.welcomeContainer}>
           <View style={styles.facultyCard}>
             <View style={styles.facultyCardContent}>
-              <View style={styles.greetingRow}>
-                <Text style={styles.greeting}>Good Morning,</Text>
-                <View style={styles.dateBadge}>
-                  <Icon name="event" size={13} color={Colors.primary} style={{ marginRight: 4 }} />
-                  <Text style={styles.dateText}>{todayDate} • Day Order {todayDayOrder}</Text>
+              <View style={styles.greetingHeaderRow}>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.greeting}>Good Morning,</Text>
+                  <Text style={styles.name}>{facultyName}</Text>
+                </View>
+                <View style={styles.departmentBadge}>
+                  <Icon name="business" size={14} color={Colors.primary} style={{ marginRight: 5 }} />
+                  <Text style={styles.subtitle}>{facultyDept}</Text>
                 </View>
               </View>
-              <Text style={styles.name}>{facultyName}</Text>
-              <View style={styles.departmentBadge}>
-                <Icon name="business" size={16} color={Colors.primary} style={{ marginRight: 6 }} />
-                <Text style={styles.subtitle}>{facultyDept}</Text>
+
+              {/* Date, Day, Day Order & Period Count Info Card */}
+              <View style={styles.calendarInfoBox}>
+                <View style={styles.calendarLine1}>
+                  <Icon name="event" size={15} color={Colors.primary} style={{ marginRight: 6 }} />
+                  <Text style={styles.dateDayText}>{formattedDateAndDay}</Text>
+                </View>
+
+                <View style={styles.calendarLine2}>
+                  <View style={styles.dayOrderBadge}>
+                    <Text style={styles.dayOrderBadgeText}>Day Order {todayDayOrder}</Text>
+                  </View>
+                  <Text style={styles.dotSeparator}>•</Text>
+                  <View style={styles.periodCountBadge}>
+                    <Icon name="schedule" size={13} color="#047857" style={{ marginRight: 4 }} />
+                    <Text style={styles.periodCountText}>
+                      {scheduleState.todayClassCount} {scheduleState.todayClassCount === 1 ? 'Period' : 'Periods'} Today
+                    </Text>
+                  </View>
+                </View>
               </View>
             </View>
           </View>
@@ -616,15 +636,23 @@ const styles = StyleSheet.create({
   headerLogoContainer: { flex: 1, alignItems: 'center' },
   headerLogo: { width: 240, height: 60, transform: [{ scale: 1.2 }] },
   welcomeContainer: { padding: 20, paddingTop: 24 },
-  facultyCard: { backgroundColor: '#ffffff', borderRadius: 24, padding: 24, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', shadowColor: Colors.primary, shadowOffset: { width: 0, height: 12 }, shadowOpacity: 0.08, shadowRadius: 24, elevation: 8, overflow: 'hidden', borderWidth: 1, borderColor: 'rgba(255, 93, 56, 0.1)' },
-  facultyCardContent: { flex: 1, zIndex: 2 },
-  greetingRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  greeting: { fontSize: 14, color: '#64748B', fontWeight: '600', textTransform: 'uppercase', letterSpacing: 1.5 },
-  dateBadge: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#F8FAFC', paddingHorizontal: 10, paddingVertical: 5, borderRadius: 10, borderWidth: 1, borderColor: '#E2E8F0' },
-  dateText: { fontSize: 12, fontWeight: '700', color: '#475569' },
-  name: { fontSize: 26, fontWeight: '900', color: '#0F172A', marginTop: 6, marginBottom: 16, letterSpacing: -0.5 },
-  departmentBadge: { flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(255, 93, 56, 0.1)', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 12, alignSelf: 'flex-start' },
-  subtitle: { fontSize: 13, color: Colors.primary, fontWeight: '700' },
+  facultyCard: { backgroundColor: '#ffffff', borderRadius: 24, padding: 20, shadowColor: Colors.primary, shadowOffset: { width: 0, height: 12 }, shadowOpacity: 0.08, shadowRadius: 24, elevation: 8, borderWidth: 1, borderColor: 'rgba(255, 93, 56, 0.1)' },
+  facultyCardContent: { flex: 1 },
+  greetingHeaderRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 4 },
+  greeting: { fontSize: 13, color: '#64748B', fontWeight: '600', textTransform: 'uppercase', letterSpacing: 1.2 },
+  name: { fontSize: 24, fontWeight: '900', color: '#0F172A', marginTop: 2, letterSpacing: -0.5 },
+  departmentBadge: { flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(255, 93, 56, 0.1)', paddingHorizontal: 10, paddingVertical: 5, borderRadius: 10 },
+  subtitle: { fontSize: 12, color: Colors.primary, fontWeight: '700' },
+  
+  calendarInfoBox: { backgroundColor: '#F8FAFC', borderRadius: 16, paddingHorizontal: 14, paddingVertical: 10, borderWidth: 1, borderColor: '#E2E8F0', marginTop: 12 },
+  calendarLine1: { flexDirection: 'row', alignItems: 'center', marginBottom: 6 },
+  dateDayText: { fontSize: 14, fontWeight: '800', color: '#0F172A', letterSpacing: -0.2 },
+  calendarLine2: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap' },
+  dayOrderBadge: { backgroundColor: 'rgba(255, 93, 56, 0.12)', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8 },
+  dayOrderBadgeText: { fontSize: 12, fontWeight: '800', color: Colors.primary },
+  dotSeparator: { marginHorizontal: 8, color: '#94A3B8', fontWeight: '800', fontSize: 13 },
+  periodCountBadge: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#ECFDF5', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8, borderWidth: 1, borderColor: '#A7F3D0' },
+  periodCountText: { fontSize: 12, fontWeight: '700', color: '#047857' },
   
   gridContainer: { paddingHorizontal: 20, marginTop: 10 },
   fullWidthCard: { backgroundColor: '#ffffff', borderColor: '#F1F5F9', padding: 20, borderRadius: 24, borderWidth: 1, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.04, shadowRadius: 10, elevation: 2, marginBottom: 14 },
