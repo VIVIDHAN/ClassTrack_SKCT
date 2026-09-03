@@ -238,64 +238,73 @@ export default function Dashboard() {
 
         <View style={styles.gridContainer}>
           <TouchableOpacity 
-            style={[styles.fullWidthCard, { backgroundColor: '#E0F2FE', borderColor: '#7DD3FC' }]} 
+            style={styles.fullWidthCard} 
             onPress={() => navigation.navigate('ClassesList', { mode: 'attendance' })}
             activeOpacity={0.8}
           >
             <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-              <View style={[styles.gridIconWrap, { backgroundColor: '#38BDF8', marginBottom: 0, marginRight: 16 }]}>
-                <Icon name="fact-check" size={32} color="#ffffff" />
+              <View style={[styles.gridIconWrap, { backgroundColor: '#E0F2FE', marginBottom: 0, marginRight: 16 }]}>
+                <Icon name="fact-check" size={28} color="#0284C7" />
               </View>
               <View style={{ flex: 1 }}>
                 <Text style={styles.gridTitle}>Mark Attendance</Text>
                 <Text style={styles.gridSubtitle}>Select a class to mark</Text>
               </View>
-              <Icon name="chevron-right" size={24} color="#38BDF8" />
+              <Icon name="chevron-right" size={24} color="#94A3B8" />
             </View>
           </TouchableOpacity>
 
           <View style={styles.rowGrid}>
             <TouchableOpacity 
-              style={[styles.gridBox, { backgroundColor: '#FEE2E2', borderColor: '#FCA5A5' }]} 
+              style={styles.gridBox} 
               onPress={() => navigation.navigate('History')}
               activeOpacity={0.8}
             >
-              <View style={[styles.gridIconWrap, { backgroundColor: '#F87171' }]}>
-                <Icon name="history" size={28} color="#ffffff" />
+              <View style={[styles.gridIconWrap, { backgroundColor: '#FEE2E2' }]}>
+                <Icon name="history" size={26} color="#EF4444" />
               </View>
               <Text style={styles.gridTitle}>Logs</Text>
               <Text style={styles.gridSubtitle}>View reports</Text>
             </TouchableOpacity>
 
             <TouchableOpacity 
-              style={[styles.gridBox, { backgroundColor: '#DCFCE7', borderColor: '#86EFAC' }]} 
+              style={styles.gridBox} 
               onPress={() => navigation.navigate('ClassesList', { mode: 'directory' })}
               activeOpacity={0.8}
             >
-              <View style={[styles.gridIconWrap, { backgroundColor: '#4ADE80' }]}>
-                <Icon name="people" size={28} color="#ffffff" />
+              <View style={[styles.gridIconWrap, { backgroundColor: '#DCFCE7' }]}>
+                <Icon name="people" size={26} color="#10B981" />
               </View>
               <Text style={styles.gridTitle}>Directory</Text>
               <Text style={styles.gridSubtitle}>Student info</Text>
             </TouchableOpacity>
           </View>
 
-          <TouchableOpacity 
-            style={[styles.fullWidthCard, { backgroundColor: '#EEF2FF', borderColor: '#C7D2FE', marginTop: 12 }]} 
-            onPress={() => navigation.navigate('FacultyTimetable')}
-            activeOpacity={0.8}
-          >
-            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-              <View style={[styles.gridIconWrap, { backgroundColor: '#4F46E5', marginBottom: 0, marginRight: 16 }]}>
-                <Icon name="calendar-month" size={30} color="#ffffff" />
+          <View style={[styles.rowGrid, { marginTop: 12 }]}>
+            <TouchableOpacity 
+              style={styles.gridBox} 
+              onPress={() => navigation.navigate('Notify')}
+              activeOpacity={0.8}
+            >
+              <View style={[styles.gridIconWrap, { backgroundColor: '#FEF3C7' }]}>
+                <Icon name="campaign" size={26} color="#F59E0B" />
               </View>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.gridTitle}>My Timetable</Text>
-                <Text style={styles.gridSubtitle}>Weekly schedule & period plans</Text>
+              <Text style={styles.gridTitle}>Notify</Text>
+              <Text style={styles.gridSubtitle}>Call & SMS absentees</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity 
+              style={styles.gridBox} 
+              onPress={() => navigation.navigate('FacultyTimetable')}
+              activeOpacity={0.8}
+            >
+              <View style={[styles.gridIconWrap, { backgroundColor: '#EEF2FF' }]}>
+                <Icon name="calendar-month" size={26} color="#4F46E5" />
               </View>
-              <Icon name="chevron-right" size={24} color="#4F46E5" />
-            </View>
-          </TouchableOpacity>
+              <Text style={styles.gridTitle}>My Timetable</Text>
+              <Text style={styles.gridSubtitle}>Weekly schedule</Text>
+            </TouchableOpacity>
+          </View>
         </View>
 
         {/* Live Class Schedule (Ongoing & Upcoming) */}
@@ -518,6 +527,17 @@ export default function Dashboard() {
                 style={styles.sidebarMenuItem} 
                 onPress={() => {
                   setIsSidebarOpen(false);
+                  navigation.navigate('Notify');
+                }}
+              >
+                <Icon name="campaign" size={24} color="#64748B" />
+                <Text style={styles.sidebarMenuText}>Notify Parents</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity 
+                style={styles.sidebarMenuItem} 
+                onPress={() => {
+                  setIsSidebarOpen(false);
                   navigation.navigate('Profile');
                 }}
               >
@@ -597,9 +617,9 @@ const styles = StyleSheet.create({
   subtitle: { fontSize: 13, color: Colors.primary, fontWeight: '700' },
   
   gridContainer: { paddingHorizontal: 20, marginTop: 10 },
-  fullWidthCard: { padding: 20, borderRadius: 24, borderWidth: 1, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.04, shadowRadius: 10, elevation: 2, marginBottom: 16 },
+  fullWidthCard: { backgroundColor: '#ffffff', borderColor: '#F1F5F9', padding: 20, borderRadius: 24, borderWidth: 1, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.04, shadowRadius: 10, elevation: 2, marginBottom: 14 },
   rowGrid: { flexDirection: 'row', justifyContent: 'space-between' },
-  gridBox: { flex: 1, padding: 20, borderRadius: 24, marginHorizontal: 6, borderWidth: 1, alignItems: 'flex-start', shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.04, shadowRadius: 10, elevation: 2 },
+  gridBox: { flex: 1, backgroundColor: '#ffffff', borderColor: '#F1F5F9', padding: 18, borderRadius: 24, marginHorizontal: 6, borderWidth: 1, alignItems: 'flex-start', shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.04, shadowRadius: 10, elevation: 2 },
   gridIconWrap: { width: 48, height: 48, borderRadius: 14, justifyContent: 'center', alignItems: 'center', marginBottom: 12 },
   gridTitle: { fontSize: 16, fontWeight: '800', color: '#0F172A', marginBottom: 4 },
   gridSubtitle: { fontSize: 12, color: '#64748B', fontWeight: '600', lineHeight: 16 },

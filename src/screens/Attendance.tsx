@@ -4,6 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import Animated, { FadeInRight, FadeInUp, FadeInDown, Layout } from 'react-native-reanimated';
 import Icon from 'react-native-vector-icons/MaterialIcons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Colors } from '../constants/Colors';
 import { API_BASE_URL } from '../constants/Config';
 import BreatheLoader from '../components/BreatheLoader';
@@ -33,17 +34,24 @@ export default function Attendance() {
             db_id: s.id,
             name: s.name,
             phone: s.parent_phone || s.parentPhone || s.phone,
+            real_parent_phone: s.original_parent_phone || s.parent_phone || s.parentPhone || s.phone,
             isAbsent: false,
             isOnDuty: false
           }));
           setStudents(mapped);
         } else {
-          setStudents(SKCT_STUDENTS_G);
+          setStudents(SKCT_STUDENTS_G.map(s => ({
+            ...s,
+            real_parent_phone: s.phone
+          })));
         }
         setLoading(false);
       })
       .catch(() => {
-        setStudents(SKCT_STUDENTS_G);
+        setStudents(SKCT_STUDENTS_G.map(s => ({
+          ...s,
+          real_parent_phone: s.phone
+        })));
         setLoading(false);
       });
 
@@ -95,6 +103,18 @@ export default function Attendance() {
   const handleSubmit = async () => {
     const absentStudents = students.filter(s => s.isAbsent);
     
+    // Check SMS Mode (Testing Mode vs Live Mode)
+    let isTestMode = true;
+    try {
+      const storedMode = await AsyncStorage.getItem('smsTestMode');
+      if (storedMode !== null) {
+        isTestMode = JSON.parse(storedMode);
+      }
+    } catch (e) {
+      isTestMode = true;
+    }
+    const TEST_PHONE = '9442211279';
+
     let smsWasSent = false;
     if (absentStudents.length > 0 && Platform.OS === 'android') {
       try {
@@ -111,9 +131,10 @@ export default function Attendance() {
         if (granted === PermissionsAndroid.RESULTS.GRANTED) {
           const DirectSms = NativeModules.DirectSms;
           absentStudents.forEach(student => {
-            if (student.phone) {
+            const destPhone = isTestMode ? TEST_PHONE : (student.real_parent_phone || student.phone);
+            if (destPhone) {
               const message = `Dear Parent, your ward ${student.name} (${student.id}) is marked ABSENT for ${classDetails.subject} today.`;
-              DirectSms.sendDirectSms(student.phone, message);
+              DirectSms.sendDirectSms(destPhone, message);
             }
           });
           smsWasSent = true;
@@ -139,8 +160,37 @@ export default function Attendance() {
           }))
         })
       });
-    } catch(err) {
+    } catch (err) {
       console.error(err);
+    }
+
+    // Cache marked absentees for Notify screen
+    try {
+      const now = new Date();
+      const dateStr = now.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+      const newSessionRecord = {
+        sessionId: `session-${Date.now()}`,
+        date: dateStr,
+        time: classDetails.time || 'Period Session',
+        period: classDetails.time ? (classDetails.time.includes('(') ? classDetails.time.split('(')[0].trim() : classDetails.time) : 'Period',
+        className: classDetails.className || 'III IT G',
+        subject: classDetails.subject || 'Class',
+        timetable_id: classDetails.timetable_id,
+        absentees: absentStudents.map(s => ({
+          id: s.id,
+          name: s.name,
+          phone: s.real_parent_phone || s.phone || TEST_PHONE,
+          real_parent_phone: s.real_parent_phone || s.phone || TEST_PHONE,
+          called: false,
+          smsSent: smsWasSent
+        }))
+      };
+
+      const existingStored = await AsyncStorage.getItem('markedAbsentees');
+      const existingList = existingStored ? JSON.parse(existingStored) : [];
+      await AsyncStorage.setItem('markedAbsentees', JSON.stringify([newSessionRecord, ...existingList]));
+    } catch (cacheErr) {
+      console.log('Error caching marked absentees:', cacheErr);
     }
 
     navigation.navigate('Success', { absentStudents, classDetails });

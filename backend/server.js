@@ -151,7 +151,7 @@ app.post('/api/attendance', async (req, res) => {
   }
 });
 
-// 4. Get History
+// 4. Get History with Absentees
 app.get('/api/history', async (req, res) => {
   try {
     const history = await Attendance.findAll({
@@ -168,12 +168,32 @@ app.get('/api/history', async (req, res) => {
       order: [['date', 'DESC']]
     });
     
-    // Format response to ensure absentCount is a number
-    const formatted = history.map(h => {
+    // Format response and attach detailed absentees list for each session
+    const formatted = await Promise.all(history.map(async (h) => {
       const data = h.toJSON();
       data.absentCount = parseInt(data.absentCount, 10) || 0;
+
+      const absentees = await Attendance.findAll({
+        where: {
+          date: data.date,
+          timetable_id: data.timetable_id,
+          status: 'Absent'
+        },
+        include: [
+          { model: Student, attributes: ['id', 'roll_no', 'name', 'parent_phone', 'section'] }
+        ]
+      });
+
+      data.absentees = absentees.map(a => ({
+        id: a.Student ? a.Student.roll_no : '',
+        name: a.Student ? a.Student.name : '',
+        phone: a.Student ? a.Student.parent_phone : '',
+        real_parent_phone: a.Student ? a.Student.parent_phone : '',
+        section: a.Student ? a.Student.section : ''
+      }));
+
       return data;
-    });
+    }));
     
     res.json(formatted);
   } catch (err) {
@@ -217,6 +237,38 @@ app.get('/api/reports', async (req, res) => {
     }
 
     res.json(report);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// 6. Get Absentees list for notification
+app.get('/api/absentees', async (req, res) => {
+  try {
+    const { date } = req.query;
+    const where = { status: 'Absent' };
+    if (date) where.date = date;
+
+    const absentees = await Attendance.findAll({
+      where,
+      include: [
+        { model: Student, attributes: ['id', 'roll_no', 'name', 'parent_phone', 'section'] },
+        { model: Timetable, include: [Subject] }
+      ],
+      order: [['date', 'DESC'], ['id', 'DESC']]
+    });
+
+    const isTestMode = process.env.SMS_TEST_MODE !== 'false' && SMS_TEST_MODE;
+    const formatted = absentees.map(a => {
+      const data = a.toJSON();
+      if (data.Student && isTestMode) {
+        data.Student.original_parent_phone = data.Student.parent_phone;
+        data.Student.parent_phone = SMS_TEST_PHONE;
+      }
+      return data;
+    });
+
+    res.json(formatted);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

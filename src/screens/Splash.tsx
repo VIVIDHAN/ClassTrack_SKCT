@@ -1,25 +1,35 @@
-import React from 'react';
-import { View, Text, StyleSheet, Animated, ActivityIndicator, Dimensions } from 'react-native';
+import React, { useEffect, useRef } from 'react';
+import {
+  View,
+  Text,
+  StyleSheet,
+  Animated,
+  ActivityIndicator,
+  Dimensions,
+  Image,
+} from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import BreatheLoader from '../components/BreatheLoader';
+import { Colors } from '../constants/Colors';
 
-const { width } = Dimensions.get('window');
+const { width, height } = Dimensions.get('window');
 
 export default function Splash({ navigation }: any) {
-  const fadeAnim = React.useRef(new Animated.Value(0)).current;
-  const scaleAnim = React.useRef(new Animated.Value(0.9)).current;
-  const slideAnim = React.useRef(new Animated.Value(50)).current;
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const scaleAnim = useRef(new Animated.Value(0.8)).current;
+  const slideAnim = useRef(new Animated.Value(30)).current;
+  const logoPulse = useRef(new Animated.Value(1)).current;
 
-  React.useEffect(() => {
+  useEffect(() => {
+    // Entrance animations
     Animated.parallel([
       Animated.timing(fadeAnim, {
         toValue: 1,
-        duration: 1000,
+        duration: 900,
         useNativeDriver: true,
       }),
       Animated.spring(scaleAnim, {
         toValue: 1,
-        friction: 5,
+        friction: 6,
         tension: 40,
         useNativeDriver: true,
       }),
@@ -30,6 +40,23 @@ export default function Splash({ navigation }: any) {
       }),
     ]).start();
 
+    // Gentle logo breathing pulse
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(logoPulse, {
+          toValue: 1.05,
+          duration: 1500,
+          useNativeDriver: true,
+        }),
+        Animated.timing(logoPulse, {
+          toValue: 1,
+          duration: 1500,
+          useNativeDriver: true,
+        }),
+      ])
+    ).start();
+
+    // Session check and transition
     const checkSession = async () => {
       try {
         const token = await AsyncStorage.getItem('userToken');
@@ -39,30 +66,79 @@ export default function Splash({ navigation }: any) {
           } else {
             navigation.replace('Login');
           }
-        }, 3000);
+        }, 2800);
       } catch (e) {
-        setTimeout(() => navigation.replace('Login'), 3000);
+        setTimeout(() => navigation.replace('Login'), 2800);
       }
     };
 
     checkSession();
-  }, [navigation, fadeAnim, scaleAnim, slideAnim]);
+  }, [navigation, fadeAnim, scaleAnim, slideAnim, logoPulse]);
 
   return (
     <View style={styles.container}>
-      {/* Background glow effects */}
-      <View style={[styles.glow, { top: -100, left: -50, backgroundColor: 'rgba(255, 93, 56, 0.2)' }]} />
-      <View style={[styles.glow, { bottom: -100, right: -50, backgroundColor: 'rgba(79, 70, 229, 0.2)' }]} />
+      {/* Dynamic Background Glows */}
+      <View
+        style={[
+          styles.glow,
+          {
+            top: -height * 0.1,
+            left: -width * 0.2,
+            backgroundColor: 'rgba(255, 93, 56, 0.22)',
+          },
+        ]}
+      />
+      <View
+        style={[
+          styles.glow,
+          {
+            bottom: -height * 0.1,
+            right: -width * 0.2,
+            backgroundColor: 'rgba(59, 130, 246, 0.18)',
+          },
+        ]}
+      />
 
-      <Animated.View style={[styles.content, { opacity: fadeAnim, transform: [{ scale: scaleAnim }, { translateY: slideAnim }] }]}>
-        <View style={{ marginBottom: 24 }}>
-          <BreatheLoader message="" />
+      <Animated.View
+        style={[
+          styles.content,
+          {
+            opacity: fadeAnim,
+            transform: [{ scale: scaleAnim }, { translateY: slideAnim }],
+          },
+        ]}
+      >
+        {/* BIG HERO LOGO CONTAINER */}
+        <Animated.View
+          style={[
+            styles.logoContainer,
+            {
+              transform: [{ scale: logoPulse }],
+            },
+          ]}
+        >
+          <View style={styles.logoHalo} />
+          <Image
+            source={require('../assets/logo.png')}
+            style={styles.heroLogo}
+            resizeMode="contain"
+          />
+        </Animated.View>
+
+        {/* Brand Titles */}
+        <Text style={styles.title}>
+          ClassTrack<Text style={styles.titleAccent}>.</Text>
+        </Text>
+        <Text style={styles.subtitle}>SRI KRISHNA COLLEGE OF TECHNOLOGY</Text>
+        <View style={styles.taglineBadge}>
+          <Text style={styles.taglineText}>Smart Attendance & Timetable Suite</Text>
         </View>
-        <Text style={styles.title}>ClassTrack<Text style={styles.titleAccent}>.</Text></Text>
-        <Text style={styles.subtitle}>SRI KRISHNA INSTITUTIONS</Text>
       </Animated.View>
 
-      <ActivityIndicator style={styles.loader} size="large" color="#FF5D38" />
+      {/* Loading Indicator */}
+      <View style={styles.footerLoader}>
+        <ActivityIndicator size="large" color={Colors.primary} />
+      </View>
     </View>
   );
 }
@@ -77,52 +153,68 @@ const styles = StyleSheet.create({
   },
   glow: {
     position: 'absolute',
-    width: width * 0.8,
-    height: width * 0.8,
-    borderRadius: width * 0.4,
-    filter: 'blur(60px)',
+    width: width * 1.1,
+    height: width * 1.1,
+    borderRadius: (width * 1.1) / 2,
   },
   content: {
     alignItems: 'center',
-  },
-  logoBadge: {
-    width: 72,
-    height: 72,
-    borderRadius: 24,
-    backgroundColor: '#FF5D38',
     justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 24,
-    shadowColor: '#FF5D38',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.5,
-    shadowRadius: 24,
-    elevation: 10,
+    paddingHorizontal: 24,
   },
-  logoBadgeText: {
-    color: '#ffffff',
-    fontSize: 32,
-    fontWeight: '900',
-    letterSpacing: 2,
+  logoContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 20,
+  },
+  logoHalo: {
+    position: 'absolute',
+    width: 290,
+    height: 290,
+    borderRadius: 145,
+    backgroundColor: 'rgba(255, 93, 56, 0.18)',
+  },
+  heroLogo: {
+    width: width * 0.65,
+    height: width * 0.65,
+    maxWidth: 260,
+    maxHeight: 260,
   },
   title: {
-    fontSize: 48,
+    fontSize: 44,
     fontWeight: '900',
     color: '#FFFFFF',
-    letterSpacing: -1,
+    letterSpacing: -0.5,
   },
   titleAccent: {
-    color: '#FF5D38',
+    color: Colors.primary,
   },
   subtitle: {
     fontSize: 12,
     color: '#94A3B8',
-    marginTop: 12,
-    fontWeight: '700',
-    letterSpacing: 3,
+    marginTop: 10,
+    fontWeight: '800',
+    letterSpacing: 2.5,
+    textAlign: 'center',
   },
-  loader: {
+  taglineBadge: {
+    marginTop: 16,
+    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+    paddingHorizontal: 16,
+    paddingVertical: 6,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.12)',
+  },
+  taglineText: {
+    color: '#E2E8F0',
+    fontSize: 12,
+    fontWeight: '600',
+    letterSpacing: 0.5,
+  },
+  footerLoader: {
     position: 'absolute',
-    bottom: 80,
+    bottom: 65,
+    alignItems: 'center',
   },
 });

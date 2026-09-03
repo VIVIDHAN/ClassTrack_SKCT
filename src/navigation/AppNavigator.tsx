@@ -15,6 +15,7 @@ import AttendanceReport from '../screens/AttendanceReport';
 import FacultyTimetable from '../screens/FacultyTimetable';
 import Success from '../screens/Success';
 import History from '../screens/History';
+import Notify from '../screens/Notify';
 import Profile from '../screens/Profile';
 import Settings from '../screens/Settings';
 import PersonalDetails from '../screens/PersonalDetails';
@@ -41,6 +42,7 @@ export default function AppNavigator() {
         <Stack.Screen name="StudentDirectoryList" component={StudentDirectoryList} />
         <Stack.Screen name="StudentProfile" component={StudentProfile} />
         <Stack.Screen name="History" component={History} />
+        <Stack.Screen name="Notify" component={Notify} />
         <Stack.Screen name="Profile" component={Profile} />
         <Stack.Screen name="Attendance" component={Attendance} />
         <Stack.Screen name="FacultyTimetable" component={FacultyTimetable} />

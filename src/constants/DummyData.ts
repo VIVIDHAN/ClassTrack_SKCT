@@ -7,11 +7,11 @@ export const DUMMY_USER = {
 };
 
 export const TODAY_CLASSES = [
-  { id: '1', time: 'Period 1 (08:45 - 09:35)', subject: 'Distributed Computing', className: 'III IT G', code: 'DC', timetable_id: 1 },
-  { id: '2', time: 'Period 2 (09:35 - 10:25)', subject: 'Applied Cryptography', className: 'III IT G', code: 'AC', timetable_id: 2 },
-  { id: '3', time: 'Period 3 (10:45 - 11:35)', subject: 'Cyber Incident & Sec Mgmt', className: 'III IT G', code: 'CISM', timetable_id: 3 },
-  { id: '4', time: 'Period 4 (11:35 - 12:25)', subject: 'Full Stack App Development', className: 'III IT G', code: 'AD', timetable_id: 4 },
-  { id: '5', time: 'Period 5 (01:25 - 02:15)', subject: 'Technical Writing & Method', className: 'III IT G', code: 'TWM', timetable_id: 5 },
+  { id: '1', time: 'Period 1 (08:15 - 09:15)', subject: 'Distributed Computing', className: 'III IT G', code: 'DC', timetable_id: 1 },
+  { id: '2', time: 'Period 2 (09:15 - 10:15)', subject: 'Applied Cryptography', className: 'III IT G', code: 'AC', timetable_id: 2 },
+  { id: '3', time: 'Period 3 (10:45 - 11:45)', subject: 'Cyber Incident & Sec Mgmt', className: 'III IT G', code: 'CISM', timetable_id: 3 },
+  { id: '4', time: 'Period 4 (11:45 - 12:45)', subject: 'Full Stack App Development', className: 'III IT G', code: 'AD', timetable_id: 4 },
+  { id: '5', time: 'Period 5 (01:45 - 02:45)', subject: 'Technical Writing & Method', className: 'III IT G', code: 'TWM', timetable_id: 5 },
 ];
 
 export const DIRECTORY_CLASSES = [
@@ -72,14 +72,14 @@ export interface PeriodScheduleItem {
 }
 
 export const PERIOD_SCHEDULE: Record<number, PeriodScheduleItem> = {
-  1: { period: 1, label: 'Period 1', startMinutes: 8 * 60 + 45, endMinutes: 9 * 60 + 35, startTimeStr: '08:45 AM', endTimeStr: '09:35 AM', timeRange: '08:45 AM - 09:35 AM' },
-  2: { period: 2, label: 'Period 2', startMinutes: 9 * 60 + 35, endMinutes: 10 * 60 + 25, startTimeStr: '09:35 AM', endTimeStr: '10:25 AM', timeRange: '09:35 AM - 10:25 AM' },
-  3: { period: 3, label: 'Period 3', startMinutes: 10 * 60 + 45, endMinutes: 11 * 60 + 35, startTimeStr: '10:45 AM', endTimeStr: '11:35 AM', timeRange: '10:45 AM - 11:35 AM' },
-  4: { period: 4, label: 'Period 4', startMinutes: 11 * 60 + 35, endMinutes: 12 * 60 + 25, startTimeStr: '11:35 AM', endTimeStr: '12:25 PM', timeRange: '11:35 AM - 12:25 PM' },
-  5: { period: 5, label: 'Period 5', startMinutes: 13 * 60 + 25, endMinutes: 14 * 60 + 15, startTimeStr: '01:25 PM', endTimeStr: '02:15 PM', timeRange: '01:25 PM - 02:15 PM' },
-  6: { period: 6, label: 'Period 6', startMinutes: 14 * 60 + 15, endMinutes: 15 * 60 + 5, startTimeStr: '02:15 PM', endTimeStr: '03:05 PM', timeRange: '02:15 PM - 03:05 PM' },
-  7: { period: 7, label: 'Period 7', startMinutes: 15 * 60 + 5, endMinutes: 15 * 60 + 55, startTimeStr: '03:05 PM', endTimeStr: '03:55 PM', timeRange: '03:05 PM - 03:55 PM' },
-  8: { period: 8, label: 'Period 8', startMinutes: 15 * 60 + 55, endMinutes: 16 * 60 + 45, startTimeStr: '03:55 PM', endTimeStr: '04:45 PM', timeRange: '03:55 PM - 04:45 PM' },
+  1: { period: 1, label: 'Period 1', startMinutes: 8 * 60 + 15, endMinutes: 9 * 60 + 15, startTimeStr: '08:15 AM', endTimeStr: '09:15 AM', timeRange: '08:15 AM - 09:15 AM' },
+  2: { period: 2, label: 'Period 2', startMinutes: 9 * 60 + 15, endMinutes: 10 * 60 + 15, startTimeStr: '09:15 AM', endTimeStr: '10:15 AM', timeRange: '09:15 AM - 10:15 AM' },
+  3: { period: 3, label: 'Period 3', startMinutes: 10 * 60 + 45, endMinutes: 11 * 60 + 45, startTimeStr: '10:45 AM', endTimeStr: '11:45 AM', timeRange: '10:45 AM - 11:45 AM' },
+  4: { period: 4, label: 'Period 4', startMinutes: 11 * 60 + 45, endMinutes: 12 * 60 + 45, startTimeStr: '11:45 AM', endTimeStr: '12:45 PM', timeRange: '11:45 AM - 12:45 PM' },
+  5: { period: 5, label: 'Period 5', startMinutes: 13 * 60 + 45, endMinutes: 14 * 60 + 45, startTimeStr: '01:45 PM', endTimeStr: '02:45 PM', timeRange: '01:45 PM - 02:45 PM' },
+  6: { period: 6, label: 'Period 6', startMinutes: 14 * 60 + 45, endMinutes: 15 * 60 + 45, startTimeStr: '02:45 PM', endTimeStr: '03:45 PM', timeRange: '02:45 PM - 03:45 PM' },
+  7: { period: 7, label: 'Period 7', startMinutes: 15 * 60 + 45, endMinutes: 16 * 60 + 45, startTimeStr: '03:45 PM', endTimeStr: '04:45 PM', timeRange: '03:45 PM - 04:45 PM' },
+  8: { period: 8, label: 'Period 8', startMinutes: 16 * 60 + 45, endMinutes: 17 * 60 + 30, startTimeStr: '04:45 PM', endTimeStr: '05:30 PM', timeRange: '04:45 PM - 05:30 PM' },
 };
 
 export const getTeacherFullTimetableFallback = (teacherId: number, teacherName: string = '') => {
@@ -154,9 +154,41 @@ export const SKCT_STUDENTS_G = [
 ];
 
 export const DEFAULT_HISTORY = [
-  { id: '101', date: 'Sep 2', className: 'III IT G', subject: 'Distributed Computing', absentCount: 2, smsSent: true },
-  { id: '102', date: 'Sep 1', className: 'III IT G', subject: 'Applied Cryptography', absentCount: 0, smsSent: true },
-  { id: '103', date: 'Aug 29', className: 'III IT G', subject: 'Cyber Incident & Sec Mgmt', absentCount: 3, smsSent: true },
+  {
+    id: '101',
+    date: 'Sep 2',
+    period: 'Period 3 (10:45 - 11:45)',
+    className: 'III IT G',
+    subject: 'Distributed Computing',
+    absentCount: 2,
+    smsSent: true,
+    absentees: [
+      { id: '727824TUIT209', name: 'SATHYA E', phone: '9047889619', real_parent_phone: '9047889619' },
+      { id: '727824TUIT245', name: 'THARSHINI L', phone: '9840071706', real_parent_phone: '9840071706' },
+    ]
+  },
+  {
+    id: '102',
+    date: 'Sep 1',
+    period: 'Period 4 (11:45 - 12:45)',
+    className: 'III IT G',
+    subject: 'Applied Cryptography',
+    absentCount: 0,
+    smsSent: true,
+    absentees: []
+  },
+  {
+    id: '103',
+    date: 'Aug 29',
+    period: 'Period 1 (08:15 - 09:15)',
+    className: 'III IT G',
+    subject: 'Applied Cryptography',
+    absentCount: 1,
+    smsSent: true,
+    absentees: [
+      { id: '727824TUIT204', name: 'SAKTHII SUNDHAR J', phone: '9786478493', real_parent_phone: '9786478493' }
+    ]
+  },
 ];
 
 export let ATTENDANCE_HISTORY: any[] = [...DEFAULT_HISTORY];
@@ -192,4 +224,6 @@ export const generateFallbackReport = (section: string = 'III IT G', startStr?: 
     };
   });
 };
+
+export const DEFAULT_ABSENTEES: any[] = [];
 

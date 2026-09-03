@@ -88,17 +88,17 @@ export default function ClassesList() {
             // Teacher specific fallback
             if (teacherId === 3 || currentTeacher.name?.toLowerCase().includes('narmatha')) {
               setClasses([
-                { id: '4', time: 'Period 4 (11:35 - 12:25)', className: 'III IT G', subject: 'Applied Cryptography', timetable_id: 4 },
-                { id: '5', time: 'Period 5 (01:25 - 02:15)', className: 'III IT G', subject: 'Applied Cryptography', timetable_id: 5 },
+                { id: '4', time: 'Period 4 (11:45 - 12:45)', className: 'III IT G', subject: 'Applied Cryptography', timetable_id: 4 },
+                { id: '5', time: 'Period 5 (01:45 - 02:45)', className: 'III IT G', subject: 'Applied Cryptography', timetable_id: 5 },
               ]);
             } else if (teacherId === 4 || currentTeacher.name?.toLowerCase().includes('saranya')) {
               setClasses([
-                { id: '3', time: 'Period 3 (10:45 - 11:35)', className: 'III IT G', subject: 'Distributed Computing', timetable_id: 3 },
+                { id: '3', time: 'Period 3 (10:45 - 11:45)', className: 'III IT G', subject: 'Distributed Computing', timetable_id: 3 },
               ]);
             } else if (teacherId === 2 || currentTeacher.name?.toLowerCase().includes('guranna')) {
               setClasses([
-                { id: '1', time: 'Period 1 (08:45 - 09:35)', className: 'III IT G', subject: 'Software Testing', timetable_id: 1 },
-                { id: '2', time: 'Period 2 (09:35 - 10:25)', className: 'III IT G', subject: 'Software Testing', timetable_id: 2 },
+                { id: '1', time: 'Period 1 (08:15 - 09:15)', className: 'III IT G', subject: 'Software Testing', timetable_id: 1 },
+                { id: '2', time: 'Period 2 (09:15 - 10:15)', className: 'III IT G', subject: 'Software Testing', timetable_id: 2 },
               ]);
             } else {
               setClasses(TODAY_CLASSES);
