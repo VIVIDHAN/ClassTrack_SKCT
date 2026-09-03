@@ -160,6 +160,12 @@ export default function FacultyTimetable() {
 
   const currentDayClasses = timetableByDay[selectedDay] || [];
   const totalWeeklyPeriods = Object.values(timetableByDay).reduce((sum, arr) => sum + arr.length, 0);
+  const formattedDateAndDay = new Date().toLocaleDateString('en-GB', {
+    weekday: 'long',
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+  });
 
   return (
     <View style={styles.container}>
@@ -177,18 +183,43 @@ export default function FacultyTimetable() {
         </TouchableOpacity>
       </View>
 
-      {/* FACULTY PROFILE CARD */}
+      {/* FACULTY PROFILE & CALENDAR INFO CARD */}
       <Animated.View entering={FadeInUp.duration(400)} style={styles.facultyCard}>
-        <View style={styles.facultyAvatar}>
-          <Icon name="person" size={28} color="#FFF" />
+        <View style={styles.facultyProfileRow}>
+          <View style={styles.facultyAvatar}>
+            <Icon name="person" size={26} color="#FFF" />
+          </View>
+          <View style={{ flex: 1, marginLeft: 12 }}>
+            <Text style={styles.facultyName}>{teacher?.name || 'Faculty Member'}</Text>
+            <Text style={styles.facultyDept}>{teacher?.department || 'Information Technology'}</Text>
+          </View>
+          <View style={styles.periodBadge}>
+            <Text style={styles.periodBadgeNum}>{totalWeeklyPeriods}</Text>
+            <Text style={styles.periodBadgeLabel}>Periods/Wk</Text>
+          </View>
         </View>
-        <View style={{ flex: 1, marginLeft: 14 }}>
-          <Text style={styles.facultyName}>{teacher?.name || 'Faculty Member'}</Text>
-          <Text style={styles.facultyDept}>{teacher?.department || 'Information Technology'}</Text>
-        </View>
-        <View style={styles.periodBadge}>
-          <Text style={styles.periodBadgeNum}>{totalWeeklyPeriods}</Text>
-          <Text style={styles.periodBadgeLabel}>Periods/Wk</Text>
+
+        {/* Date, Day, Day Order & Period Count Info Box */}
+        <View style={styles.calendarInfoBox}>
+          {/* Line 1: Date and Day */}
+          <View style={styles.calendarLine1}>
+            <Icon name="event" size={15} color={Colors.primary} style={{ marginRight: 6 }} />
+            <Text style={styles.dateDayText}>{formattedDateAndDay}</Text>
+          </View>
+
+          {/* Line 2: Day Order & Period Count */}
+          <View style={styles.calendarLine2}>
+            <View style={styles.dayOrderBadge}>
+              <Text style={styles.dayOrderBadgeText}>Day Order {selectedDay}</Text>
+            </View>
+            <Text style={styles.dotSeparator}>•</Text>
+            <View style={styles.periodCountBadge}>
+              <Icon name="schedule" size={13} color="#047857" style={{ marginRight: 4 }} />
+              <Text style={styles.periodCountText}>
+                {currentDayClasses.length} {currentDayClasses.length === 1 ? 'Period' : 'Periods'} Scheduled
+              </Text>
+            </View>
+          </View>
         </View>
       </Animated.View>
 
@@ -378,31 +409,33 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
   facultyCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
     backgroundColor: '#0F172A',
     marginHorizontal: 16,
     marginTop: 14,
     marginBottom: 14,
     padding: 16,
-    borderRadius: 18,
+    borderRadius: 20,
     shadowColor: '#0F172A',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.15,
     shadowRadius: 10,
     elevation: 4,
   },
+  facultyProfileRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
   facultyAvatar: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     backgroundColor: Colors.primary,
     justifyContent: 'center',
     alignItems: 'center',
   },
   facultyName: {
     fontSize: 16,
-    fontWeight: '700',
+    fontWeight: '800',
     color: '#FFF',
   },
   facultyDept: {
@@ -412,15 +445,15 @@ const styles = StyleSheet.create({
   },
   periodBadge: {
     backgroundColor: 'rgba(255, 255, 255, 0.1)',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
     borderRadius: 12,
     alignItems: 'center',
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.15)',
   },
   periodBadgeNum: {
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: '800',
     color: '#38BDF8',
   },
@@ -429,6 +462,61 @@ const styles = StyleSheet.create({
     color: '#94A3B8',
     fontWeight: '600',
     marginTop: 1,
+  },
+  calendarInfoBox: {
+    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+    borderRadius: 14,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.1)',
+    marginTop: 12,
+  },
+  calendarLine1: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 6,
+  },
+  dateDayText: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#FFFFFF',
+    letterSpacing: -0.2,
+  },
+  calendarLine2: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+  },
+  dayOrderBadge: {
+    backgroundColor: 'rgba(255, 93, 56, 0.25)',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 8,
+  },
+  dayOrderBadgeText: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#FF7A59',
+  },
+  dotSeparator: {
+    marginHorizontal: 8,
+    color: '#64748B',
+    fontWeight: '800',
+    fontSize: 12,
+  },
+  periodCountBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(16, 185, 129, 0.2)',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 8,
+  },
+  periodCountText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#34D399',
   },
   daySelectorContainer: {
     flexDirection: 'row',
