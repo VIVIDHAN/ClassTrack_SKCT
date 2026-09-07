@@ -1,6 +1,7 @@
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
+const { Op } = require('sequelize');
 const { sequelize, Teacher, Student, Subject, Timetable, Attendance } = require('./db');
 
 const app = express();
@@ -232,22 +233,105 @@ app.get('/api/students', async (req, res) => {
   }
 });
 
-// 3. Submit Attendance
+// 3. Submit Attendance (Robust, foreign-key safe, idempotent)
 app.post('/api/attendance', async (req, res) => {
   try {
-    const { date, timetable_id, records } = req.body;
-    // records is an array: [{ student_id, status }]
-    
-    const attendanceData = records.map(r => ({
-      date,
-      timetable_id,
-      student_id: r.student_id,
-      status: r.status
-    }));
+    const { date, timetable_id, section, records } = req.body;
 
-    await Attendance.bulkCreate(attendanceData);
-    res.json({ success: true, message: 'Attendance recorded successfully!' });
+    if (!Array.isArray(records) || records.length === 0) {
+      return res.status(400).json({ error: 'No attendance records provided' });
+    }
+
+    // 1. Resolve date
+    const resolvedDate = date || new Date().toISOString().split('T')[0];
+
+    // 2. Resolve valid timetable_id (foreign-key safe)
+    let resolvedTimetableId = parseInt(timetable_id, 10);
+    if (isNaN(resolvedTimetableId) || resolvedTimetableId <= 0) {
+      resolvedTimetableId = 1;
+    }
+    const timetableExists = await Timetable.findByPk(resolvedTimetableId);
+    if (!timetableExists) {
+      const firstTt = await Timetable.findOne({ order: [['id', 'ASC']] });
+      resolvedTimetableId = firstTt ? firstTt.id : 1;
+    }
+
+    // 3. Student Resolution: Map roll numbers to numeric Student IDs
+    const sectionName = section || 'III IT G';
+    const existingStudents = await Student.findAll({ where: { section: sectionName } });
+    const studentMap = new Map();
+    existingStudents.forEach(s => {
+      studentMap.set(s.id, s.id);
+      studentMap.set(String(s.roll_no).trim().toUpperCase(), s.id);
+    });
+
+    const attendanceData = [];
+
+    for (const r of records) {
+      const rollKey = String(r.roll_no || r.id || '').trim().toUpperCase();
+      let sId = studentMap.get(r.student_id) || studentMap.get(rollKey);
+
+      // If student is not in database yet, auto-create to prevent foreign-key failure
+      if (!sId && rollKey) {
+        try {
+          const [newStudent] = await Student.findOrCreate({
+            where: { roll_no: rollKey },
+            defaults: {
+              name: r.name || rollKey,
+              section: sectionName,
+              parent_phone: r.phone || r.real_parent_phone || '9442211279',
+              phone: r.phone || '9442211279'
+            }
+          });
+          sId = newStudent.id;
+          studentMap.set(rollKey, sId);
+        } catch (createErr) {
+          console.warn('Could not auto-create student:', rollKey, createErr.message);
+        }
+      }
+
+      if (sId) {
+        // Normalize status
+        let normalizedStatus = 'Present';
+        const rawStatus = String(r.status || '').toLowerCase();
+        if (rawStatus === 'absent') normalizedStatus = 'Absent';
+        else if (rawStatus === 'od' || rawStatus === 'onduty') normalizedStatus = 'OD';
+
+        attendanceData.push({
+          date: resolvedDate,
+          timetable_id: resolvedTimetableId,
+          student_id: sId,
+          status: normalizedStatus
+        });
+      }
+    }
+
+    if (attendanceData.length === 0) {
+      return res.status(400).json({ error: 'Could not resolve any student IDs for attendance' });
+    }
+
+    // 4. Remove previous attendance records for this date and timetable to prevent duplicates
+    await Attendance.destroy({
+      where: {
+        date: resolvedDate,
+        timetable_id: resolvedTimetableId
+      }
+    });
+
+    // 5. Bulk insert resolved records
+    const inserted = await Attendance.bulkCreate(attendanceData);
+
+    console.log(`[ATTENDANCE STORED] Date: ${resolvedDate} | Timetable: ${resolvedTimetableId} | Count: ${inserted.length}`);
+
+    res.json({
+      success: true,
+      count: inserted.length,
+      date: resolvedDate,
+      timetable_id: resolvedTimetableId,
+      message: `Successfully recorded attendance for ${inserted.length} students!`
+    });
   } catch (err) {
+    console.error('Error submitting attendance:', err);
     res.status(500).json({ error: err.message });
   }
 });
@@ -311,11 +395,11 @@ app.get('/api/reports', async (req, res) => {
 
     const attendanceWhere = {};
     if (startDate && endDate) {
-      attendanceWhere.date = { [sequelize.Op.between]: [startDate, endDate] };
+      attendanceWhere.date = { [Op.between]: [startDate, endDate] };
     } else if (startDate) {
-      attendanceWhere.date = { [sequelize.Op.gte]: startDate };
+      attendanceWhere.date = { [Op.gte]: startDate };
     } else if (endDate) {
-      attendanceWhere.date = { [sequelize.Op.lte]: endDate };
+      attendanceWhere.date = { [Op.lte]: endDate };
     }
 
     const report = [];

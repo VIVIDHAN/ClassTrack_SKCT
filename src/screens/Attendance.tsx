@@ -9,6 +9,7 @@ import { Colors } from '../constants/Colors';
 import { API_BASE_URL } from '../constants/Config';
 import BreatheLoader from '../components/BreatheLoader';
 import { SKCT_STUDENTS_G } from '../constants/DummyData';
+import { saveAttendanceLocally } from '../services/AttendanceService';
 
 export default function Attendance() {
   const navigation = useNavigation<any>();
@@ -102,7 +103,12 @@ export default function Attendance() {
 
   const handleSubmit = async () => {
     const absentStudents = students.filter(s => s.isAbsent);
-    
+    const targetTimetableId = classDetails.timetable_id || classDetails.timetableId || classDetails.id || 1;
+    const now = new Date();
+    const dateStr = now.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+    const isoDate = now.toISOString().split('T')[0];
+    const sessionId = `session-${Date.now()}`;
+
     // Check SMS Mode (Testing Mode vs Live Mode)
     let isTestMode = true;
     let testPhone = '9442211279';
@@ -119,6 +125,86 @@ export default function Attendance() {
       isTestMode = true;
     }
 
+    // =========================================================================
+    // STEP 1: GUARANTEED IMMEDIATE LOCAL STORAGE (MUST HAPPEN FIRST)
+    // =========================================================================
+    const fullAttendanceRecord = {
+      sessionId,
+      date: dateStr,
+      isoDate: isoDate,
+      time: classDetails.time || 'Period Session',
+      period: classDetails.time ? (classDetails.time.includes('(') ? classDetails.time.split('(')[0].trim() : classDetails.time) : 'Period',
+      className: classDetails.className || 'III IT G',
+      subject: classDetails.subject || 'Class',
+      timetable_id: targetTimetableId,
+      totalStudents: students.length,
+      presentCount: students.filter(s => !s.isAbsent && !s.isOnDuty).length,
+      absentCount: absentStudents.length,
+      odCount: students.filter(s => s.isOnDuty).length,
+      records: students.map(s => ({
+        id: s.id,
+        db_id: s.db_id,
+        name: s.name,
+        status: (s.isAbsent ? 'Absent' : s.isOnDuty ? 'OD' : 'Present') as 'Present' | 'Absent' | 'OD',
+        phone: s.real_parent_phone || s.phone,
+        real_parent_phone: s.real_parent_phone || s.phone,
+      })),
+      absentees: absentStudents.map(s => ({
+        id: s.id,
+        name: s.name,
+        phone: isTestMode ? testPhone : (s.real_parent_phone || s.phone || testPhone),
+        real_parent_phone: s.real_parent_phone || s.phone || testPhone,
+        called: false,
+        smsSent: false,
+      })),
+      syncedToBackend: false,
+      createdAt: now.toISOString(),
+    };
+
+    try {
+      // Save locally via AttendanceService immediately
+      await saveAttendanceLocally(fullAttendanceRecord);
+      console.log('Attendance successfully stored locally in AsyncStorage');
+    } catch (cacheErr) {
+      console.error('Critical: Error saving attendance locally:', cacheErr);
+    }
+
+    // =========================================================================
+    // STEP 2: SAVE TO REMOTE DATABASE / SYNC QUEUE
+    // =========================================================================
+    try {
+      const recordsPayload = students.map((s, idx) => ({
+        student_id: s.db_id || (idx + 1),
+        roll_no: s.id,
+        name: s.name,
+        status: s.isAbsent ? 'Absent' : s.isOnDuty ? 'OD' : 'Present'
+      }));
+
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 4000);
+      const res = await fetch(`${API_BASE_URL}/attendance`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          timetable_id: targetTimetableId,
+          date: isoDate,
+          section: classDetails.className || 'III IT G',
+          records: recordsPayload
+        }),
+        signal: controller.signal
+      });
+      clearTimeout(timeoutId);
+      if (res.ok) {
+        const resData = await res.json();
+        console.log('Attendance API response:', resData);
+      }
+    } catch (err) {
+      console.log('Remote attendance API offline (safely stored locally):', err);
+    }
+
+    // =========================================================================
+    // STEP 3: SMS DISPATCH FOR ABSENT STUDENTS
+    // =========================================================================
     let smsWasSent = false;
     const failedSmsList: { phone: string; message: string }[] = [];
 
@@ -157,7 +243,7 @@ export default function Attendance() {
           }
         }
 
-        // If direct SMS was blocked by Android/OEM restriction (e.g. Vivo background SMS), open native SMS app for the absentee
+        // If direct SMS was blocked, open native SMS app for the first absentee
         if (failedSmsList.length > 0) {
           const target = failedSmsList[0];
           const smsUrl = `sms:${target.phone}?body=${encodeURIComponent(target.message)}`;
@@ -170,55 +256,6 @@ export default function Attendance() {
       } catch (err) {
         console.warn('SMS dispatch error:', err);
       }
-    }
-
-    // Save to history via live API
-    try {
-      await fetch(`${API_BASE_URL}/attendance`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          timetable_id: classDetails.timetable_id,
-          date: new Date().toISOString().split('T')[0],
-          records: students.map(s => ({
-            student_id: s.db_id,
-            status: s.isAbsent ? 'Absent' : s.isOnDuty ? 'OD' : 'Present'
-          }))
-        })
-      });
-    } catch (err) {
-      console.error(err);
-    }
-
-    // Cache marked absentees for Notify screen
-    try {
-      const now = new Date();
-      const dateStr = now.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
-      const isoDate = now.toISOString().split('T')[0];
-      const newSessionRecord = {
-        sessionId: `session-${Date.now()}`,
-        date: dateStr,
-        isoDate: isoDate,
-        time: classDetails.time || 'Period Session',
-        period: classDetails.time ? (classDetails.time.includes('(') ? classDetails.time.split('(')[0].trim() : classDetails.time) : 'Period',
-        className: classDetails.className || 'III IT G',
-        subject: classDetails.subject || 'Class',
-        timetable_id: classDetails.timetable_id,
-        absentees: absentStudents.map(s => ({
-          id: s.id,
-          name: s.name,
-          phone: s.real_parent_phone || s.phone || testPhone,
-          real_parent_phone: s.real_parent_phone || s.phone || testPhone,
-          called: false,
-          smsSent: smsWasSent
-        }))
-      };
-
-      const existingStored = await AsyncStorage.getItem('markedAbsentees');
-      const existingList = existingStored ? JSON.parse(existingStored) : [];
-      await AsyncStorage.setItem('markedAbsentees', JSON.stringify([newSessionRecord, ...existingList]));
-    } catch (cacheErr) {
-      console.log('Error caching marked absentees:', cacheErr);
     }
 
     navigation.navigate('Success', { absentStudents, classDetails });

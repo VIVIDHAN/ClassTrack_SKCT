@@ -22,6 +22,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Colors } from '../constants/Colors';
 import { API_BASE_URL } from '../constants/Config';
 import BreatheLoader from '../components/BreatheLoader';
+import { syncPendingAttendance } from '../services/AttendanceService';
 
 const MONTH_NAMES = [
   'January', 'February', 'March', 'April', 'May', 'June',
@@ -194,6 +195,7 @@ export default function Notify() {
   const loadAbsentees = useCallback(async () => {
     try {
       await syncSmsModeFromBackend();
+      syncPendingAttendance().catch(() => {});
 
       const stored = await AsyncStorage.getItem('markedAbsentees');
       const dedupMap = new Map<string, AbsenteeRecord>();

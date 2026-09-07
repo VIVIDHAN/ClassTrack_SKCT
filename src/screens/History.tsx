@@ -22,6 +22,7 @@ import { Colors } from '../constants/Colors';
 import { API_BASE_URL } from '../constants/Config';
 import BreatheLoader from '../components/BreatheLoader';
 import { ATTENDANCE_HISTORY } from '../constants/DummyData';
+import { getAllStoredSessions, syncPendingAttendance, clearAttendanceStorage } from '../services/AttendanceService';
 
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
   UIManager.setLayoutAnimationEnabledExperimental(true);
@@ -55,45 +56,45 @@ export default function History() {
   const [refreshing, setRefreshing] = useState(false);
   const [expandedCardId, setExpandedCardId] = useState<string | null>(null);
 
-  // Load history records from both local AsyncStorage and remote API
+  // Load history records from both local AttendanceService and remote API
   const loadHistory = useCallback(async () => {
     try {
       let combined: HistorySession[] = [];
 
-      // 1. Read locally cached attendance submissions from markedAbsentees
-      const stored = await AsyncStorage.getItem('markedAbsentees');
-      if (stored) {
-        const parsed = JSON.parse(stored);
-        if (Array.isArray(parsed)) {
-          parsed.forEach((session: any) => {
-            if (session.sessionId === 'session-101' || session.sessionId === 'session-102') {
-              return;
-            }
-            const absList: AbsenteeItem[] = Array.isArray(session.absentees)
-              ? session.absentees.map((a: any) => ({
-                  id: a.id,
-                  name: a.name,
-                  phone: a.real_parent_phone || a.phone || '',
-                  real_parent_phone: a.real_parent_phone || a.phone || '',
-                  called: !!a.called,
-                  smsSent: !!a.smsSent,
-                }))
-              : [];
+      // 1. Read all locally stored attendance sessions from AttendanceService
+      const storedSessions = await getAllStoredSessions();
+      if (Array.isArray(storedSessions) && storedSessions.length > 0) {
+        storedSessions.forEach((session) => {
+          if (session.sessionId === 'session-101' || session.sessionId === 'session-102') {
+            return;
+          }
+          const absList: AbsenteeItem[] = Array.isArray(session.absentees)
+            ? session.absentees.map((a: any) => ({
+                id: a.id,
+                name: a.name,
+                phone: a.real_parent_phone || a.phone || '',
+                real_parent_phone: a.real_parent_phone || a.phone || '',
+                called: !!a.called,
+                smsSent: !!a.smsSent,
+              }))
+            : [];
 
-            combined.push({
-              id: session.sessionId || `sess-${Date.now()}`,
-              date: session.date || 'Today',
-              time: session.time || '',
-              period: session.period || 'Period',
-              className: session.className || 'III IT G',
-              subject: session.subject || 'Class',
-              absentCount: absList.length,
-              smsSent: true,
-              absentees: absList,
-            });
+          combined.push({
+            id: session.sessionId || `sess-${Date.now()}`,
+            date: session.date || 'Today',
+            time: session.time || '',
+            period: session.period || 'Period',
+            className: session.className || 'III IT G',
+            subject: session.subject || 'Class',
+            absentCount: session.absentCount !== undefined ? session.absentCount : absList.length,
+            smsSent: true,
+            absentees: absList,
           });
-        }
+        });
       }
+
+      // Trigger automatic sync of pending attendance records in background
+      syncPendingAttendance().catch(() => {});
 
       // 2. Fetch from backend server if reachable
       try {
@@ -194,7 +195,7 @@ export default function History() {
         style: 'destructive',
         onPress: async () => {
           setHistory([]);
-          await AsyncStorage.removeItem('markedAbsentees');
+          await clearAttendanceStorage();
           fetch(`${API_BASE_URL}/history`, { method: 'DELETE' }).catch(() => {});
         },
       },
