@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
@@ -23,6 +23,55 @@ import { Colors } from '../constants/Colors';
 import { API_BASE_URL } from '../constants/Config';
 import BreatheLoader from '../components/BreatheLoader';
 
+const MONTH_NAMES = [
+  'January', 'February', 'March', 'April', 'May', 'June',
+  'July', 'August', 'September', 'October', 'November', 'December'
+];
+const WEEK_DAYS = ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'];
+
+const getTodayIsoDate = (): string => {
+  const now = new Date();
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+};
+
+export const normalizeToIso = (rawDate?: string): string => {
+  if (!rawDate) return '';
+  const trimmed = String(rawDate).trim();
+  if (trimmed.toLowerCase() === 'today') {
+    return getTodayIsoDate();
+  }
+  if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) {
+    return trimmed;
+  }
+  const parsed = new Date(trimmed);
+  if (!isNaN(parsed.getTime())) {
+    const yr = parsed.getFullYear() < 2000 ? 2026 : parsed.getFullYear();
+    return `${yr}-${String(parsed.getMonth() + 1).padStart(2, '0')}-${String(parsed.getDate()).padStart(2, '0')}`;
+  }
+  return trimmed;
+};
+
+export const formatDisplayDate = (isoOrRaw: string | null): string => {
+  if (!isoOrRaw) return 'All Dates';
+  const iso = normalizeToIso(isoOrRaw);
+  const parts = iso.split('-');
+  if (parts.length === 3) {
+    const yr = parseInt(parts[0], 10);
+    const m = parseInt(parts[1], 10) - 1;
+    const d = parseInt(parts[2], 10);
+    const dateObj = new Date(yr, m, d);
+    if (!isNaN(dateObj.getTime())) {
+      return dateObj.toLocaleDateString('en-GB', {
+        weekday: 'short',
+        day: 'numeric',
+        month: 'short',
+        year: 'numeric',
+      });
+    }
+  }
+  return isoOrRaw;
+};
+
 export interface AbsenteeRecord {
   id: string;
   name: string;
@@ -33,6 +82,7 @@ export interface AbsenteeRecord {
   period: string;
   time: string;
   date: string;
+  isoDate: string;
   called: boolean;
   smsSent: boolean;
   session_id?: string;
@@ -46,13 +96,20 @@ export default function Notify() {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedSessionFilter, setSelectedSessionFilter] = useState('all');
 
-  // Backend-driven SMS mode (determined by backend .env SMS_TEST_MODE)
+  // Calendar & Date Filtering
+  const todayIso = getTodayIsoDate();
+  const [selectedDate, setSelectedDate] = useState<string | null>(todayIso);
+  const [calendarModalVisible, setCalendarModalVisible] = useState(false);
+  const [calMonth, setCalMonth] = useState(() => new Date().getMonth());
+  const [calYear, setCalYear] = useState(() => new Date().getFullYear());
+
+  // Backend-driven SMS mode (Default testing mode, controllable in backend .env/API)
   const [testMode, setTestMode] = useState<boolean>(true);
   const [testPhone, setTestPhone] = useState<string>('9442211279');
 
   // Custom SMS template configuration
   const defaultTemplate =
-    'Dear Parent, your ward {name} ({id}) is absent for {period} ({time}), Date: {date}.';
+    'Dear Parent, your ward {name} ({id}) is absent for {period} ({time}), Date: {date}.\nஅன்பான பெற்றோரே, உங்கள் குழந்தை {name} ({id}) {date} அன்று {period} வகுப்பிற்கு வரவில்லை.\nSKCT - Contact Class Teacher.';
   const [customTemplate, setCustomTemplate] = useState(defaultTemplate);
   const [templateModalVisible, setTemplateModalVisible] = useState(false);
   const [tempTemplateInput, setTempTemplateInput] = useState(defaultTemplate);
@@ -68,6 +125,11 @@ export default function Notify() {
   // 1. Fetch SMS mode automatically from backend API (driven by server .env SMS_TEST_MODE)
   const syncSmsModeFromBackend = useCallback(async () => {
     try {
+      const storedPhone = await AsyncStorage.getItem('smsTestPhone');
+      if (storedPhone) {
+        setTestPhone(storedPhone);
+      }
+
       const controller = new AbortController();
       const timer = setTimeout(() => controller.abort(), 3000);
       const res = await fetch(`${API_BASE_URL}/sms-mode`, { signal: controller.signal });
@@ -75,11 +137,12 @@ export default function Notify() {
       const data = await res.json();
       if (typeof data.test_mode === 'boolean') {
         setTestMode(data.test_mode);
-        if (data.test_phone) setTestPhone(data.test_phone);
-        await AsyncStorage.setItem('smsTestMode', JSON.stringify(data.test_mode));
+        if (data.test_phone && !storedPhone) {
+          setTestPhone(data.test_phone);
+        }
       }
     } catch (err) {
-      // Offline fallback: check cached mode
+      // Offline fallback: defaults to true
       const stored = await AsyncStorage.getItem('smsTestMode');
       if (stored !== null) {
         setTestMode(JSON.parse(stored));
@@ -90,7 +153,11 @@ export default function Notify() {
   useEffect(() => {
     syncSmsModeFromBackend();
     AsyncStorage.getItem('customAbsenteeTemplate').then(stored => {
-      if (stored) {
+      if (!stored || !stored.includes('SKCT')) {
+        setCustomTemplate(defaultTemplate);
+        setTempTemplateInput(defaultTemplate);
+        AsyncStorage.setItem('customAbsenteeTemplate', defaultTemplate);
+      } else {
         setCustomTemplate(stored);
         setTempTemplateInput(stored);
       }
@@ -139,10 +206,11 @@ export default function Notify() {
             if (session.sessionId === 'session-101' || session.sessionId === 'session-102') {
               return;
             }
+            const sessionIso = session.isoDate || normalizeToIso(session.date);
             if (Array.isArray(session.absentees)) {
               session.absentees.forEach((s: any) => {
                 const parentPhone = s.real_parent_phone || s.phone || '';
-                const key = `${s.id}_${session.period || 'period'}_${session.subject || 'subject'}`;
+                const key = `${s.id}_${session.period || 'period'}_${session.subject || 'subject'}_${sessionIso}`;
                 dedupMap.set(key, {
                   id: s.id,
                   name: s.name,
@@ -153,6 +221,7 @@ export default function Notify() {
                   period: session.period || 'Period',
                   time: session.time || '',
                   date: session.date || 'Today',
+                  isoDate: sessionIso,
                   called: !!s.called,
                   smsSent: !!s.smsSent,
                   session_id: session.sessionId || 'session',
@@ -178,7 +247,8 @@ export default function Notify() {
               const realPhone = student.original_parent_phone || student.parent_phone || '';
               const periodLabel = `Period ${timetable?.period || 1}`;
               const subjectTitle = timetable?.Subject?.title || 'Class';
-              const key = `${student.roll_no}_${periodLabel}_${subjectTitle}`;
+              const recordIso = normalizeToIso(record.date);
+              const key = `${student.roll_no}_${periodLabel}_${subjectTitle}_${recordIso}`;
 
               if (!dedupMap.has(key)) {
                 dedupMap.set(key, {
@@ -191,6 +261,7 @@ export default function Notify() {
                   period: periodLabel,
                   time: '',
                   date: record.date || 'Today',
+                  isoDate: recordIso,
                   called: false,
                   smsSent: false,
                   session_id: `server-${record.id}`,
@@ -305,8 +376,12 @@ export default function Notify() {
         if (granted === PermissionsAndroid.RESULTS.GRANTED) {
           const DirectSms = NativeModules.DirectSms;
           if (DirectSms && DirectSms.sendDirectSms) {
-            DirectSms.sendDirectSms(destPhone, message);
-            directSent = true;
+            try {
+              await DirectSms.sendDirectSms(destPhone, message);
+              directSent = true;
+            } catch (err) {
+              console.log('Direct SMS failed, opening native SMS app:', err);
+            }
           }
         }
       } catch (err) {
@@ -317,7 +392,7 @@ export default function Notify() {
     if (!directSent) {
       const smsUrl = `sms:${destPhone}?body=${encodeURIComponent(message)}`;
       Linking.openURL(smsUrl).catch(() => {
-        Alert.alert('SMS Error', 'Could not open SMS composer on this device.');
+        Alert.alert('SMS Info', `SMS ready for ${destPhone}:\n\n${message}`);
       });
     }
 
@@ -329,7 +404,7 @@ export default function Notify() {
     persistAbsenteesState(updated);
 
     setSingleSmsModalVisible(false);
-    Alert.alert('SMS Sent', `Absentee alert dispatched for ${activeStudentForSms.name}.`);
+    Alert.alert('SMS Dispatched', `Absentee alert processed for ${activeStudentForSms.name}.`);
   };
 
   // 7. Batch Send SMS to All Absentees
@@ -344,7 +419,7 @@ export default function Notify() {
 
     Alert.alert(
       'Confirm Broadcast',
-      `Send absentee alert SMS to parents of ${targetList.length} student(s)?`,
+      `Send absentee alert SMS to parents of ${targetList.length} student(s)?\nRoute: ${testMode ? `TEST MODE (${testPhone})` : 'LIVE (Real Parents)'}`,
       [
         { text: 'Cancel', style: 'cancel' },
         {
@@ -358,17 +433,44 @@ export default function Notify() {
                 const granted = await PermissionsAndroid.request(
                   PermissionsAndroid.PERMISSIONS.SEND_SMS
                 );
-                if (granted === PermissionsAndroid.RESULTS.GRANTED) {
-                  const DirectSms = NativeModules.DirectSms;
-                  targetList.forEach(student => {
-                    const destPhone = getTargetPhone(student);
-                    const msg = generateMessageForStudent(student);
-                    DirectSms.sendDirectSms(destPhone, msg);
-                  });
+                const DirectSms = NativeModules.DirectSms;
+                const failedDirectList: AbsenteeRecord[] = [];
+
+                for (const student of targetList) {
+                  const destPhone = getTargetPhone(student);
+                  const msg = generateMessageForStudent(student);
+                  let sent = false;
+                  if (granted === PermissionsAndroid.RESULTS.GRANTED && DirectSms && DirectSms.sendDirectSms) {
+                    try {
+                      await DirectSms.sendDirectSms(destPhone, msg);
+                      sent = true;
+                    } catch (err) {
+                      console.log('Failed Direct SMS to', destPhone, err);
+                    }
+                  }
+                  if (!sent) {
+                    failedDirectList.push(student);
+                  }
+                }
+
+                // If direct background SMS was blocked (e.g. Vivo background SMS restriction), open native SMS app for the first absentee
+                if (failedDirectList.length > 0) {
+                  const first = failedDirectList[0];
+                  const firstPhone = getTargetPhone(first);
+                  const firstMsg = generateMessageForStudent(first);
+                  const smsUrl = `sms:${firstPhone}?body=${encodeURIComponent(firstMsg)}`;
+                  Linking.openURL(smsUrl).catch(() => {});
                 }
               } catch (e) {
                 console.log('Batch SMS error:', e);
               }
+            } else {
+              targetList.forEach(student => {
+                const destPhone = getTargetPhone(student);
+                const msg = generateMessageForStudent(student);
+                const smsUrl = `sms:${destPhone}?body=${encodeURIComponent(msg)}`;
+                Linking.openURL(smsUrl).catch(() => {});
+              });
             }
 
             const updated = absentees.map(s => {
@@ -380,7 +482,7 @@ export default function Notify() {
 
             Alert.alert(
               'Broadcast Complete',
-              `SMS alerts sent for ${targetList.length} absent student(s).`
+              `SMS alerts processed for ${targetList.length} absent student(s).`
             );
           },
         },
@@ -415,26 +517,47 @@ export default function Notify() {
     );
   };
 
-  // Distinct sessions for filter chips
-  const distinctSessions = Array.from(
-    new Set(absentees.map(a => `${a.period} • ${a.subject}`))
-  );
+  // Set of dates that have absentees recorded
+  const datesWithAbsentees = useMemo(() => {
+    const set = new Set<string>();
+    absentees.forEach(a => {
+      const iso = a.isoDate || normalizeToIso(a.date);
+      if (iso) set.add(iso);
+    });
+    return set;
+  }, [absentees]);
 
-  // Filtered absentees based on search query and session
-  const filteredAbsentees = absentees.filter(item => {
-    const matchesSearch =
-      item.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      item.id.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      item.phone.includes(searchQuery);
-    const sessionKey = `${item.period} • ${item.subject}`;
-    const matchesSession =
-      selectedSessionFilter === 'all' || sessionKey === selectedSessionFilter;
-    return matchesSearch && matchesSession;
-  });
+  // Absentees matching the selected date filter
+  const dateFilteredAbsentees = useMemo(() => {
+    if (!selectedDate) return absentees;
+    return absentees.filter(item => {
+      const itemIso = item.isoDate || normalizeToIso(item.date);
+      return itemIso === selectedDate;
+    });
+  }, [absentees, selectedDate]);
 
-  const totalAbsenteesCount = absentees.length;
-  const totalCallsPlaced = absentees.filter(a => a.called).length;
-  const totalSmsSent = absentees.filter(a => a.smsSent).length;
+  // Distinct sessions for filter chips (scoped to current date selection)
+  const distinctSessions = useMemo(() => {
+    return Array.from(new Set(dateFilteredAbsentees.map(a => `${a.period} • ${a.subject}`)));
+  }, [dateFilteredAbsentees]);
+
+  // Filtered absentees based on search query, session, and date
+  const filteredAbsentees = useMemo(() => {
+    return dateFilteredAbsentees.filter(item => {
+      const matchesSearch =
+        item.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        item.id.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        item.phone.includes(searchQuery);
+      const sessionKey = `${item.period} • ${item.subject}`;
+      const matchesSession =
+        selectedSessionFilter === 'all' || sessionKey === selectedSessionFilter;
+      return matchesSearch && matchesSession;
+    });
+  }, [dateFilteredAbsentees, searchQuery, selectedSessionFilter]);
+
+  const totalAbsenteesCount = filteredAbsentees.length;
+  const totalCallsPlaced = filteredAbsentees.filter(a => a.called).length;
+  const totalSmsSent = filteredAbsentees.filter(a => a.smsSent).length;
 
   if (loading) {
     return (
@@ -462,6 +585,17 @@ export default function Notify() {
               </TouchableOpacity>
             )}
             <TouchableOpacity
+              onPress={() => {
+                const ref = selectedDate ? new Date(selectedDate) : new Date();
+                setCalYear(ref.getFullYear());
+                setCalMonth(ref.getMonth());
+                setCalendarModalVisible(true);
+              }}
+              style={styles.calHeaderBtn}
+            >
+              <Icon name="calendar-today" size={20} color={Colors.primary} />
+            </TouchableOpacity>
+            <TouchableOpacity
               onPress={() => setTemplateModalVisible(true)}
               style={styles.templateBtn}
             >
@@ -477,6 +611,109 @@ export default function Notify() {
         showsVerticalScrollIndicator={false}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
       >
+        {/* Date Selector Card with Calendar Trigger */}
+        <Animated.View entering={FadeInUp.delay(30).duration(400)} style={styles.dateSelectorCard}>
+          <TouchableOpacity
+            style={styles.calendarTriggerBtn}
+            onPress={() => {
+              const ref = selectedDate ? new Date(selectedDate) : new Date();
+              setCalYear(ref.getFullYear());
+              setCalMonth(ref.getMonth());
+              setCalendarModalVisible(true);
+            }}
+            activeOpacity={0.8}
+          >
+            <View style={styles.calIconBox}>
+              <Icon name="event" size={22} color={Colors.primary} />
+            </View>
+            <View style={{ flex: 1, marginLeft: 10 }}>
+              <Text style={styles.dateSelectorLabel}>
+                {selectedDate === todayIso
+                  ? "TODAY'S ABSENTEES"
+                  : selectedDate
+                  ? 'SELECTED DATE'
+                  : 'ALL RECORDED DATES'}
+              </Text>
+              <Text style={styles.dateSelectorValue}>
+                {formatDisplayDate(selectedDate)}
+              </Text>
+            </View>
+            <View style={styles.calPickerBtn}>
+              <Icon name="calendar-month" size={17} color="#ffffff" style={{ marginRight: 4 }} />
+              <Text style={styles.calPickerBtnText}>Calendar</Text>
+            </View>
+          </TouchableOpacity>
+
+          {/* Quick Date Shortcuts & Stepper */}
+          <View style={styles.dateSelectorFooter}>
+            <View style={styles.quickPillsRow}>
+              <TouchableOpacity
+                style={[
+                  styles.dateFilterPill,
+                  selectedDate === todayIso && styles.dateFilterPillActive,
+                ]}
+                onPress={() => setSelectedDate(todayIso)}
+              >
+                <Text
+                  style={[
+                    styles.dateFilterPillText,
+                    selectedDate === todayIso && styles.dateFilterPillTextActive,
+                  ]}
+                >
+                  Today
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[
+                  styles.dateFilterPill,
+                  selectedDate === null && styles.dateFilterPillActive,
+                ]}
+                onPress={() => setSelectedDate(null)}
+              >
+                <Text
+                  style={[
+                    styles.dateFilterPillText,
+                    selectedDate === null && styles.dateFilterPillTextActive,
+                  ]}
+                >
+                  All Dates ({absentees.length})
+                </Text>
+              </TouchableOpacity>
+            </View>
+
+            {selectedDate && (
+              <View style={styles.dateStepRow}>
+                <TouchableOpacity
+                  style={styles.dateStepBtn}
+                  onPress={() => {
+                    const parts = selectedDate.split('-');
+                    const d = new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, parseInt(parts[2], 10));
+                    d.setDate(d.getDate() - 1);
+                    const newIso = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+                    setSelectedDate(newIso);
+                  }}
+                >
+                  <Icon name="chevron-left" size={20} color="#334155" />
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={styles.dateStepBtn}
+                  onPress={() => {
+                    const parts = selectedDate.split('-');
+                    const d = new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, parseInt(parts[2], 10));
+                    d.setDate(d.getDate() + 1);
+                    const newIso = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+                    setSelectedDate(newIso);
+                  }}
+                >
+                  <Icon name="chevron-right" size={20} color="#334155" />
+                </TouchableOpacity>
+              </View>
+            )}
+          </View>
+        </Animated.View>
+
         {/* Quick Stats Banner */}
         {totalAbsenteesCount > 0 && (
           <Animated.View entering={FadeInUp.delay(50).duration(400)} style={styles.statsCard}>
@@ -673,26 +910,41 @@ export default function Notify() {
             </Animated.View>
           ))}
 
-          {/* EMPTY STATE: When no attendance has been marked yet */}
+          {/* EMPTY STATE: When no absentees are found */}
           {filteredAbsentees.length === 0 && (
             <View style={styles.emptyStateContainer}>
               <View style={styles.emptyIconCircle}>
                 <Icon name="event-available" size={48} color={Colors.primary} />
               </View>
-              <Text style={styles.emptyTitle}>No Absentees Recorded</Text>
+              <Text style={styles.emptyTitle}>
+                {selectedDate ? `No Absentees on ${formatDisplayDate(selectedDate)}` : 'No Absentees Recorded'}
+              </Text>
               <Text style={styles.emptySubtitle}>
                 {searchQuery
                   ? 'No students matched your search query.'
-                  : "You haven't marked attendance for any class today. Once you submit attendance, any absent students will appear here."}
+                  : selectedDate
+                  ? `All students were present or attendance has not been marked for ${formatDisplayDate(selectedDate)}.`
+                  : "You haven't marked attendance for any class yet. Once you submit attendance, any absent students will appear here."}
               </Text>
-              <TouchableOpacity
-                style={styles.markAttendanceBtn}
-                onPress={() => navigation.navigate('ClassesList', { mode: 'attendance' })}
-                activeOpacity={0.85}
-              >
-                <Icon name="fact-check" size={20} color="#ffffff" style={{ marginRight: 8 }} />
-                <Text style={styles.markAttendanceBtnText}>Mark Attendance Now</Text>
-              </TouchableOpacity>
+              <View style={{ flexDirection: 'row', gap: 10, marginTop: 14 }}>
+                {selectedDate && (
+                  <TouchableOpacity
+                    style={styles.emptySecondaryBtn}
+                    onPress={() => setSelectedDate(null)}
+                    activeOpacity={0.85}
+                  >
+                    <Text style={styles.emptySecondaryBtnText}>View All Dates</Text>
+                  </TouchableOpacity>
+                )}
+                <TouchableOpacity
+                  style={styles.markAttendanceBtn}
+                  onPress={() => navigation.navigate('ClassesList', { mode: 'attendance' })}
+                  activeOpacity={0.85}
+                >
+                  <Icon name="fact-check" size={18} color="#ffffff" style={{ marginRight: 6 }} />
+                  <Text style={styles.markAttendanceBtnText}>Mark Attendance</Text>
+                </TouchableOpacity>
+              </View>
             </View>
           )}
         </View>
@@ -707,7 +959,7 @@ export default function Notify() {
             disabled={batchSending}
             activeOpacity={0.85}
           >
-            <Icon name="campaign" size={24} color="#ffffff" style={{ marginRight: 8 }} />
+            <Icon name="notifications" size={24} color="#ffffff" style={{ marginRight: 8 }} />
             <Text style={styles.notifyAllText}>
               {batchSending
                 ? 'Dispatching Broadcast...'
@@ -801,6 +1053,160 @@ export default function Notify() {
               <TouchableOpacity style={styles.sendDirectBtn} onPress={handleSendSingleSms}>
                 <Icon name="send" size={16} color="#ffffff" style={{ marginRight: 6 }} />
                 <Text style={styles.sendDirectText}>Send SMS</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* MODAL 3: Full Interactive Calendar Date Picker */}
+      <Modal visible={calendarModalVisible} transparent animationType="fade">
+        <View style={styles.modalOverlay}>
+          <View style={styles.calendarModalCard}>
+            {/* Modal Header */}
+            <View style={styles.modalHeaderRow}>
+              <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                <Icon name="calendar-month" size={24} color={Colors.primary} style={{ marginRight: 8 }} />
+                <Text style={styles.modalTitle}>Select Date</Text>
+              </View>
+              <TouchableOpacity onPress={() => setCalendarModalVisible(false)} style={styles.modalCloseCircle}>
+                <Icon name="close" size={20} color="#64748B" />
+              </TouchableOpacity>
+            </View>
+
+            {/* Month & Year Navigation */}
+            <View style={styles.calMonthNavRow}>
+              <TouchableOpacity
+                style={styles.calNavIconBtn}
+                onPress={() => {
+                  if (calMonth === 0) {
+                    setCalMonth(11);
+                    setCalYear(prev => prev - 1);
+                  } else {
+                    setCalMonth(prev => prev - 1);
+                  }
+                }}
+              >
+                <Icon name="chevron-left" size={26} color="#0F172A" />
+              </TouchableOpacity>
+              <Text style={styles.calMonthText}>
+                {MONTH_NAMES[calMonth]} {calYear}
+              </Text>
+              <TouchableOpacity
+                style={styles.calNavIconBtn}
+                onPress={() => {
+                  if (calMonth === 11) {
+                    setCalMonth(0);
+                    setCalYear(prev => prev + 1);
+                  } else {
+                    setCalMonth(prev => prev + 1);
+                  }
+                }}
+              >
+                <Icon name="chevron-right" size={26} color="#0F172A" />
+              </TouchableOpacity>
+            </View>
+
+            {/* Day of Week Headers */}
+            <View style={styles.calWeekRow}>
+              {WEEK_DAYS.map((wd, i) => (
+                <Text
+                  key={i}
+                  style={[
+                    styles.calWeekText,
+                    (i === 0 || i === 6) && { color: '#EF4444' },
+                  ]}
+                >
+                  {wd}
+                </Text>
+              ))}
+            </View>
+
+            {/* Calendar Days Grid */}
+            <View style={styles.calDaysGrid}>
+              {Array.from({ length: new Date(calYear, calMonth, 1).getDay() }).map((_, i) => (
+                <View key={`empty-${i}`} style={styles.calDayBox} />
+              ))}
+              {Array.from({ length: new Date(calYear, calMonth + 1, 0).getDate() }).map((_, i) => {
+                const dayNum = i + 1;
+                const iso = `${calYear}-${String(calMonth + 1).padStart(2, '0')}-${String(dayNum).padStart(2, '0')}`;
+                const isSelected = selectedDate === iso;
+                const isToday = iso === todayIso;
+                const hasAbsentees = datesWithAbsentees.has(iso);
+
+                return (
+                  <TouchableOpacity
+                    key={`day-${dayNum}`}
+                    style={[
+                      styles.calDayBox,
+                      isSelected && styles.calDayBoxSelected,
+                      !isSelected && isToday && styles.calDayBoxToday,
+                    ]}
+                    onPress={() => {
+                      setSelectedDate(iso);
+                      setCalendarModalVisible(false);
+                    }}
+                    activeOpacity={0.7}
+                  >
+                    <Text
+                      style={[
+                        styles.calDayNumText,
+                        isSelected && styles.calDayNumTextSelected,
+                        !isSelected && isToday && styles.calDayNumTextToday,
+                      ]}
+                    >
+                      {dayNum}
+                    </Text>
+                    {hasAbsentees && (
+                      <View
+                        style={[
+                          styles.calDot,
+                          isSelected && styles.calDotSelected,
+                        ]}
+                      />
+                    )}
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+
+            {/* Legend */}
+            <View style={styles.calLegendRow}>
+              <View style={styles.legendItem}>
+                <View style={[styles.calDot, { marginTop: 0, marginRight: 6 }]} />
+                <Text style={styles.legendText}>Has Absentees</Text>
+              </View>
+              <View style={styles.legendItem}>
+                <View style={styles.legendTodayBox} />
+                <Text style={styles.legendText}>Today</Text>
+              </View>
+            </View>
+
+            {/* Modal Bottom Actions */}
+            <View style={styles.calModalActions}>
+              <TouchableOpacity
+                style={styles.calQuickActionBtn}
+                onPress={() => {
+                  const now = new Date();
+                  setCalYear(now.getFullYear());
+                  setCalMonth(now.getMonth());
+                  setSelectedDate(todayIso);
+                  setCalendarModalVisible(false);
+                }}
+              >
+                <Icon name="today" size={16} color={Colors.primary} style={{ marginRight: 6 }} />
+                <Text style={styles.calQuickActionText}>Jump to Today</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.calQuickActionBtn, { backgroundColor: '#F1F5F9' }]}
+                onPress={() => {
+                  setSelectedDate(null);
+                  setCalendarModalVisible(false);
+                }}
+              >
+                <Icon name="list" size={16} color="#475569" style={{ marginRight: 6 }} />
+                <Text style={[styles.calQuickActionText, { color: '#475569' }]}>View All Dates</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -1153,11 +1559,11 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     paddingHorizontal: 14,
     borderRadius: 10,
-    shadowColor: Colors.primary,
+    shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 4,
-    elevation: 2,
+    shadowOpacity: 0.1,
+    shadowRadius: 3,
+    elevation: 1,
   },
   smsBtnSent: {
     backgroundColor: '#4338CA',
@@ -1201,11 +1607,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     backgroundColor: Colors.primary,
     borderRadius: 14,
-    shadowColor: Colors.primary,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.25,
-    shadowRadius: 8,
-    elevation: 4,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.12,
+    shadowRadius: 4,
+    elevation: 2,
   },
   markAttendanceBtnText: {
     color: '#ffffff',
@@ -1235,11 +1641,11 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.primary,
     paddingVertical: 14,
     borderRadius: 16,
-    shadowColor: Colors.primary,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 4,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.12,
+    shadowRadius: 4,
+    elevation: 2,
   },
   notifyAllText: {
     color: '#ffffff',
@@ -1383,5 +1789,249 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '700',
     color: '#ffffff',
+  },
+  calHeaderBtn: {
+    padding: 6,
+    backgroundColor: 'rgba(255, 93, 56, 0.1)',
+    borderRadius: 10,
+  },
+  dateSelectorCard: {
+    backgroundColor: '#ffffff',
+    borderRadius: 18,
+    padding: 14,
+    marginBottom: 14,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.04,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  calendarTriggerBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  calIconBox: {
+    width: 42,
+    height: 42,
+    borderRadius: 12,
+    backgroundColor: 'rgba(255, 93, 56, 0.1)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  dateSelectorLabel: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#64748B',
+    letterSpacing: 0.5,
+  },
+  dateSelectorValue: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: '#0F172A',
+    marginTop: 2,
+  },
+  calPickerBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Colors.primary,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 10,
+  },
+  calPickerBtnText: {
+    color: '#ffffff',
+    fontSize: 12,
+    fontWeight: '800',
+  },
+  dateSelectorFooter: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: 12,
+    paddingTop: 10,
+    borderTopWidth: 1,
+    borderTopColor: '#F1F5F9',
+  },
+  quickPillsRow: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  dateFilterPill: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
+    backgroundColor: '#F1F5F9',
+  },
+  dateFilterPillActive: {
+    backgroundColor: Colors.primary,
+  },
+  dateFilterPillText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#475569',
+  },
+  dateFilterPillTextActive: {
+    color: '#ffffff',
+  },
+  dateStepRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  dateStepBtn: {
+    padding: 4,
+    borderRadius: 8,
+    backgroundColor: '#F1F5F9',
+  },
+  emptySecondaryBtn: {
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    borderRadius: 10,
+    backgroundColor: '#F1F5F9',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  emptySecondaryBtnText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#475569',
+  },
+  calendarModalCard: {
+    backgroundColor: '#ffffff',
+    borderRadius: 24,
+    padding: 20,
+    width: '92%',
+    maxWidth: 380,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.15,
+    shadowRadius: 20,
+    elevation: 8,
+  },
+  modalCloseCircle: {
+    padding: 6,
+    borderRadius: 20,
+    backgroundColor: '#F1F5F9',
+  },
+  calMonthNavRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 10,
+    marginBottom: 8,
+  },
+  calNavIconBtn: {
+    padding: 6,
+    borderRadius: 12,
+    backgroundColor: '#F8FAFC',
+  },
+  calMonthText: {
+    fontSize: 17,
+    fontWeight: '800',
+    color: '#0F172A',
+  },
+  calWeekRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    paddingBottom: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F1F5F9',
+  },
+  calWeekText: {
+    width: 38,
+    textAlign: 'center',
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#64748B',
+  },
+  calDaysGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    paddingVertical: 10,
+  },
+  calDayBox: {
+    width: '14.28%',
+    height: 44,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderRadius: 12,
+    marginVertical: 2,
+  },
+  calDayBoxSelected: {
+    backgroundColor: Colors.primary,
+  },
+  calDayBoxToday: {
+    borderWidth: 1.5,
+    borderColor: Colors.primary,
+  },
+  calDayNumText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#1E293B',
+  },
+  calDayNumTextSelected: {
+    color: '#ffffff',
+    fontWeight: '800',
+  },
+  calDayNumTextToday: {
+    color: Colors.primary,
+    fontWeight: '800',
+  },
+  calDot: {
+    width: 5,
+    height: 5,
+    borderRadius: 2.5,
+    backgroundColor: Colors.primary,
+    marginTop: 2,
+  },
+  calDotSelected: {
+    backgroundColor: '#ffffff',
+  },
+  calLegendRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 16,
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: '#F1F5F9',
+  },
+  legendItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  legendText: {
+    fontSize: 11.5,
+    color: '#64748B',
+    fontWeight: '600',
+  },
+  legendTodayBox: {
+    width: 10,
+    height: 10,
+    borderRadius: 3,
+    borderWidth: 1.5,
+    borderColor: Colors.primary,
+    marginRight: 6,
+  },
+  calModalActions: {
+    flexDirection: 'row',
+    gap: 10,
+    marginTop: 16,
+  },
+  calQuickActionBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 10,
+    borderRadius: 12,
+    backgroundColor: 'rgba(255, 93, 56, 0.1)',
+  },
+  calQuickActionText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: Colors.primary,
   },
 });

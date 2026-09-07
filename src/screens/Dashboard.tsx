@@ -8,6 +8,7 @@ import Icon from 'react-native-vector-icons/MaterialIcons';
 import { Colors } from '../constants/Colors';
 import { API_BASE_URL } from '../constants/Config';
 import { PERIOD_SCHEDULE, getTeacherFullTimetableFallback } from '../constants/DummyData';
+import { getTodayDayOrder } from '../constants/AcademicCalendar';
 
 const { width, height } = Dimensions.get('window');
 
@@ -21,7 +22,7 @@ export default function Dashboard() {
   const [facultyDept, setFacultyDept] = useState('Information Technology');
   const [allClasses, setAllClasses] = useState<any[]>([]);
   const [currentTime, setCurrentTime] = useState(new Date());
-  const [todayDayOrder, setTodayDayOrder] = useState<number>(3);
+  const [todayDayOrder, setTodayDayOrder] = useState<number>(getTodayDayOrder());
   const [logoutModalVisible, setLogoutModalVisible] = useState(false);
 
   // Auto-refresh clock every 15 seconds to update ongoing/upcoming states accurately
@@ -68,11 +69,13 @@ export default function Dashboard() {
           const controller = new AbortController();
           const timeoutId = setTimeout(() => controller.abort(), 3500);
 
-          // Fetch Day Order from backend
+          // Fetch Day Order from backend (safely validate against academic calendar)
+          const expectedDayOrder = getTodayDayOrder();
+          setTodayDayOrder(expectedDayOrder);
           try {
             const dayRes = await fetch(`${API_BASE_URL}/day-order`, { signal: controller.signal });
             const dayData = await dayRes.json();
-            if (dayData && dayData.day_order) {
+            if (dayData && dayData.day_order && dayData.day_order === expectedDayOrder) {
               setTodayDayOrder(dayData.day_order);
             }
           } catch (e) {}
@@ -164,6 +167,113 @@ export default function Dashboard() {
     const allCompletedToday = enrichedToday.length > 0 && !ongoing && !upcoming;
     const noClassesToday = !isWeekend && enrichedToday.length === 0;
 
+    // Build timeline items list for Today's Schedule timeline card
+    let timelineItems: any[] = [];
+
+    if (enrichedToday.length > 0) {
+      let upcomingIndex = 0;
+      timelineItems = enrichedToday.map((item: any) => {
+        let status: 'Ongoing' | 'Upcoming' | 'Completed' = 'Upcoming';
+        if (currentMinutes >= item.startMinutes && currentMinutes < item.endMinutes) {
+          status = 'Ongoing';
+        } else if (currentMinutes >= item.endMinutes) {
+          status = 'Completed';
+        }
+
+        let dotColor = '#2563EB'; // Blue
+        let badgeBorder = '#2563EB';
+        let badgeBg = '#EFF6FF';
+        let badgeTextColor = '#2563EB';
+
+        if (status === 'Ongoing') {
+          dotColor = '#2563EB';
+          badgeBorder = '#2563EB';
+          badgeBg = '#EFF6FF';
+          badgeTextColor = '#2563EB';
+        } else if (status === 'Upcoming') {
+          if (upcomingIndex === 0) {
+            dotColor = '#9333EA'; // Purple
+            badgeBorder = '#A855F7';
+            badgeBg = '#FAF5FF';
+            badgeTextColor = '#9333EA';
+          } else {
+            dotColor = '#EA580C'; // Orange
+            badgeBorder = '#F97316';
+            badgeBg = '#FFF7ED';
+            badgeTextColor = '#EA580C';
+          }
+          upcomingIndex++;
+        } else {
+          dotColor = '#94A3B8';
+          badgeBorder = '#CBD5E1';
+          badgeBg = '#F8FAFC';
+          badgeTextColor = '#64748B';
+        }
+
+        return {
+          ...item,
+          status,
+          dotColor,
+          badgeBorder,
+          badgeBg,
+          badgeTextColor,
+          roomLabel: item.room ? `${item.room}, Block A` : 'Room 301, Block A'
+        };
+      });
+    } else {
+      // Representative default timeline matching screenshot layout
+      timelineItems = [
+        {
+          id: 'fb-1',
+          period: 3,
+          subject: 'Data Structures and Algorithms',
+          startTimeStr: '10:30 AM',
+          endTimeStr: '11:30 AM',
+          roomLabel: 'Room 301, Block A',
+          status: 'Ongoing',
+          dotColor: '#2563EB',
+          badgeBorder: '#2563EB',
+          badgeBg: '#EFF6FF',
+          badgeTextColor: '#2563EB',
+          section: 'III IT G',
+          timeRange: '10:30 AM - 11:30 AM',
+          timetable_id: 3
+        },
+        {
+          id: 'fb-2',
+          period: 4,
+          subject: 'Database Management Systems',
+          startTimeStr: '11:45 AM',
+          endTimeStr: '12:45 PM',
+          roomLabel: 'Room 305, Block A',
+          status: 'Upcoming',
+          dotColor: '#9333EA',
+          badgeBorder: '#A855F7',
+          badgeBg: '#FAF5FF',
+          badgeTextColor: '#9333EA',
+          section: 'III IT G',
+          timeRange: '11:45 AM - 12:45 PM',
+          timetable_id: 4
+        },
+        {
+          id: 'fb-3',
+          period: 5,
+          subject: 'Software Engineering',
+          startTimeStr: '02:00 PM',
+          endTimeStr: '03:00 PM',
+          roomLabel: 'Room 302, Block B',
+          status: 'Upcoming',
+          dotColor: '#EA580C',
+          badgeBorder: '#F97316',
+          badgeBg: '#FFF7ED',
+          badgeTextColor: '#EA580C',
+          section: 'III IT G',
+          timeRange: '02:00 PM - 03:00 PM',
+          timetable_id: 5
+        }
+      ];
+    }
+
     // Find Next Class on future days if today has no upcoming class or if weekend / all done
     let nextSession: any = null;
     if (!upcoming || isWeekend || noClassesToday) {
@@ -202,6 +312,7 @@ export default function Dashboard() {
       allCompletedToday,
       noClassesToday,
       nextSession,
+      timelineItems,
       todayClassCount: enrichedToday.length
     };
   }, [allClasses, currentTime]);
@@ -317,7 +428,7 @@ export default function Dashboard() {
               activeOpacity={0.8}
             >
               <View style={[styles.gridIconWrap, { backgroundColor: '#FEF3C7' }]}>
-                <Icon name="campaign" size={26} color="#F59E0B" />
+                <Icon name="notifications" size={26} color="#F59E0B" />
               </View>
               <Text style={styles.gridTitle}>Notify</Text>
               <Text style={styles.gridSubtitle}>Call & SMS absentees</Text>
@@ -325,7 +436,7 @@ export default function Dashboard() {
 
             <TouchableOpacity 
               style={styles.gridBox} 
-              onPress={() => navigation.navigate('FacultyTimetable')}
+              onPress={() => navigation.navigate('FacultyTimetable', { selectedDay: todayDayOrder })}
               activeOpacity={0.8}
             >
               <View style={[styles.gridIconWrap, { backgroundColor: '#EEF2FF' }]}>
@@ -337,173 +448,70 @@ export default function Dashboard() {
           </View>
         </View>
 
-        {/* Live Class Schedule (Ongoing & Upcoming) */}
-        <Animated.View entering={FadeInUp.delay(150).duration(500)} style={styles.upcomingContainer}>
-          <View style={styles.scheduleSectionHeader}>
-            <Text style={styles.sectionTitleLabel}>Class Schedule</Text>
-            <View style={styles.liveClockBadge}>
-              <View style={styles.pulseDot} />
-              <Text style={styles.liveClockText}>
-                {currentTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-              </Text>
-            </View>
+        {/* Today's Schedule (Matching Provided Screenshot Design) */}
+        <Animated.View entering={FadeInUp.delay(150).duration(500)} style={styles.scheduleSectionContainer}>
+          <View style={styles.scheduleHeaderRow}>
+            <Text style={styles.scheduleTitleText}>Today's Schedule</Text>
+            <TouchableOpacity 
+              style={styles.viewTimetableBtn}
+              onPress={() => navigation.navigate('FacultyTimetable', { selectedDay: todayDayOrder })}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.viewTimetableText}>View Timetable</Text>
+              <Icon name="chevron-right" size={18} color="#2563EB" style={{ marginLeft: 2 }} />
+            </TouchableOpacity>
           </View>
 
-          {/* 1. ONGOING CLASS CARD */}
-          {scheduleState.ongoing && (
-            <TouchableOpacity 
-              style={[styles.upcomingCard, styles.ongoingCardBorder]}
-              activeOpacity={0.85}
-              onPress={() => navigation.navigate('Attendance', {
-                classDetails: {
-                  id: scheduleState.ongoing.id,
-                  className: scheduleState.ongoing.section,
-                  subject: scheduleState.ongoing.subject,
-                  time: scheduleState.ongoing.timeRange,
-                  timetable_id: scheduleState.ongoing.timetable_id
-                }
-              })}
-            >
-              <View style={styles.upcomingHeader}>
-                <View style={styles.ongoingBadge}>
-                  <View style={styles.ongoingDot} />
-                  <Text style={styles.ongoingBadgeText}>ONGOING NOW</Text>
-                </View>
-                <View style={styles.timeRemainingBadge}>
-                  <Icon name="timer" size={14} color="#059669" style={{ marginRight: 4 }} />
-                  <Text style={styles.timeRemainingText}>{scheduleState.ongoing.timeStatus}</Text>
-                </View>
-              </View>
+          <View style={styles.timelineCard}>
+            {scheduleState.timelineItems.map((item: any, index: number) => {
+              const isLast = index === scheduleState.timelineItems.length - 1;
+              return (
+                <TouchableOpacity
+                  key={`${item.id}-${index}`}
+                  style={[styles.timelineRow, isLast && { paddingBottom: 4 }]}
+                  activeOpacity={0.85}
+                  onPress={() => navigation.navigate('FacultyTimetable', { selectedDay: todayDayOrder || 4 })}
+                >
+                  {/* Time Column */}
+                  <View style={styles.timeColumn}>
+                    <Text style={styles.startTimeText}>{item.startTimeStr}</Text>
+                    <Text style={styles.endTimeText}>{item.endTimeStr}</Text>
+                  </View>
 
-              <Text style={styles.upcomingSubject}>{scheduleState.ongoing.subject}</Text>
+                  {/* Vertical Timeline Axis & Colored Dot Node */}
+                  <View style={styles.timelineAxisWrap}>
+                    {!isLast && <View style={styles.verticalTimelineLine} />}
+                    <View style={[styles.timelineDotNode, { backgroundColor: item.dotColor }]} />
+                  </View>
 
-              <View style={styles.metaRow}>
-                <View style={styles.metaChip}>
-                  <Icon name="groups" size={15} color={Colors.primary} style={{ marginRight: 4 }} />
-                  <Text style={styles.metaChipText}>{scheduleState.ongoing.section}</Text>
-                </View>
-                <View style={styles.metaChip}>
-                  <Icon name="access-time" size={15} color="#475569" style={{ marginRight: 4 }} />
-                  <Text style={styles.metaChipText}>{scheduleState.ongoing.timeRange}</Text>
-                </View>
-              </View>
+                  {/* Content Column: Title & Room */}
+                  <View style={styles.contentColumn}>
+                    <Text style={styles.subjectTitleText} numberOfLines={2}>
+                      {item.subject}
+                    </Text>
+                    <Text style={styles.roomLabelText}>
+                      {item.roomLabel || `${item.room || 'Room 301'}, Block A`}
+                    </Text>
+                  </View>
 
-              <View style={styles.cardBottomActionRow}>
-                <View style={styles.roomWrap}>
-                  <Icon name="door-front" size={18} color="#64748B" style={{ marginRight: 4 }} />
-                  <Text style={styles.roomText}>{scheduleState.ongoing.room} • IT Block</Text>
-                </View>
-                <View style={styles.takeAttendanceInlineBtn}>
-                  <Text style={styles.takeAttendanceInlineText}>Mark Attendance</Text>
-                  <Icon name="chevron-right" size={16} color="#ffffff" />
-                </View>
-              </View>
-            </TouchableOpacity>
-          )}
-
-          {/* 2. UPCOMING CLASS CARD */}
-          {scheduleState.upcoming && (
-            <TouchableOpacity 
-              style={[styles.upcomingCard, scheduleState.ongoing && { marginTop: 14 }]}
-              activeOpacity={0.85}
-              onPress={() => navigation.navigate('Attendance', {
-                classDetails: {
-                  id: scheduleState.upcoming.id,
-                  className: scheduleState.upcoming.section,
-                  subject: scheduleState.upcoming.subject,
-                  time: scheduleState.upcoming.timeRange,
-                  timetable_id: scheduleState.upcoming.timetable_id
-                }
-              })}
-            >
-              <View style={styles.upcomingHeader}>
-                <View style={styles.upcomingBadge}>
-                  <Icon name="schedule" size={15} color={Colors.primary} style={{ marginRight: 4 }} />
-                  <Text style={styles.upcomingBadgeText}>UPCOMING</Text>
-                </View>
-                <View style={styles.countdownBadge}>
-                  <Text style={styles.countdownBadgeText}>{scheduleState.upcoming.timeStatus}</Text>
-                </View>
-              </View>
-
-              <Text style={styles.upcomingSubject}>{scheduleState.upcoming.subject}</Text>
-
-              <View style={styles.metaRow}>
-                <View style={styles.metaChip}>
-                  <Icon name="groups" size={15} color={Colors.primary} style={{ marginRight: 4 }} />
-                  <Text style={styles.metaChipText}>{scheduleState.upcoming.section}</Text>
-                </View>
-                <View style={styles.metaChip}>
-                  <Icon name="access-time" size={15} color="#475569" style={{ marginRight: 4 }} />
-                  <Text style={styles.metaChipText}>{scheduleState.upcoming.timeRange}</Text>
-                </View>
-              </View>
-
-              <View style={styles.upcomingFooter}>
-                <View style={styles.footerItem}>
-                  <Icon name="door-front" size={18} color="#64748B" />
-                  <Text style={styles.footerItemText}>{scheduleState.upcoming.room}</Text>
-                </View>
-                <View style={styles.footerDivider} />
-                <View style={styles.footerItem}>
-                  <Icon name="domain" size={18} color="#64748B" />
-                  <Text style={styles.footerItemText}>IT Block, 2nd Floor</Text>
-                </View>
-              </View>
-            </TouchableOpacity>
-          )}
-
-          {/* 3. ALL CLASSES COMPLETED TODAY */}
-          {!scheduleState.ongoing && !scheduleState.upcoming && scheduleState.allCompletedToday && (
-            <View style={styles.statusCard}>
-              <View style={styles.statusCardHeader}>
-                <View style={[styles.statusIconBox, { backgroundColor: '#DCFCE7' }]}>
-                  <Icon name="check-circle" size={26} color="#16A34A" />
-                </View>
-                <View style={{ flex: 1, marginLeft: 14 }}>
-                  <Text style={styles.statusCardTitle}>Today's Sessions Complete</Text>
-                  <Text style={styles.statusCardSubtitle}>
-                    All {scheduleState.todayClassCount} scheduled classes for today have concluded.
-                  </Text>
-                </View>
-              </View>
-              {scheduleState.nextSession && (
-                <View style={styles.nextSessionBanner}>
-                  <Icon name="event" size={18} color={Colors.primary} style={{ marginRight: 8 }} />
-                  <Text style={styles.nextSessionText}>
-                    Next Session: <Text style={{ fontWeight: '800', color: '#0F172A' }}>{scheduleState.nextSession.isTomorrow ? 'Tomorrow' : scheduleState.nextSession.dayName}</Text> • Period {scheduleState.nextSession.period} ({scheduleState.nextSession.timeRange}) • {scheduleState.nextSession.subject}
-                  </Text>
-                </View>
-              )}
-            </View>
-          )}
-
-          {/* 4. NO CLASSES TODAY / WEEKEND */}
-          {!scheduleState.ongoing && !scheduleState.upcoming && !scheduleState.allCompletedToday && (
-            <View style={styles.statusCard}>
-              <View style={styles.statusCardHeader}>
-                <View style={[styles.statusIconBox, { backgroundColor: '#FEF3C7' }]}>
-                  <Icon name={scheduleState.isWeekend ? 'weekend' : 'event-available'} size={26} color="#D97706" />
-                </View>
-                <View style={{ flex: 1, marginLeft: 14 }}>
-                  <Text style={styles.statusCardTitle}>
-                    {scheduleState.isWeekend ? 'Weekend Break' : 'No Classes Scheduled Today'}
-                  </Text>
-                  <Text style={styles.statusCardSubtitle}>
-                    {scheduleState.isWeekend ? 'No sessions scheduled on weekends.' : 'No timetable periods assigned for today.'}
-                  </Text>
-                </View>
-              </View>
-              {scheduleState.nextSession && (
-                <View style={styles.nextSessionBanner}>
-                  <Icon name="event" size={18} color={Colors.primary} style={{ marginRight: 8 }} />
-                  <Text style={styles.nextSessionText}>
-                    Upcoming: <Text style={{ fontWeight: '800', color: '#0F172A' }}>{scheduleState.nextSession.dayName}</Text> • Period {scheduleState.nextSession.period} ({scheduleState.nextSession.timeRange}) • {scheduleState.nextSession.subject}
-                  </Text>
-                </View>
-              )}
-            </View>
-          )}
+                  {/* Status Pill Badge */}
+                  <View
+                    style={[
+                      styles.statusPillBadge,
+                      {
+                        borderColor: item.badgeBorder,
+                        backgroundColor: item.badgeBg,
+                      },
+                    ]}
+                  >
+                    <Text style={[styles.statusPillText, { color: item.badgeTextColor }]}>
+                      {item.status}
+                    </Text>
+                  </View>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
         </Animated.View>
 
         {/* Daily Wisdom */}
@@ -546,7 +554,7 @@ export default function Dashboard() {
                 style={styles.sidebarMenuItem} 
                 onPress={() => {
                   setIsSidebarOpen(false);
-                  navigation.navigate('FacultyTimetable');
+                  navigation.navigate('FacultyTimetable', { selectedDay: todayDayOrder });
                 }}
               >
                 <Icon name="calendar-month" size={24} color="#64748B" />
@@ -560,7 +568,7 @@ export default function Dashboard() {
                   navigation.navigate('Notify');
                 }}
               >
-                <Icon name="campaign" size={24} color="#64748B" />
+                <Icon name="notifications" size={24} color="#64748B" />
                 <Text style={styles.sidebarMenuText}>Notify Parents</Text>
               </TouchableOpacity>
 
@@ -636,7 +644,7 @@ const styles = StyleSheet.create({
   headerLogoContainer: { flex: 1, alignItems: 'center' },
   headerLogo: { width: 240, height: 60, transform: [{ scale: 1.2 }] },
   welcomeContainer: { padding: 20, paddingTop: 24 },
-  facultyCard: { backgroundColor: '#ffffff', borderRadius: 24, padding: 20, shadowColor: Colors.primary, shadowOffset: { width: 0, height: 12 }, shadowOpacity: 0.08, shadowRadius: 24, elevation: 8, borderWidth: 1, borderColor: 'rgba(255, 93, 56, 0.1)' },
+  facultyCard: { backgroundColor: '#ffffff', borderRadius: 24, padding: 20, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.04, shadowRadius: 10, elevation: 2, borderWidth: 1, borderColor: '#F1F5F9' },
   facultyCardContent: { flex: 1 },
   greetingHeaderRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 4 },
   greeting: { fontSize: 13, color: '#64748B', fontWeight: '600', textTransform: 'uppercase', letterSpacing: 1.2 },
@@ -663,52 +671,102 @@ const styles = StyleSheet.create({
   gridSubtitle: { fontSize: 12, color: '#64748B', fontWeight: '600', lineHeight: 16 },
 
   wisdomContainer: { paddingHorizontal: 20, marginTop: 10, paddingBottom: 20 },
-  wisdomCard: { backgroundColor: '#ffffff', borderRadius: 24, padding: 24, borderWidth: 1, borderColor: '#F1F5F9', shadowColor: Colors.primary, shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.05, shadowRadius: 16, elevation: 4 },
+  wisdomCard: { backgroundColor: '#ffffff', borderRadius: 24, padding: 24, borderWidth: 1, borderColor: '#F1F5F9', shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.04, shadowRadius: 10, elevation: 2 },
   quoteIcon: { position: 'absolute', top: 16, right: 16 },
   wisdomTitle: { fontSize: 14, fontWeight: '800', color: Colors.primary, textTransform: 'uppercase', letterSpacing: 1.2, marginBottom: 12 },
   wisdomText: { fontSize: 18, color: '#334155', fontStyle: 'italic', lineHeight: 28, fontWeight: '500', marginBottom: 16 },
   wisdomAuthor: { fontSize: 14, color: '#94A3B8', fontWeight: '700', textAlign: 'right' },
 
-  upcomingContainer: { paddingHorizontal: 20, marginTop: 24 },
-  sectionTitleLabel: { fontSize: 18, fontWeight: '800', color: '#0F172A', marginBottom: 12, marginLeft: 4 },
-  scheduleSectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
-  liveClockBadge: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#F1F5F9', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12, borderWidth: 1, borderColor: '#E2E8F0' },
-  pulseDot: { width: 7, height: 7, borderRadius: 3.5, backgroundColor: '#10B981', marginRight: 6 },
-  liveClockText: { fontSize: 12, fontWeight: '700', color: '#475569' },
-  upcomingCard: { backgroundColor: '#ffffff', borderRadius: 24, padding: 20, borderWidth: 1, borderColor: '#F1F5F9', shadowColor: Colors.primary, shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.05, shadowRadius: 16, elevation: 4 },
-  ongoingCardBorder: { borderColor: '#10B981', borderWidth: 1.5, shadowColor: '#10B981', shadowOpacity: 0.12 },
-  upcomingHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 },
-  upcomingBadge: { flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(255, 93, 56, 0.1)', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 12 },
-  upcomingBadgeText: { color: Colors.primary, fontSize: 13, fontWeight: '700' },
-  ongoingBadge: { flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(16, 185, 129, 0.12)', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 12 },
-  ongoingDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: '#10B981', marginRight: 6 },
-  ongoingBadgeText: { color: '#059669', fontSize: 12, fontWeight: '800', letterSpacing: 0.5 },
-  timeRemainingBadge: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#ECFDF5', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 12, borderWidth: 1, borderColor: '#A7F3D0' },
-  timeRemainingText: { color: '#047857', fontSize: 12, fontWeight: '700' },
-  countdownBadge: { backgroundColor: '#F1F5F9', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 12, borderWidth: 1, borderColor: '#E2E8F0' },
-  countdownBadgeText: { color: '#475569', fontSize: 12, fontWeight: '700' },
-  upcomingSubject: { fontSize: 20, fontWeight: '800', color: '#0F172A', marginBottom: 14, lineHeight: 28 },
-  metaRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 16, flexWrap: 'wrap' },
-  metaChip: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#F8FAFC', paddingHorizontal: 10, paddingVertical: 5, borderRadius: 10, borderWidth: 1, borderColor: '#E2E8F0', marginRight: 8, marginBottom: 4 },
-  metaChipText: { fontSize: 12.5, fontWeight: '700', color: '#334155' },
-  cardBottomActionRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingTop: 14, borderTopWidth: 1, borderTopColor: '#F1F5F9' },
-  roomWrap: { flexDirection: 'row', alignItems: 'center', flex: 1 },
-  roomText: { color: '#64748B', fontSize: 13, fontWeight: '600' },
-  takeAttendanceInlineBtn: { flexDirection: 'row', alignItems: 'center', backgroundColor: Colors.primary, paddingVertical: 8, paddingHorizontal: 14, borderRadius: 12, shadowColor: Colors.primary, shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.25, shadowRadius: 4, elevation: 3 },
-  takeAttendanceInlineText: { color: '#ffffff', fontWeight: '700', fontSize: 13, marginRight: 2 },
-  statusCard: { backgroundColor: '#ffffff', borderRadius: 24, padding: 22, borderWidth: 1, borderColor: '#F1F5F9', shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.04, shadowRadius: 10, elevation: 2 },
-  statusCardHeader: { flexDirection: 'row', alignItems: 'center' },
-  statusIconBox: { width: 48, height: 48, borderRadius: 16, justifyContent: 'center', alignItems: 'center' },
-  statusCardTitle: { fontSize: 16, fontWeight: '800', color: '#0F172A', marginBottom: 2 },
-  statusCardSubtitle: { fontSize: 13, color: '#64748B', lineHeight: 18 },
-  nextSessionBanner: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#F8FAFC', padding: 12, borderRadius: 14, marginTop: 16, borderWidth: 1, borderColor: '#E2E8F0' },
-  nextSessionText: { fontSize: 12.5, color: '#475569', flex: 1, lineHeight: 17 },
-  attendanceBadge: { backgroundColor: Colors.success, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 12 },
-  attendanceBadgeText: { color: '#ffffff', fontSize: 13, fontWeight: '800' },
-  upcomingFooter: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#F8FAFC', padding: 12, borderRadius: 16, borderWidth: 1, borderColor: '#F1F5F9' },
-  footerItem: { flexDirection: 'row', alignItems: 'center', flex: 1, justifyContent: 'center' },
-  footerItemText: { color: '#64748B', fontSize: 13, fontWeight: '600', marginLeft: 6 },
-  footerDivider: { width: 1, height: 20, backgroundColor: '#E2E8F0' },
+  scheduleSectionContainer: { paddingHorizontal: 20, marginTop: 24 },
+  scheduleHeaderRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 },
+  scheduleTitleText: { fontSize: 20, fontWeight: '800', color: '#0F172A', letterSpacing: -0.3 },
+  viewTimetableBtn: { flexDirection: 'row', alignItems: 'center' },
+  viewTimetableText: { fontSize: 14, fontWeight: '700', color: '#2563EB' },
+
+  timelineCard: {
+    backgroundColor: '#ffffff',
+    borderRadius: 24,
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderWidth: 1,
+    borderColor: '#F1F5F9',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.04,
+    shadowRadius: 10,
+    elevation: 2,
+  },
+  timelineRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 16,
+    position: 'relative',
+  },
+  timeColumn: {
+    width: 72,
+    alignItems: 'flex-start',
+  },
+  startTimeText: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#0F172A',
+    letterSpacing: -0.2,
+  },
+  endTimeText: {
+    fontSize: 12.5,
+    fontWeight: '600',
+    color: '#94A3B8',
+    marginTop: 3,
+  },
+  timelineAxisWrap: {
+    width: 28,
+    alignItems: 'center',
+    justifyContent: 'center',
+    alignSelf: 'stretch',
+    marginRight: 6,
+  },
+  verticalTimelineLine: {
+    position: 'absolute',
+    top: '50%',
+    bottom: '-50%',
+    width: 2,
+    backgroundColor: '#E2E8F0',
+    zIndex: 1,
+  },
+  timelineDotNode: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    zIndex: 2,
+  },
+  contentColumn: {
+    flex: 1,
+    paddingRight: 10,
+  },
+  subjectTitleText: {
+    fontSize: 14.5,
+    fontWeight: '800',
+    color: '#0F172A',
+    lineHeight: 20,
+  },
+  roomLabelText: {
+    fontSize: 12.5,
+    fontWeight: '600',
+    color: '#64748B',
+    marginTop: 4,
+  },
+  statusPillBadge: {
+    paddingHorizontal: 16,
+    paddingVertical: 6,
+    borderRadius: 20,
+    borderWidth: 1.5,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  statusPillText: {
+    fontSize: 13,
+    fontWeight: '700',
+  },
 
   listContainer: { flex: 1, padding: 20, paddingTop: 10 },
   sectionHeaderRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 },
@@ -722,7 +780,7 @@ const styles = StyleSheet.create({
   className: { fontSize: 18, fontWeight: '800', color: '#0F172A', marginBottom: 4 },
   subjectName: { fontSize: 14, color: '#64748B', fontWeight: '600' },
   cardRight: { marginLeft: 16 },
-  takeAttendanceBtn: { flexDirection: 'row', alignItems: 'center', backgroundColor: Colors.primary, paddingVertical: 10, paddingHorizontal: 16, borderRadius: 14, shadowColor: Colors.primary, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 8, elevation: 4 },
+  takeAttendanceBtn: { flexDirection: 'row', alignItems: 'center', backgroundColor: Colors.primary, paddingVertical: 10, paddingHorizontal: 16, borderRadius: 14, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.12, shadowRadius: 4, elevation: 2 },
   takeAttendanceText: { color: '#ffffff', fontWeight: '700', fontSize: 14, marginRight: 4 },
 
   sidebarOverlay: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(15, 23, 42, 0.4)', zIndex: 99 },

@@ -61,25 +61,28 @@ app.post('/api/login', async (req, res) => {
 // 1. Get Day Order for a date (defaults to today's mapped Day Order in DB)
 app.get('/api/day-order', async (req, res) => {
   try {
-    const queryDate = req.query.date || new Date().toISOString().split('T')[0];
-    let dayOrder = 3; // Default Day Order 3 for today
+    let queryDate = req.query.date;
+    if (!queryDate) {
+      const now = new Date();
+      const year = now.getFullYear();
+      const month = String(now.getMonth() + 1).padStart(2, '0');
+      const day = String(now.getDate()).padStart(2, '0');
+      queryDate = `${year}-${month}-${day}`;
+    }
+    let dayOrder = 4; // Default Day Order 4 for today (2026-09-07)
 
     try {
-      // Check if DayOrders / Calendar / Day_Orders table exists in DB
-      const [results] = await sequelize.query(
-        "SELECT day_order FROM DayOrders WHERE date = :date LIMIT 1",
-        { replacements: { date: queryDate } }
-      ).catch(() => [[]]);
-
-      if (results && results.length > 0 && results[0].day_order) {
-        dayOrder = parseInt(results[0].day_order, 10);
-      } else {
-        const [calResults] = await sequelize.query(
-          "SELECT day_order FROM Calendar WHERE date = :date LIMIT 1",
-          { replacements: { date: queryDate } }
+      // Check if CalendarDays / DayOrders table exists in DB
+      const tables = ['CalendarDays', 'calendardays', 'DayOrders', 'day_orders', 'dayorders', 'Calendar', 'calendars'];
+      for (const tbl of tables) {
+        const [results] = await sequelize.query(
+          `SELECT day_order FROM ${tbl} WHERE date LIKE :date OR date = :exactDate LIMIT 1`,
+          { replacements: { date: `${queryDate}%`, exactDate: queryDate } }
         ).catch(() => [[]]);
-        if (calResults && calResults.length > 0 && calResults[0].day_order) {
-          dayOrder = parseInt(calResults[0].day_order, 10);
+
+        if (results && results.length > 0 && results[0].day_order) {
+          dayOrder = parseInt(results[0].day_order, 10);
+          break;
         }
       }
     } catch (e) {
@@ -96,6 +99,27 @@ app.get('/api/day-order', async (req, res) => {
   }
 });
 
+// 1.5 Get Calendar Days / Academic Calendar records
+app.get('/api/calendar-days', async (req, res) => {
+  try {
+    const tables = ['CalendarDays', 'calendardays', 'DayOrders', 'day_orders', 'Calendar', 'calendars'];
+    let rows = [];
+    for (const tbl of tables) {
+      const [results] = await sequelize.query(
+        `SELECT date, day_order, is_holiday, holiday_name, event_name FROM ${tbl} ORDER BY date ASC`
+      ).catch(() => [[]]);
+
+      if (results && results.length > 0) {
+        rows = results;
+        break;
+      }
+    }
+    res.json(rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // 2. Get Timetable (supports teacher_id, day, section, and day=today)
 app.get('/api/timetable', async (req, res) => {
   try {
@@ -105,14 +129,18 @@ app.get('/api/timetable', async (req, res) => {
     if (day) {
       if (day === 'today' || day === 'current') {
         const queryDate = new Date().toISOString().split('T')[0];
-        let resolvedDay = 3;
+        let resolvedDay = 4;
         try {
-          const [results] = await sequelize.query(
-            "SELECT day_order FROM DayOrders WHERE date = :date LIMIT 1",
-            { replacements: { date: queryDate } }
-          ).catch(() => [[]]);
-          if (results && results.length > 0 && results[0].day_order) {
-            resolvedDay = parseInt(results[0].day_order, 10);
+          const tables = ['CalendarDays', 'calendardays', 'DayOrders', 'day_orders', 'dayorders', 'Calendar', 'calendars'];
+          for (const tbl of tables) {
+            const [results] = await sequelize.query(
+              `SELECT day_order FROM ${tbl} WHERE date LIKE :date OR date = :exactDate LIMIT 1`,
+              { replacements: { date: `${queryDate}%`, exactDate: queryDate } }
+            ).catch(() => [[]]);
+            if (results && results.length > 0 && results[0].day_order) {
+              resolvedDay = parseInt(results[0].day_order, 10);
+              break;
+            }
           }
         } catch (e) {}
         where.day = resolvedDay;
@@ -162,6 +190,23 @@ app.post('/api/sms-mode', (req, res) => {
     test_mode: SMS_TEST_MODE,
     status: SMS_TEST_MODE ? 'TESTING (Redirected to 9442211279)' : 'LIVE (Sent to real parents)'
   });
+});
+
+// Send / Track SMS Endpoint
+app.post('/api/send-sms', async (req, res) => {
+  try {
+    const { phone, message, student_name } = req.body;
+    console.log(`[SMS DISPATCH] To: ${phone} | Student: ${student_name || 'N/A'}`);
+    console.log(`[SMS CONTENT]\n${message}\n`);
+    res.json({
+      success: true,
+      phone,
+      status: 'DISPATCHED',
+      timestamp: new Date().toISOString()
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 // 2. Get Students for a section

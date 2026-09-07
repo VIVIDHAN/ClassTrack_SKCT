@@ -238,7 +238,7 @@ export default function History() {
       return;
     }
     const cleanPhone = phone.replace(/[^0-9+]/g, '');
-    const msg = `Dear Parent, your ward ${student.name} (${student.id}) was marked absent for ${session.period || 'class'} on ${session.date}.`;
+    const msg = `Dear Parent, your ward ${student.name} (${student.id}) was marked absent for ${session.period || 'class'} on ${session.date}.\nஅன்பான பெற்றோரே, உங்கள் குழந்தை ${student.name} (${student.id}) ${session.date} அன்று வகுப்பிற்கு வரவில்லை.\nSKCT - Contact Class Teacher.`;
     const url = `sms:${cleanPhone}?body=${encodeURIComponent(msg)}`;
     Linking.openURL(url).catch(() => {
       Alert.alert('Error', 'Unable to open SMS composer.');

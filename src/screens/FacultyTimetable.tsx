@@ -8,12 +8,18 @@ import {
   ActivityIndicator,
   RefreshControl,
 } from 'react-native';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useRoute } from '@react-navigation/native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Icon from 'react-native-vector-icons/MaterialIcons';
 import Animated, { FadeInUp, FadeInRight } from 'react-native-reanimated';
 import { Colors } from '../constants/Colors';
 import { API_BASE_URL } from '../constants/Config';
+import {
+  getWorkingCycleTabs,
+  getTodayDayOrder,
+  getLocalDateStr,
+  TabDayInfo,
+} from '../constants/AcademicCalendar';
 
 interface TimetableItem {
   id: number;
@@ -45,6 +51,17 @@ const PERIOD_TIMINGS: { [key: number]: string } = {
   8: '04:45 PM - 05:30 PM',
 };
 
+const PERIOD_TIMING_MAP: { [key: number]: { startTimeStr: string; endTimeStr: string; startMinutes: number; endMinutes: number } } = {
+  1: { startTimeStr: '08:15 AM', endTimeStr: '09:15 AM', startMinutes: 8 * 60 + 15, endMinutes: 9 * 60 + 15 },
+  2: { startTimeStr: '09:15 AM', endTimeStr: '10:15 AM', startMinutes: 9 * 60 + 15, endMinutes: 10 * 60 + 15 },
+  3: { startTimeStr: '10:45 AM', endTimeStr: '11:45 AM', startMinutes: 10 * 60 + 45, endMinutes: 11 * 60 + 45 },
+  4: { startTimeStr: '11:45 AM', endTimeStr: '12:45 PM', startMinutes: 11 * 60 + 45, endMinutes: 12 * 60 + 45 },
+  5: { startTimeStr: '01:45 PM', endTimeStr: '02:45 PM', startMinutes: 13 * 60 + 45, endMinutes: 14 * 60 + 45 },
+  6: { startTimeStr: '02:45 PM', endTimeStr: '03:45 PM', startMinutes: 14 * 60 + 45, endMinutes: 15 * 60 + 45 },
+  7: { startTimeStr: '03:45 PM', endTimeStr: '04:45 PM', startMinutes: 15 * 60 + 45, endMinutes: 16 * 60 + 45 },
+  8: { startTimeStr: '04:45 PM', endTimeStr: '05:30 PM', startMinutes: 16 * 60 + 45, endMinutes: 17 * 60 + 30 },
+};
+
 const DAYS = [
   { day: 1, label: 'Day 1', full: 'Day Order 1' },
   { day: 2, label: 'Day 2', full: 'Day Order 2' },
@@ -53,37 +70,18 @@ const DAYS = [
   { day: 5, label: 'Day 5', full: 'Day Order 5' },
 ];
 
-const getAcademicCalendarDays = (todayDayOrder: number = 3) => {
-  const now = new Date(); // e.g. Thursday, 3 Sep 2026
-
-  return [1, 2, 3, 4, 5].map(d => {
-    // Offset relative to today's active Day Order (Day 3 -> today 3 Sep)
-    const offset = d - todayDayOrder;
-    const targetDate = new Date(now);
-    targetDate.setDate(now.getDate() + offset);
-
-    const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-    const shortDay = targetDate.getDay() === 4 ? 'Thu' : dayNames[targetDate.getDay()];
-    const dateNum = targetDate.getDate();
-    const monthStr = targetDate.toLocaleDateString('en-GB', { month: 'short' });
-    const isToday = d === todayDayOrder;
-
-    return {
-      day: d,
-      orderLabel: `Day Order ${d}`,
-      shortDay: isToday ? 'Thu' : shortDay,
-      dateStr: isToday ? '3 Sep' : `${dateNum} ${monthStr}`,
-      fullDateStr: `${shortDay}, ${dateNum} ${monthStr}`,
-      isToday,
-    };
-  });
-};
-
 export default function FacultyTimetable() {
   const navigation = useNavigation<any>();
-  const [selectedDay, setSelectedDay] = useState(3);
-  const [todayDayOrder, setTodayDayOrder] = useState(3);
-  const weekDays = React.useMemo(() => getAcademicCalendarDays(todayDayOrder), [todayDayOrder]);
+  const route = useRoute<any>();
+  const initialSelectedDay = route.params?.selectedDay;
+
+  // Derive weekly tabs synchronized with current date from academic calendar
+  const weekDays: TabDayInfo[] = React.useMemo(() => getWorkingCycleTabs(new Date()), []);
+  const todayTab = weekDays.find(w => w.isToday) || weekDays[0];
+
+  // Default to route.params.selectedDay if provided, else ALWAYS today's active day order (e.g. Day 4 for 7 Sep)
+  const [selectedDay, setSelectedDay] = useState<number>(initialSelectedDay || todayTab.day);
+  const [todayDayOrder, setTodayDayOrder] = useState<number>(todayTab.day);
   const [teacher, setTeacher] = useState<any>(null);
   const [timetableByDay, setTimetableByDay] = useState<{ [day: number]: TimetableItem[] }>({
     1: [],
@@ -95,7 +93,16 @@ export default function FacultyTimetable() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
-  // Load teacher from storage and active day order
+  // Synchronize route.params.selectedDay or ensure today's tab is selected on initial entry
+  useEffect(() => {
+    if (route.params?.selectedDay) {
+      setSelectedDay(route.params.selectedDay);
+    } else {
+      setSelectedDay(todayTab.day);
+    }
+  }, [route.params?.selectedDay, todayTab.day]);
+
+  // Load teacher from storage
   useEffect(() => {
     const init = async () => {
       try {
@@ -109,18 +116,18 @@ export default function FacultyTimetable() {
         setTeacher({ id: 3, name: 'Ms. B Narmatha', department: 'Information Technology' });
       }
 
-      // Sync active Day Order from backend
+      // Check backend for day-order (only adopt if matching today's academic date and day order)
       try {
         const dayRes = await fetch(`${API_BASE_URL}/day-order`);
         const dayData = await dayRes.json();
-        if (dayData && dayData.day_order) {
-          setSelectedDay(dayData.day_order);
+        const todayStr = getLocalDateStr(new Date());
+        if (dayData && dayData.day_order && dayData.date === todayStr && dayData.day_order === todayTab.day) {
           setTodayDayOrder(dayData.day_order);
         }
       } catch (e) {}
     };
     init();
-  }, []);
+  }, [todayTab]);
 
   // Fetch timetable for all 5 days for this teacher
   const fetchTimetable = useCallback(async (teacherId: number) => {
@@ -179,21 +186,114 @@ export default function FacultyTimetable() {
     }
   }, [teacher, fetchTimetable]);
 
-  const onRefresh = () => {
+  const onRefresh = async () => {
     setRefreshing(true);
+    // Refresh & sync selected tab to current date/day order
+    const freshTabs = getWorkingCycleTabs(new Date());
+    const currentToday = freshTabs.find(w => w.isToday) || freshTabs[0];
+    setTodayDayOrder(currentToday.day);
+    if (!route.params?.selectedDay) {
+      setSelectedDay(currentToday.day);
+    }
+
     if (teacher?.id) {
       fetchTimetable(teacher.id);
+    } else {
+      setRefreshing(false);
     }
   };
 
   const currentDayClasses = timetableByDay[selectedDay] || [];
-  const totalWeeklyPeriods = Object.values(timetableByDay).reduce((sum, arr) => sum + arr.length, 0);
-  const formattedDateAndDay = new Date().toLocaleDateString('en-GB', {
-    weekday: 'long',
-    day: 'numeric',
-    month: 'short',
-    year: 'numeric',
+  const sortedClasses = (currentDayClasses || []).slice().sort((a, b) => a.period - b.period);
+  const now = new Date();
+  const currentMinutes = now.getHours() * 60 + now.getMinutes();
+
+  let upcomingCount = 0;
+
+  const timelineItems = sortedClasses.map((item) => {
+    const timing = PERIOD_TIMING_MAP[item.period] || {
+      startTimeStr: '10:30 AM',
+      endTimeStr: '11:30 AM',
+      startMinutes: 10 * 60 + 30,
+      endMinutes: 11 * 60 + 30
+    };
+
+    const todayStr = getLocalDateStr(new Date());
+    const selectedTab = weekDays.find(w => w.day === selectedDay);
+    const selectedDateStr = selectedTab?.isoDate || '2026-09-07';
+
+    let status: 'Ongoing' | 'Upcoming' | 'Completed' = 'Upcoming';
+    if (selectedDateStr < todayStr) {
+      status = 'Completed';
+    } else if (selectedDateStr > todayStr) {
+      status = 'Upcoming';
+    } else {
+      if (currentMinutes >= timing.startMinutes && currentMinutes < timing.endMinutes) {
+        status = 'Ongoing';
+      } else if (currentMinutes >= timing.endMinutes) {
+        status = 'Completed';
+      } else {
+        status = 'Upcoming';
+      }
+    }
+
+    let dotColor = '#2563EB';
+    let badgeBorder = '#2563EB';
+    let badgeBg = '#EFF6FF';
+    let badgeTextColor = '#2563EB';
+
+    if (status === 'Ongoing') {
+      dotColor = '#2563EB';
+      badgeBorder = '#2563EB';
+      badgeBg = '#EFF6FF';
+      badgeTextColor = '#2563EB';
+    } else if (status === 'Upcoming') {
+      if (upcomingCount === 0) {
+        dotColor = '#9333EA';
+        badgeBorder = '#A855F7';
+        badgeBg = '#FAF5FF';
+        badgeTextColor = '#9333EA';
+      } else {
+        dotColor = '#EA580C';
+        badgeBorder = '#F97316';
+        badgeBg = '#FFF7ED';
+        badgeTextColor = '#EA580C';
+      }
+      upcomingCount++;
+    } else {
+      dotColor = '#94A3B8';
+      badgeBorder = '#CBD5E1';
+      badgeBg = '#F8FAFC';
+      badgeTextColor = '#64748B';
+    }
+
+    const subjectTitle = item.Subject?.title || 'Applied Cryptography';
+    const roomLabel = `Room 30${item.period || 1}, Block A`;
+
+    return {
+      ...item,
+      startTimeStr: timing.startTimeStr,
+      endTimeStr: timing.endTimeStr,
+      subjectTitle,
+      roomLabel,
+      status,
+      dotColor,
+      badgeBorder,
+      badgeBg,
+      badgeTextColor
+    };
   });
+
+  const totalWeeklyPeriods = Object.values(timetableByDay).reduce((sum, arr) => sum + arr.length, 0);
+  const selectedTabInfo = weekDays.find(w => w.day === selectedDay);
+  const formattedDateAndDay = selectedTabInfo 
+    ? `${selectedTabInfo.fullDateStr}, 2026`
+    : new Date().toLocaleDateString('en-GB', {
+        weekday: 'long',
+        day: 'numeric',
+        month: 'short',
+        year: 'numeric',
+      });
 
   return (
     <View style={styles.container}>
@@ -272,9 +372,9 @@ export default function FacultyTimetable() {
                 {d.shortDay}, {d.dateStr}
               </Text>
 
-              {/* Line 2: Day Order e.g. "Day 3" */}
+              {/* Line 2: Day Order e.g. "Day 4 • Today" */}
               <Text style={[styles.dayTabSub, isSelected && styles.dayTabSubActive]}>
-                Day {d.day}
+                Day {d.day}{d.isToday ? ' • Today' : ''}
               </Text>
 
               {/* Line 3: Period count circle */}
@@ -314,7 +414,7 @@ export default function FacultyTimetable() {
             </Text>
           </View>
 
-          {currentDayClasses.length === 0 ? (
+          {timelineItems.length === 0 ? (
             <Animated.View entering={FadeInUp.duration(400)} style={styles.emptyCard}>
               <View style={styles.emptyIconCircle}>
                 <Icon name="event-busy" size={38} color="#94A3B8" />
@@ -325,76 +425,64 @@ export default function FacultyTimetable() {
               </Text>
             </Animated.View>
           ) : (
-            currentDayClasses
-              .sort((a, b) => a.period - b.period)
-              .map((item, index) => {
-                const timeSlot = PERIOD_TIMINGS[item.period] || 'Time Slot TBD';
-                const subjectTitle = item.Subject?.title || 'Applied Cryptography';
-                const subjectCode = item.Subject?.code || '23IT502';
-                const subjectAcronym = item.Subject?.acronym || 'AC';
-
+            <Animated.View entering={FadeInUp.duration(400)} style={styles.timelineCard}>
+              {timelineItems.map((item, index) => {
+                const isLast = index === timelineItems.length - 1;
                 return (
-                  <Animated.View
-                    key={item.id}
-                    entering={FadeInRight.delay(index * 100).duration(400)}
-                    style={styles.periodCard}
+                  <TouchableOpacity
+                    key={item.id || index}
+                    style={[styles.timelineRow, isLast && { paddingBottom: 4 }]}
+                    activeOpacity={0.85}
+                    onPress={() => {
+                      navigation.navigate('Attendance', {
+                        classDetails: {
+                          subject: item.subjectTitle,
+                          className: item.section,
+                          time: `${item.startTimeStr} - ${item.endTimeStr}`,
+                          period: item.period,
+                          timetableId: item.id,
+                        },
+                      });
+                    }}
                   >
-                    {/* PERIOD NUMBER BADGE */}
-                    <View style={styles.periodBadgeColumn}>
-                      <View style={styles.periodPill}>
-                        <Text style={styles.periodPillNum}>P{item.period}</Text>
-                      </View>
-                      <View style={styles.periodLine} />
+                    {/* Left Column: Time */}
+                    <View style={styles.timeColumn}>
+                      <Text style={styles.startTimeText}>{item.startTimeStr}</Text>
+                      <Text style={styles.endTimeText}>{item.endTimeStr}</Text>
                     </View>
 
-                    {/* DETAILS */}
-                    <View style={styles.periodContent}>
-                      <View style={styles.periodTopRow}>
-                        <View style={styles.timeTag}>
-                          <Icon name="schedule" size={13} color="#6366F1" style={{ marginRight: 4 }} />
-                          <Text style={styles.timeTagText}>{timeSlot}</Text>
-                        </View>
-                        <View style={styles.sectionBadge}>
-                          <Text style={styles.sectionBadgeText}>{item.section}</Text>
-                        </View>
-                      </View>
-
-                      <Text style={styles.subjectTitle}>{subjectTitle}</Text>
-
-                      <View style={styles.subjectMetaRow}>
-                        <View style={styles.metaBadge}>
-                          <Icon name="menu-book" size={12} color="#64748B" style={{ marginRight: 3 }} />
-                          <Text style={styles.metaBadgeText}>{subjectCode} ({subjectAcronym})</Text>
-                        </View>
-                        <View style={styles.metaBadge}>
-                          <Icon name="meeting-room" size={12} color="#64748B" style={{ marginRight: 3 }} />
-                          <Text style={styles.metaBadgeText}>Room 204 • IT Block</Text>
-                        </View>
-                      </View>
-
-                      {/* MARK ATTENDANCE ACTION BUTTON */}
-                      <TouchableOpacity
-                        style={styles.markAttendanceBtn}
-                        onPress={() => {
-                          navigation.navigate('Attendance', {
-                            classDetails: {
-                              subject: subjectTitle,
-                              className: item.section,
-                              time: timeSlot,
-                              period: item.period,
-                              timetableId: item.id,
-                            },
-                          });
-                        }}
-                      >
-                        <Icon name="check-circle" size={16} color="#FFF" style={{ marginRight: 6 }} />
-                        <Text style={styles.markAttendanceBtnText}>Mark Attendance</Text>
-                        <Icon name="chevron-right" size={18} color="#FFF" />
-                      </TouchableOpacity>
+                    {/* Middle: Vertical Timeline Axis & Colored Dot Node */}
+                    <View style={styles.timelineAxisWrap}>
+                      {!isLast && <View style={styles.verticalTimelineLine} />}
+                      <View style={[styles.timelineDotNode, { backgroundColor: item.dotColor }]} />
                     </View>
-                  </Animated.View>
+
+                    {/* Center Column: Subject & Room */}
+                    <View style={styles.contentColumn}>
+                      <Text style={styles.subjectTitleText} numberOfLines={2}>
+                        {item.subjectTitle}
+                      </Text>
+                      <Text style={styles.roomLabelText}>{item.roomLabel}</Text>
+                    </View>
+
+                    {/* Right Column: Status Pill */}
+                    <View
+                      style={[
+                        styles.statusPillBadge,
+                        {
+                          borderColor: item.badgeBorder,
+                          backgroundColor: item.badgeBg,
+                        },
+                      ]}
+                    >
+                      <Text style={[styles.statusPillText, { color: item.badgeTextColor }]}>
+                        {item.status}
+                      </Text>
+                    </View>
+                  </TouchableOpacity>
                 );
-              })
+              })}
+            </Animated.View>
           )}
         </ScrollView>
       )}
@@ -526,7 +614,7 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
   },
   dayOrderBadge: {
-    backgroundColor: 'rgba(255, 93, 56, 0.25)',
+    backgroundColor: 'rgba(255, 93, 56, 0.12)',
     paddingHorizontal: 8,
     paddingVertical: 3,
     borderRadius: 8,
@@ -581,11 +669,11 @@ const styles = StyleSheet.create({
   },
   dayTabActive: {
     backgroundColor: Colors.primary,
-    shadowColor: Colors.primary,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.35,
-    shadowRadius: 8,
-    elevation: 5,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.12,
+    shadowRadius: 4,
+    elevation: 2,
   },
   dayTabLabel: {
     fontSize: 11,
@@ -703,72 +791,90 @@ const styles = StyleSheet.create({
     lineHeight: 19,
     paddingHorizontal: 16,
   },
-  periodCard: {
-    flexDirection: 'row',
-    backgroundColor: '#FFF',
-    borderRadius: 18,
-    marginBottom: 14,
+  timelineCard: {
+    backgroundColor: '#ffffff',
+    borderRadius: 24,
+    paddingHorizontal: 20,
+    paddingVertical: 12,
     borderWidth: 1,
     borderColor: '#F1F5F9',
-    shadowColor: '#0F172A',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.04,
+    shadowRadius: 10,
     elevation: 2,
-    overflow: 'hidden',
+    marginTop: 4,
   },
-  periodBadgeColumn: {
-    width: 62,
-    backgroundColor: '#FAFAFA',
+  timelineRow: {
+    flexDirection: 'row',
     alignItems: 'center',
-    paddingTop: 16,
-    borderRightWidth: 1,
-    borderRightColor: '#F1F5F9',
+    paddingVertical: 16,
+    position: 'relative',
   },
-  periodPill: {
-    width: 42,
-    height: 42,
-    borderRadius: 21,
-    backgroundColor: '#EEF2FF',
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 1.5,
-    borderColor: '#C7D2FE',
+  timeColumn: {
+    width: 72,
+    alignItems: 'flex-start',
   },
-  periodPillNum: {
-    fontSize: 15,
+  startTimeText: {
+    fontSize: 14,
     fontWeight: '800',
-    color: '#4F46E5',
+    color: '#0F172A',
+    letterSpacing: -0.2,
   },
-  periodLine: {
-    flex: 1,
+  endTimeText: {
+    fontSize: 12.5,
+    fontWeight: '600',
+    color: '#94A3B8',
+    marginTop: 3,
+  },
+  timelineAxisWrap: {
+    width: 28,
+    alignItems: 'center',
+    justifyContent: 'center',
+    alignSelf: 'stretch',
+    marginRight: 6,
+  },
+  verticalTimelineLine: {
+    position: 'absolute',
+    top: '50%',
+    bottom: '-50%',
     width: 2,
     backgroundColor: '#E2E8F0',
-    marginTop: 8,
-    marginBottom: 16,
+    zIndex: 1,
   },
-  periodContent: {
+  timelineDotNode: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    zIndex: 2,
+  },
+  contentColumn: {
     flex: 1,
-    padding: 16,
+    paddingRight: 10,
   },
-  periodTopRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
+  subjectTitleText: {
+    fontSize: 14.5,
+    fontWeight: '800',
+    color: '#0F172A',
+    lineHeight: 20,
+  },
+  roomLabelText: {
+    fontSize: 12.5,
+    fontWeight: '600',
+    color: '#64748B',
+    marginTop: 4,
+  },
+  statusPillBadge: {
+    paddingHorizontal: 16,
+    paddingVertical: 6,
+    borderRadius: 20,
+    borderWidth: 1.5,
+    justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 8,
   },
-  timeTag: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#EEF2FF',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 8,
-  },
-  timeTagText: {
-    fontSize: 11,
+  statusPillText: {
+    fontSize: 13,
     fontWeight: '700',
-    color: '#4F46E5',
   },
   sectionBadge: {
     backgroundColor: '#F1F5F9',

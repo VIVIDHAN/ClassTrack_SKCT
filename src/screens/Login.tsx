@@ -177,7 +177,7 @@ export default function Login() {
   return (
     <View style={styles.container}>
       <BackgroundOrb
-        color="rgba(255, 93, 56, 0.12)"
+        color="rgba(255, 93, 56, 0.03)"
         size={width * 1.2}
         top={-height * 0.2}
         left={-width * 0.2}
@@ -371,11 +371,11 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     alignItems: 'center',
     marginTop: 4,
-    shadowColor: Colors.primary,
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.3,
-    shadowRadius: 12,
-    elevation: 6,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.12,
+    shadowRadius: 8,
+    elevation: 3,
   },
   loginButtonText: {
     color: '#ffffff',

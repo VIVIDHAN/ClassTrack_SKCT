@@ -61,6 +61,47 @@ export const getTeacherDirectoryFallback = (teacherId: number, teacherName: stri
   ];
 };
 
+export const getTeacherAttendanceFallback = (teacherId: number, teacherName: string = '', day: number = 4) => {
+  const name = teacherName ? teacherName.toLowerCase() : '';
+  if (teacherId === 4 || name.includes('saranya')) {
+    return [
+      { id: '17', time: 'Period 2 (09:15 - 10:15)', className: 'III IT G', subject: 'Distributed Computing', timetable_id: 17 },
+    ];
+  } else if (teacherId === 3 || name.includes('narmatha')) {
+    return [
+      { id: '16', time: 'Period 1 (08:15 - 09:15)', className: 'III IT G', subject: 'Applied Cryptography', timetable_id: 16 },
+    ];
+  } else if (teacherId === 2 || name.includes('guranna')) {
+    return [
+      { id: '18', time: 'Period 3 (10:45 - 11:45)', className: 'III IT G', subject: 'Cloud Infrastructure and Services Management', timetable_id: 18 },
+    ];
+  } else if (teacherId === 5 || name.includes('edwin')) {
+    return [
+      { id: '40', time: 'Period 2 (09:15 - 10:15)', className: 'III IT E', subject: 'Applied Cryptography', timetable_id: 40 },
+    ];
+  } else if (teacherId === 6 || name.includes('ratheesh')) {
+    return [
+      { id: '30', time: 'Period 1 (08:15 - 09:15)', className: 'III IT E', subject: 'Distributed Computing', timetable_id: 30 },
+    ];
+  } else if (teacherId === 7 || name.includes('mouneesh')) {
+    return [
+      { id: '31', time: 'Period 2 (09:15 - 10:15)', className: 'III IT E', subject: 'Software Testing', timetable_id: 31 },
+    ];
+  } else if (teacherId === 8 || name.includes('crown')) {
+    return [
+      { id: '33', time: 'Period 3 (10:45 - 11:45)', className: 'III IT E', subject: 'Cloud Infrastructure and Services Management', timetable_id: 33 },
+    ];
+  } else if (teacherId === 9 || name.includes('gayathri')) {
+    return [
+      { id: '27', time: 'Period 4 (11:45 - 12:45)', className: 'III IT E', subject: 'Application Development', timetable_id: 27 },
+    ];
+  }
+
+  return [
+    { id: '17', time: 'Period 2 (09:15 - 10:15)', className: 'III IT G', subject: 'Distributed Computing', timetable_id: 17 },
+  ];
+};
+
 export interface PeriodScheduleItem {
   period: number;
   label: string;

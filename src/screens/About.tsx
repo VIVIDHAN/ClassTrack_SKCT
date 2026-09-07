@@ -54,7 +54,7 @@ const styles = StyleSheet.create({
   headerTitle: { fontSize: 24, fontWeight: '800', color: Colors.text },
   content: { flex: 1, padding: 32, justifyContent: 'center' },
   centerBox: { alignItems: 'center' },
-  logoBox: { width: 120, height: 120, borderRadius: 32, backgroundColor: Colors.primary, justifyContent: 'center', alignItems: 'center', marginBottom: 24, shadowColor: Colors.primary, shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.3, shadowRadius: 16, elevation: 8 },
+  logoBox: { width: 120, height: 120, borderRadius: 32, backgroundColor: Colors.primary, justifyContent: 'center', alignItems: 'center', marginBottom: 24, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.12, shadowRadius: 8, elevation: 4 },
   appName: { fontSize: 32, fontWeight: '900', color: Colors.text, marginBottom: 8 },
   version: { fontSize: 16, fontWeight: '700', color: Colors.primary, marginBottom: 24 },
   desc: { fontSize: 16, color: Colors.textSecondary, textAlign: 'center', lineHeight: 26, marginBottom: 32 },

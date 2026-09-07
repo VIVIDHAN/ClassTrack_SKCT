@@ -21,7 +21,7 @@ export default function Success() {
       startWhatsAppAutomation(index + 1);
       return;
     }
-    const message = `Dear Parent, your ward ${student.name} is absent today for ${classDetails.subject || 'class'}. - ClassTrack`;
+    const message = `Dear Parent, your ward ${student.name} is absent today for ${classDetails.subject || 'class'}.\nஅன்பான பெற்றோரே, உங்கள் குழந்தை ${student.name} இன்று வகுப்பிற்கு வரவில்லை.\nSKCT - Contact Class Teacher.`;
     const url = `whatsapp://send?text=${encodeURIComponent(message)}&phone=91${student.phone}`;
     
     Linking.openURL(url).catch(() => {
@@ -127,11 +127,11 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     borderRadius: 14,
     alignItems: 'center',
-    shadowColor: Colors.primary,
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.3,
-    shadowRadius: 12,
-    elevation: 6,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.12,
+    shadowRadius: 4,
+    elevation: 2,
   },
   buttonText: {
     color: '#ffffff',

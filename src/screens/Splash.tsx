@@ -84,7 +84,7 @@ export default function Splash({ navigation }: any) {
           {
             top: -height * 0.1,
             left: -width * 0.2,
-            backgroundColor: 'rgba(255, 93, 56, 0.22)',
+            backgroundColor: 'rgba(255, 93, 56, 0.06)',
           },
         ]}
       />
@@ -172,7 +172,7 @@ const styles = StyleSheet.create({
     width: 290,
     height: 290,
     borderRadius: 145,
-    backgroundColor: 'rgba(255, 93, 56, 0.18)',
+    backgroundColor: 'rgba(255, 93, 56, 0.05)',
   },
   heroLogo: {
     width: width * 0.65,

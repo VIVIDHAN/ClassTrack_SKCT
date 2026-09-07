@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, NativeModules, PermissionsAndroid, Platform, Alert, TextInput, StatusBar, Modal } from 'react-native';
+import { View, Text, StyleSheet, FlatList, TouchableOpacity, NativeModules, PermissionsAndroid, Platform, Alert, TextInput, StatusBar, Modal, Linking } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import Animated, { FadeInRight, FadeInUp, FadeInDown, Layout } from 'react-native-reanimated';
@@ -105,17 +105,23 @@ export default function Attendance() {
     
     // Check SMS Mode (Testing Mode vs Live Mode)
     let isTestMode = true;
+    let testPhone = '9442211279';
     try {
       const storedMode = await AsyncStorage.getItem('smsTestMode');
       if (storedMode !== null) {
         isTestMode = JSON.parse(storedMode);
       }
+      const storedPhone = await AsyncStorage.getItem('smsTestPhone');
+      if (storedPhone) {
+        testPhone = storedPhone;
+      }
     } catch (e) {
       isTestMode = true;
     }
-    const TEST_PHONE = '9442211279';
 
     let smsWasSent = false;
+    const failedSmsList: { phone: string; message: string }[] = [];
+
     if (absentStudents.length > 0 && Platform.OS === 'android') {
       try {
         const granted = await PermissionsAndroid.request(
@@ -128,21 +134,41 @@ export default function Attendance() {
             buttonPositive: 'OK',
           },
         );
-        if (granted === PermissionsAndroid.RESULTS.GRANTED) {
-          const DirectSms = NativeModules.DirectSms;
-          absentStudents.forEach(student => {
-            const destPhone = isTestMode ? TEST_PHONE : (student.real_parent_phone || student.phone);
-            if (destPhone) {
-              const message = `Dear Parent, your ward ${student.name} (${student.id}) is marked ABSENT for ${classDetails.subject} today.`;
-              DirectSms.sendDirectSms(destPhone, message);
+
+        const DirectSms = NativeModules.DirectSms;
+
+        for (const student of absentStudents) {
+          const destPhone = isTestMode ? testPhone : (student.real_parent_phone || student.phone);
+          if (destPhone) {
+            const message = `Dear Parent, your ward ${student.name} (${student.id}) is marked ABSENT for ${classDetails.subject} today.\nஅன்பான பெற்றோரே, உங்கள் குழந்தை ${student.name} (${student.id}) இன்று ${classDetails.subject} வகுப்பிற்கு வரவில்லை.\nSKCT - Contact Class Teacher.`;
+            let sentDirectly = false;
+            if (granted === PermissionsAndroid.RESULTS.GRANTED && DirectSms && DirectSms.sendDirectSms) {
+              try {
+                await DirectSms.sendDirectSms(destPhone, message);
+                sentDirectly = true;
+                smsWasSent = true;
+              } catch (e) {
+                console.log('Direct background SMS failed for:', destPhone, e);
+              }
             }
-          });
-          smsWasSent = true;
-        } else {
-          Alert.alert('Permission Denied', 'SMS alerts were not sent.');
+            if (!sentDirectly) {
+              failedSmsList.push({ phone: destPhone, message });
+            }
+          }
+        }
+
+        // If direct SMS was blocked by Android/OEM restriction (e.g. Vivo background SMS), open native SMS app for the absentee
+        if (failedSmsList.length > 0) {
+          const target = failedSmsList[0];
+          const smsUrl = `sms:${target.phone}?body=${encodeURIComponent(target.message)}`;
+          Linking.canOpenURL(smsUrl).then(supported => {
+            if (supported) {
+              Linking.openURL(smsUrl).catch(() => {});
+            }
+          }).catch(() => {});
         }
       } catch (err) {
-        console.warn(err);
+        console.warn('SMS dispatch error:', err);
       }
     }
 
@@ -168,9 +194,11 @@ export default function Attendance() {
     try {
       const now = new Date();
       const dateStr = now.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+      const isoDate = now.toISOString().split('T')[0];
       const newSessionRecord = {
         sessionId: `session-${Date.now()}`,
         date: dateStr,
+        isoDate: isoDate,
         time: classDetails.time || 'Period Session',
         period: classDetails.time ? (classDetails.time.includes('(') ? classDetails.time.split('(')[0].trim() : classDetails.time) : 'Period',
         className: classDetails.className || 'III IT G',
@@ -179,8 +207,8 @@ export default function Attendance() {
         absentees: absentStudents.map(s => ({
           id: s.id,
           name: s.name,
-          phone: s.real_parent_phone || s.phone || TEST_PHONE,
-          real_parent_phone: s.real_parent_phone || s.phone || TEST_PHONE,
+          phone: s.real_parent_phone || s.phone || testPhone,
+          real_parent_phone: s.real_parent_phone || s.phone || testPhone,
           called: false,
           smsSent: smsWasSent
         }))
@@ -507,11 +535,11 @@ const styles = StyleSheet.create({
     paddingVertical: 16,
     borderRadius: 14,
     alignItems: 'center',
-    shadowColor: Colors.primary,
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.3,
-    shadowRadius: 12,
-    elevation: 6,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.12,
+    shadowRadius: 4,
+    elevation: 2,
   },
   submitText: {
     color: '#ffffff',

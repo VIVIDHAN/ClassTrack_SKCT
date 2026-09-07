@@ -8,7 +8,8 @@ import { Colors } from '../constants/Colors';
 import { API_BASE_URL } from '../constants/Config';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import BreatheLoader from '../components/BreatheLoader';
-import { TODAY_CLASSES, DIRECTORY_CLASSES, getTeacherDirectoryFallback } from '../constants/DummyData';
+import { TODAY_CLASSES, DIRECTORY_CLASSES, getTeacherDirectoryFallback, getTeacherAttendanceFallback, PERIOD_SCHEDULE } from '../constants/DummyData';
+import { getTodayDayOrder } from '../constants/AcademicCalendar';
 
 export default function ClassesList() {
   const navigation = useNavigation<any>();
@@ -65,12 +66,13 @@ export default function ClassesList() {
           }
           setLoading(false);
         } else {
-          // Attendance Mode: Fetch this teacher's classes for today's active Day Order
-          let currentDay = 3;
+          // Attendance Mode: Fetch this teacher's classes for today's active Day Order (defaults to current academic day order)
+          const expectedDayOrder = getTodayDayOrder();
+          let currentDay = expectedDayOrder;
           try {
             const dayRes = await fetch(`${API_BASE_URL}/day-order`, { signal: controller.signal });
             const dayData = await dayRes.json();
-            if (dayData && dayData.day_order) {
+            if (dayData && dayData.day_order && dayData.day_order === expectedDayOrder) {
               currentDay = dayData.day_order;
             }
           } catch (e) {}
@@ -84,38 +86,24 @@ export default function ClassesList() {
           if (Array.isArray(data) && data.length > 0) {
             const mapped = data.map((item: any) => ({
               id: String(item.id),
-              time: `Period ${item.period}`,
+              time: `Period ${item.period} (${PERIOD_SCHEDULE[item.period]?.timeRange || ''})`,
               className: item.section,
               subject: item.Subject ? item.Subject.title : 'Course',
               timetable_id: item.id
             }));
             setClasses(mapped);
           } else {
-            // Teacher specific fallback
-            if (teacherId === 3 || currentTeacher.name?.toLowerCase().includes('narmatha')) {
-              setClasses([
-                { id: '4', time: 'Period 4 (11:45 - 12:45)', className: 'III IT G', subject: 'Applied Cryptography', timetable_id: 4 },
-                { id: '5', time: 'Period 5 (01:45 - 02:45)', className: 'III IT G', subject: 'Applied Cryptography', timetable_id: 5 },
-              ]);
-            } else if (teacherId === 4 || currentTeacher.name?.toLowerCase().includes('saranya')) {
-              setClasses([
-                { id: '3', time: 'Period 3 (10:45 - 11:45)', className: 'III IT G', subject: 'Distributed Computing', timetable_id: 3 },
-              ]);
-            } else if (teacherId === 2 || currentTeacher.name?.toLowerCase().includes('guranna')) {
-              setClasses([
-                { id: '1', time: 'Period 1 (08:15 - 09:15)', className: 'III IT G', subject: 'Software Testing', timetable_id: 1 },
-                { id: '2', time: 'Period 2 (09:15 - 10:15)', className: 'III IT G', subject: 'Software Testing', timetable_id: 2 },
-              ]);
-            } else {
-              setClasses(TODAY_CLASSES);
-            }
+            // Teacher-specific mapped subject fallback
+            setClasses(getTeacherAttendanceFallback(teacherId, currentTeacher.name, currentDay));
           }
           setLoading(false);
         }
       } catch (e) {
         if (!isMounted) return;
         const teacherId = currentTeacher?.id || 3;
-        setClasses(mode === 'directory' ? getTeacherDirectoryFallback(teacherId, currentTeacher?.name) : TODAY_CLASSES);
+        setClasses(mode === 'directory' 
+          ? getTeacherDirectoryFallback(teacherId, currentTeacher?.name) 
+          : getTeacherAttendanceFallback(teacherId, currentTeacher?.name, 4));
         setLoading(false);
       }
     };
@@ -262,6 +250,6 @@ const styles = StyleSheet.create({
   className: { fontSize: 18, fontWeight: '800', color: '#0F172A', marginBottom: 4 },
   subjectName: { fontSize: 14, color: '#64748B', fontWeight: '600' },
   cardRight: { marginLeft: 16 },
-  takeAttendanceBtn: { flexDirection: 'row', alignItems: 'center', backgroundColor: Colors.primary, paddingVertical: 10, paddingHorizontal: 16, borderRadius: 14, shadowColor: Colors.primary, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 8, elevation: 4 },
+  takeAttendanceBtn: { flexDirection: 'row', alignItems: 'center', backgroundColor: Colors.primary, paddingVertical: 10, paddingHorizontal: 16, borderRadius: 14, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.12, shadowRadius: 4, elevation: 2 },
   takeAttendanceText: { color: '#ffffff', fontWeight: '700', fontSize: 14, marginRight: 4 },
 });
