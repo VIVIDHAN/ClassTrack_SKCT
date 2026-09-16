@@ -13,13 +13,14 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import Icon from 'react-native-vector-icons/MaterialIcons';
 import Animated, { FadeInUp, FadeInRight } from 'react-native-reanimated';
 import { Colors } from '../constants/Colors';
-import { API_BASE_URL } from '../constants/Config';
+import { API_BASE_URL, fetchWithTimeout } from '../constants/Config';
 import {
   getWorkingCycleTabs,
   getTodayDayOrder,
   getLocalDateStr,
   TabDayInfo,
 } from '../constants/AcademicCalendar';
+import { getTeacherFullTimetableFallback } from '../constants/DummyData';
 
 interface TimetableItem {
   id: number;
@@ -79,18 +80,36 @@ export default function FacultyTimetable() {
   const weekDays: TabDayInfo[] = React.useMemo(() => getWorkingCycleTabs(new Date()), []);
   const todayTab = weekDays.find(w => w.isToday) || weekDays[0];
 
+  const buildDayMapFromList = (list: any[]): { [day: number]: TimetableItem[] } => {
+    const map: { [day: number]: TimetableItem[] } = { 1: [], 2: [], 3: [], 4: [], 5: [] };
+    if (Array.isArray(list)) {
+      list.forEach((item: any) => {
+        const d = Number(item.day);
+        if (d >= 1 && d <= 5) {
+          map[d].push({
+            id: item.id,
+            day: d,
+            period: Number(item.period),
+            section: item.section || 'III IT G',
+            Subject: item.Subject || { id: 1, code: '23IT502', acronym: 'AC', title: item.subject || 'Applied Cryptography' },
+            Teacher: item.Teacher,
+          });
+        }
+      });
+    }
+    return map;
+  };
+
   // Default to route.params.selectedDay if provided, else ALWAYS today's active day order (e.g. Day 4 for 7 Sep)
   const [selectedDay, setSelectedDay] = useState<number>(initialSelectedDay || todayTab.day);
   const [todayDayOrder, setTodayDayOrder] = useState<number>(todayTab.day);
-  const [teacher, setTeacher] = useState<any>(null);
-  const [timetableByDay, setTimetableByDay] = useState<{ [day: number]: TimetableItem[] }>({
-    1: [],
-    2: [],
-    3: [],
-    4: [],
-    5: [],
+  const [teacher, setTeacher] = useState<any>({ id: 3, name: 'Ms. B Narmatha', department: 'Information Technology' });
+
+  // Pre-populate with full timetable immediately so the screen is NEVER blank
+  const [timetableByDay, setTimetableByDay] = useState<{ [day: number]: TimetableItem[] }>(() => {
+    return buildDayMapFromList(getTeacherFullTimetableFallback(3, 'Ms. B Narmatha'));
   });
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
 
   // Synchronize route.params.selectedDay or ensure today's tab is selected on initial entry
@@ -102,93 +121,70 @@ export default function FacultyTimetable() {
     }
   }, [route.params?.selectedDay, todayTab.day]);
 
-  // Load teacher from storage
-  useEffect(() => {
-    const init = async () => {
-      try {
-        const stored = await AsyncStorage.getItem('loggedInTeacher');
-        if (stored) {
-          setTeacher(JSON.parse(stored));
-        } else {
-          setTeacher({ id: 3, name: 'Ms. B Narmatha', department: 'Information Technology' });
-        }
-      } catch (e) {
-        setTeacher({ id: 3, name: 'Ms. B Narmatha', department: 'Information Technology' });
-      }
-
-      // Check backend for day-order (only adopt if matching today's academic date and day order)
-      try {
-        const dayRes = await fetch(`${API_BASE_URL}/day-order`);
-        const dayData = await dayRes.json();
-        const todayStr = getLocalDateStr(new Date());
-        if (dayData && dayData.day_order && dayData.date === todayStr && dayData.day_order === todayTab.day) {
-          setTodayDayOrder(dayData.day_order);
-        }
-      } catch (e) {}
-    };
-    init();
-  }, [todayTab]);
-
-  // Fetch timetable for all 5 days for this teacher
-  const fetchTimetable = useCallback(async (teacherId: number) => {
-    setLoading(true);
-    const dayResults: { [day: number]: TimetableItem[] } = { 1: [], 2: [], 3: [], 4: [], 5: [] };
+  // Fetch timetable for this teacher (Single resilient network call with timeout)
+  const fetchTimetable = useCallback(async (teacherId: number, teacherName: string = '') => {
+    const numId = Number(teacherId) || 3;
+    const fallbackData = getTeacherFullTimetableFallback(numId, teacherName);
+    const fallbackMap = buildDayMapFromList(fallbackData);
 
     try {
-      const promises = [1, 2, 3, 4, 5].map(async d => {
-        try {
-          const res = await fetch(`${API_BASE_URL}/timetable?teacher_id=${teacherId}&day=${d}`);
-          if (res.ok) {
-            const data = await res.json();
-            if (Array.isArray(data)) {
-              dayResults[d] = data;
+      const res = await fetchWithTimeout(`${API_BASE_URL}/timetable?teacher_id=${numId}`, {}, 3500);
+
+      if (res.ok) {
+        const data = await res.json();
+        if (Array.isArray(data) && data.length > 0) {
+          const liveMap = buildDayMapFromList(data);
+          // If live database has entries, use live map merged with fallback for any day without classes
+          [1, 2, 3, 4, 5].forEach(d => {
+            if (!liveMap[d] || liveMap[d].length === 0) {
+              liveMap[d] = fallbackMap[d] || [];
             }
-          }
-        } catch (e) {
-          console.log(`Failed to fetch day ${d}:`, e);
+          });
+          setTimetableByDay(liveMap);
+          return;
         }
-      });
-
-      await Promise.all(promises);
-
-      // Fallback if network failed and no results found
-      const totalCount = Object.values(dayResults).reduce((sum, arr) => sum + arr.length, 0);
-      if (totalCount === 0 && teacherId === 3) {
-        // Fallback for Narmatha
-        dayResults[1] = [
-          { id: 4, day: 1, period: 4, section: 'III IT G', Subject: { id: 3, code: '23IT502', acronym: 'AC', title: 'Applied Cryptography' } },
-          { id: 5, day: 1, period: 5, section: 'III IT G', Subject: { id: 3, code: '23IT502', acronym: 'AC', title: 'Applied Cryptography' } },
-        ];
-        dayResults[2] = [
-          { id: 8, day: 2, period: 3, section: 'III IT G', Subject: { id: 3, code: '23IT502', acronym: 'AC', title: 'Applied Cryptography' } },
-          { id: 9, day: 2, period: 4, section: 'III IT G', Subject: { id: 3, code: '23IT502', acronym: 'AC', title: 'Applied Cryptography' } },
-        ];
-        dayResults[4] = [
-          { id: 16, day: 4, period: 1, section: 'III IT G', Subject: { id: 3, code: '23IT502', acronym: 'AC', title: 'Applied Cryptography' } },
-        ];
-        dayResults[5] = [
-          { id: 21, day: 5, period: 1, section: 'III IT G', Subject: { id: 3, code: '23IT502', acronym: 'AC', title: 'Applied Cryptography' } },
-        ];
       }
-
-      setTimetableByDay(dayResults);
+      setTimetableByDay(fallbackMap);
     } catch (e) {
-      console.log('Error loading timetable:', e);
+      // Network failed / offline: keep guaranteed fallback schedule active
+      setTimetableByDay(fallbackMap);
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
   }, []);
 
+  // Load teacher from storage and fetch
   useEffect(() => {
-    if (teacher?.id) {
-      fetchTimetable(teacher.id);
-    }
-  }, [teacher, fetchTimetable]);
+    const init = async () => {
+      let currentTeacher = { id: 3, name: 'Ms. B Narmatha', department: 'Information Technology' };
+      try {
+        const stored = await AsyncStorage.getItem('loggedInTeacher');
+        if (stored) {
+          currentTeacher = JSON.parse(stored);
+        }
+      } catch (e) {}
+
+      setTeacher(currentTeacher);
+      fetchTimetable(currentTeacher.id, currentTeacher.name);
+
+      // Check backend for day-order
+      try {
+        const dayRes = await fetchWithTimeout(`${API_BASE_URL}/day-order`, {}, 2500);
+        if (dayRes.ok) {
+          const dayData = await dayRes.json();
+          const todayStr = getLocalDateStr(new Date());
+          if (dayData && dayData.day_order && dayData.date === todayStr && dayData.day_order === todayTab.day) {
+            setTodayDayOrder(dayData.day_order);
+          }
+        }
+      } catch (e) {}
+    };
+    init();
+  }, [todayTab, fetchTimetable]);
 
   const onRefresh = async () => {
     setRefreshing(true);
-    // Refresh & sync selected tab to current date/day order
     const freshTabs = getWorkingCycleTabs(new Date());
     const currentToday = freshTabs.find(w => w.isToday) || freshTabs[0];
     setTodayDayOrder(currentToday.day);
@@ -196,11 +192,9 @@ export default function FacultyTimetable() {
       setSelectedDay(currentToday.day);
     }
 
-    if (teacher?.id) {
-      fetchTimetable(teacher.id);
-    } else {
-      setRefreshing(false);
-    }
+    const tId = teacher?.id || 3;
+    const tName = teacher?.name || 'Ms. B Narmatha';
+    fetchTimetable(tId, tName);
   };
 
   const currentDayClasses = timetableByDay[selectedDay] || [];

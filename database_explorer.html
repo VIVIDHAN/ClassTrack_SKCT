@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ClassTrack Database Explorer</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --primary: #2563EB;
+      --primary-dark: #1D4ED8;
+      --bg: #F8FAFC;
+      --card-bg: #FFFFFF;
+      --text: #0F172A;
+      --text-muted: #64748B;
+      --border: #E2E8F0;
+      --accent: #EFF6FF;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Inter', sans-serif; }
+    body { background-color: var(--bg); color: var(--text); padding: 24px; }
+    .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; background: var(--card-bg); padding: 20px 24px; border-radius: 14px; border: 1px solid var(--border); box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
+    .header-title { font-size: 20px; font-weight: 700; color: var(--text); display: flex; align-items: center; gap: 10px; }
+    .header-badge { background: #DBEAFE; color: #1E40AF; padding: 4px 10px; border-radius: 20px; font-size: 12px; font-weight: 600; }
+    .db-info { font-size: 13px; color: var(--text-muted); font-family: monospace; background: #F1F5F9; padding: 6px 12px; border-radius: 6px; }
+    
+    .nav-tabs { display: flex; gap: 8px; margin-bottom: 20px; border-bottom: 2px solid var(--border); padding-bottom: 2px; overflow-x: auto; }
+    .tab-btn { padding: 10px 18px; border: none; background: transparent; font-size: 14px; font-weight: 600; color: var(--text-muted); cursor: pointer; border-radius: 8px 8px 0 0; transition: all 0.2s; display: flex; align-items: center; gap: 6px; }
+    .tab-btn:hover { color: var(--primary); background: rgba(37, 99, 235, 0.05); }
+    .tab-btn.active { color: var(--primary); border-bottom: 3px solid var(--primary); background: #FFFFFF; }
+    .tab-count { background: #E2E8F0; color: #475569; padding: 2px 8px; border-radius: 10px; font-size: 11px; }
+    .tab-btn.active .tab-count { background: #DBEAFE; color: #1E40AF; }
+
+    .controls { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; gap: 16px; flex-wrap: wrap; }
+    .search-box { flex: 1; min-width: 260px; position: relative; }
+    .search-input { width: 100%; padding: 10px 14px 10px 38px; border-radius: 8px; border: 1px solid var(--border); font-size: 14px; outline: none; transition: border-color 0.2s; }
+    .search-input:focus { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1); }
+    .search-icon { position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: var(--text-muted); }
+    
+    .table-container { background: var(--card-bg); border-radius: 12px; border: 1px solid var(--border); overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
+    table { width: 100%; border-collapse: collapse; text-align: left; font-size: 14px; }
+    th { background: #F8FAFC; padding: 12px 16px; font-weight: 600; color: #475569; border-bottom: 1px solid var(--border); font-size: 13px; text-transform: uppercase; letter-spacing: 0.5px; }
+    td { padding: 14px 16px; border-bottom: 1px solid var(--border); color: var(--text); }
+    tr:last-child td { border-bottom: none; }
+    tr:hover td { background: #F8FAFC; }
+
+    .badge { display: inline-flex; align-items: center; padding: 4px 8px; border-radius: 6px; font-size: 12px; font-weight: 600; }
+    .badge-primary { background: #EFF6FF; color: #2563EB; border: 1px solid #BFDBFE; }
+    .badge-success { background: #ECFDF5; color: #059669; border: 1px solid #A7F3D0; }
+    .badge-warning { background: #FFFBEB; color: #D97706; border: 1px solid #FDE68A; }
+    .badge-gray { background: #F1F5F9; color: #475569; border: 1px solid #E2E8F0; }
+
+    .empty-state { padding: 40px; text-align: center; color: var(--text-muted); font-size: 14px; }
+  </style>
+</head>
+<body>
+
+  <div class="header">
+    <div class="header-title">
+      🗄️ ClassTrack Database Explorer
+      <span class="header-badge">MySQL Live</span>
+    </div>
+    <div class="db-info">
+      Host: classtrack-db.czgqw0scaza4... | Database: classtrack
+    </div>
+  </div>
+
+  <div class="nav-tabs">
+    <button class="tab-btn active" onclick="switchTab('timetables')">
+      📅 Timetables <span class="tab-count">25</span>
+    </button>
+    <button class="tab-btn" onclick="switchTab('calendardays')">
+      📆 CalendarDays <span class="tab-count">12</span>
+    </button>
+    <button class="tab-btn" onclick="switchTab('teachers')">
+      👩‍🏫 Teachers <span class="tab-count">8</span>
+    </button>
+    <button class="tab-btn" onclick="switchTab('subjects')">
+      📚 Subjects <span class="tab-count">6</span>
+    </button>
+    <button class="tab-btn" onclick="switchTab('students')">
+      🎓 Students <span class="tab-count">13</span>
+    </button>
+  </div>
+
+  <div class="controls">
+    <div class="search-box">
+      <span class="search-icon">🔍</span>
+      <input type="text" id="searchInput" class="search-input" placeholder="Search table records..." onkeyup="filterTable()">
+    </div>
+  </div>
+
+  <div class="table-container">
+    <table id="dataTable">
+      <thead id="tableHead"></thead>
+      <tbody id="tableBody"></tbody>
+    </table>
+    <div id="emptyState" class="empty-state" style="display: none;">No matching records found.</div>
+  </div>
+
+  <script>
+    const dbData = {
+      timetables: [
+        { id: 1, day: 1, period: 1, section: "III IT G", subject: "Software Testing", teacher: "Dr. S Guranna" },
+        { id: 2, day: 1, period: 2, section: "III IT G", subject: "Software Testing", teacher: "Dr. S Guranna" },
+        { id: 3, day: 1, period: 3, section: "III IT G", subject: "Distributed Computing", teacher: "Ms. S Saranya" },
+        { id: 4, day: 1, period: 4, section: "III IT G", subject: "Applied Cryptography", teacher: "Ms. B Narmatha" },
+        { id: 5, day: 1, period: 5, section: "III IT G", subject: "Applied Cryptography", teacher: "Ms. B Narmatha" },
+        { id: 6, day: 2, period: 1, section: "III IT G", subject: "Cloud Infrastructure", teacher: "Dr. S Guranna" },
+        { id: 7, day: 2, period: 2, section: "III IT G", subject: "Cloud Infrastructure", teacher: "Dr. S Guranna" },
+        { id: 8, day: 2, period: 3, section: "III IT G", subject: "Applied Cryptography", teacher: "Ms. B Narmatha" },
+        { id: 9, day: 2, period: 4, section: "III IT G", subject: "Applied Cryptography", teacher: "Ms. B Narmatha" },
+        { id: 10, day: 2, period: 5, section: "III IT G", subject: "Software Testing", teacher: "Dr. S Guranna" },
+        { id: 11, day: 3, period: 1, section: "III IT G", subject: "Cloud Infrastructure", teacher: "Dr. S Guranna" },
+        { id: 12, day: 3, period: 2, section: "III IT G", subject: "Cloud Infrastructure", teacher: "Dr. S Guranna" },
+        { id: 13, day: 3, period: 3, section: "III IT G", subject: "Software Testing", teacher: "Dr. S Guranna" },
+        { id: 14, day: 3, period: 4, section: "III IT G", subject: "Software Testing", teacher: "Dr. S Guranna" },
+        { id: 15, day: 3, period: 5, section: "III IT G", subject: "Distributed Computing", teacher: "Ms. S Saranya" },
+        { id: 16, day: 4, period: 1, section: "III IT G", subject: "Applied Cryptography", teacher: "Ms. B Narmatha" },
+        { id: 17, day: 4, period: 2, section: "III IT G", subject: "Distributed Computing", teacher: "Ms. S Saranya" },
+        { id: 18, day: 4, period: 3, section: "III IT G", subject: "Cloud Infrastructure", teacher: "Dr. S Guranna" },
+        { id: 19, day: 4, period: 4, section: "III IT G", subject: "Cloud Infrastructure", teacher: "Dr. S Guranna" },
+        { id: 20, day: 4, period: 5, section: "III IT G", subject: "Software Testing", teacher: "Dr. S Guranna" },
+        { id: 21, day: 5, period: 1, section: "III IT G", subject: "Applied Cryptography", teacher: "Ms. B Narmatha" },
+        { id: 22, day: 5, period: 2, section: "III IT G", subject: "Distributed Computing", teacher: "Ms. S Saranya" },
+        { id: 23, day: 5, period: 3, section: "III IT G", subject: "Cloud Infrastructure", teacher: "Dr. S Guranna" },
+        { id: 24, day: 5, period: 4, section: "III IT G", subject: "Cloud Infrastructure", teacher: "Dr. S Guranna" },
+        { id: 25, day: 5, period: 5, section: "III IT G", subject: "Distributed Computing", teacher: "Ms. S Saranya" },
+      ],
+      calendardays: [
+        { date: "2026-09-01", day_order: "Day Order 1", is_holiday: "No", holiday: "-" },
+        { date: "2026-09-02", day_order: "Day Order 2", is_holiday: "No", holiday: "-" },
+        { date: "2026-09-03", day_order: "Day Order 3", is_holiday: "No", holiday: "-" },
+        { date: "2026-09-04", day_order: "-", is_holiday: "Yes", holiday: "Krishna Jayanthi" },
+        { date: "2026-09-05", day_order: "-", is_holiday: "Yes", holiday: "Saturday Holiday" },
+        { date: "2026-09-06", day_order: "-", is_holiday: "Yes", holiday: "Sunday Holiday" },
+        { date: "2026-09-07", day_order: "Day Order 4", is_holiday: "No", holiday: "-" },
+        { date: "2026-09-08", day_order: "Day Order 5", is_holiday: "No", holiday: "-" },
+        { date: "2026-09-09", day_order: "Day Order 1", is_holiday: "No", holiday: "-" },
+        { date: "2026-09-10", day_order: "Day Order 2", is_holiday: "No", holiday: "-" },
+        { date: "2026-09-11", day_order: "Day Order 3", is_holiday: "No", holiday: "-" },
+        { date: "2026-09-12", day_order: "Day Order 4", is_holiday: "No", holiday: "-" },
+      ],
+      teachers: [
+        { id: 3, name: "Ms. B Narmatha", department: "Information Technology", email: "narmatha@skct.edu.in", assigned_subject: "Applied Cryptography" },
+        { id: 4, name: "Ms. S Saranya", department: "Information Technology", email: "saranya@skct.edu.in", assigned_subject: "Distributed Computing" },
+        { id: 2, name: "Dr. S Guranna", department: "Information Technology", email: "guranna@skct.edu.in", assigned_subject: "Software Testing / Cloud" },
+        { id: 5, name: "Mr. K Edwin", department: "Information Technology", email: "edwin@skct.edu.in", assigned_subject: "Applied Cryptography (IT E)" },
+        { id: 6, name: "Mr. R Ratheesh", department: "Information Technology", email: "ratheesh@skct.edu.in", assigned_subject: "Distributed Computing (IT E)" },
+        { id: 7, name: "Mr. S Mouneesh", department: "Information Technology", email: "mouneesh@skct.edu.in", assigned_subject: "Software Testing (IT E)" },
+        { id: 8, name: "Crown", department: "Information Technology", email: "crown@skct.edu.in", assigned_subject: "Cloud Infrastructure (IT E)" },
+        { id: 9, name: "Ms. G Gayathri", department: "Information Technology", email: "gayathri@skct.edu.in", assigned_subject: "Application Development (IT E)" },
+      ],
+      subjects: [
+        { id: 1, code: "23IT501", title: "Software Testing", acronym: "ST" },
+        { id: 2, code: "23IT502", title: "Applied Cryptography", acronym: "AC" },
+        { id: 3, code: "23IT503", title: "Distributed Computing", acronym: "DC" },
+        { id: 4, code: "23IT504", title: "Cloud Infrastructure and Services Mgmt", acronym: "CISM" },
+        { id: 5, code: "23IT505", title: "Application Development", acronym: "AD" },
+        { id: 6, code: "23IT506", title: "Technical Writing", acronym: "TW" },
+      ],
+      students: [
+        { id: "727824TUIT201", roll_no: "201", name: "SAISATHYASHREE", section: "III IT G", parent_phone: "+91 9442211279" },
+        { id: "727824TUIT202", roll_no: "202", name: "SAKKTHI SRI S", section: "III IT G", parent_phone: "+91 9042059126" },
+        { id: "727824TUIT203", roll_no: "203", name: "SAKTHI SUNDARESAN S", section: "III IT G", parent_phone: "+91 9944153519" },
+        { id: "727824TUIT204", roll_no: "204", name: "SAKTHII SUNDHAR J", section: "III IT G", parent_phone: "+91 9786478493" },
+        { id: "727824TUIT205", roll_no: "205", name: "SAKTHIVEL B", section: "III IT G", parent_phone: "+91 9095056349" },
+        { id: "727824TUIT206", roll_no: "206", name: "SANJAY B", section: "III IT G", parent_phone: "+91 8903413308" },
+        { id: "727824TUIT207", roll_no: "207", name: "SANJEEVAN V G", section: "III IT G", parent_phone: "+91 9443745600" },
+        { id: "727824TUIT208", roll_no: "208", name: "SANJITH S", section: "III IT G", parent_phone: "+91 9382618660" },
+        { id: "727824TUIT209", roll_no: "209", name: "SATHYA E", section: "III IT G", parent_phone: "+91 9047889619" },
+        { id: "727824TUIT210", roll_no: "210", name: "SATHYAJIT R", section: "III IT G", parent_phone: "+91 8973820746" },
+      ]
+    };
+
+    let currentTab = 'timetables';
+
+    function switchTab(tabKey) {
+      currentTab = tabKey;
+      document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+      event.currentTarget.classList.add('active');
+      document.getElementById('searchInput').value = '';
+      renderTable();
+    }
+
+    function renderTable() {
+      const data = dbData[currentTab];
+      const thead = document.getElementById('tableHead');
+      const tbody = document.getElementById('tableBody');
+      const searchVal = document.getElementById('searchInput').value.toLowerCase();
+      
+      thead.innerHTML = '';
+      tbody.innerHTML = '';
+
+      if (!data || data.length === 0) return;
+
+      const keys = Object.keys(data[0]);
+      let headerRow = '<tr>';
+      keys.forEach(k => {
+        headerRow += `<th>${k.replace('_', ' ')}</th>`;
+      });
+      headerRow += '</tr>';
+      thead.innerHTML = headerRow;
+
+      const filtered = data.filter(row => {
+        return Object.values(row).some(val => String(val).toLowerCase().includes(searchVal));
+      });
+
+      if (filtered.length === 0) {
+        document.getElementById('emptyState').style.display = 'block';
+        document.getElementById('dataTable').style.display = 'none';
+        return;
+      }
+
+      document.getElementById('emptyState').style.display = 'none';
+      document.getElementById('dataTable').style.display = 'table';
+
+      filtered.forEach(row => {
+        let tr = '<tr>';
+        keys.forEach(k => {
+          let val = row[k];
+          if (k === 'day') val = `<span class="badge badge-primary">Day ${val}</span>`;
+          else if (k === 'period') val = `<span class="badge badge-gray">Period ${val}</span>`;
+          else if (k === 'section') val = `<span class="badge badge-success">${val}</span>`;
+          else if (k === 'is_holiday' && val === 'Yes') val = `<span class="badge badge-warning">Holiday</span>`;
+          tr += `<td>${val}</td>`;
+        });
+        tr += '</tr>';
+        tbody.innerHTML += tr;
+      });
+    }
+
+    function filterTable() {
+      renderTable();
+    }
+
+    // Initial Render
+    renderTable();
+  </script>
+</body>
+</html>

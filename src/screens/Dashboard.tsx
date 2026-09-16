@@ -6,7 +6,7 @@ import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import Animated, { FadeInUp, FadeInRight, SlideInLeft, SlideOutLeft, Easing } from 'react-native-reanimated';
 import Icon from 'react-native-vector-icons/MaterialIcons';
 import { Colors } from '../constants/Colors';
-import { API_BASE_URL } from '../constants/Config';
+import { API_BASE_URL, fetchWithTimeout } from '../constants/Config';
 import { PERIOD_SCHEDULE, getTeacherFullTimetableFallback } from '../constants/DummyData';
 import { getTodayDayOrder } from '../constants/AcademicCalendar';
 
@@ -66,32 +66,36 @@ export default function Dashboard() {
           }
           const teacherId = currentTeacher.id || 3;
 
-          const controller = new AbortController();
-          const timeoutId = setTimeout(() => controller.abort(), 3500);
-
           // Fetch Day Order from backend (safely validate against academic calendar)
           const expectedDayOrder = getTodayDayOrder();
           setTodayDayOrder(expectedDayOrder);
           try {
-            const dayRes = await fetch(`${API_BASE_URL}/day-order`, { signal: controller.signal });
-            const dayData = await dayRes.json();
-            if (dayData && dayData.day_order && dayData.day_order === expectedDayOrder) {
-              setTodayDayOrder(dayData.day_order);
+            const dayRes = await fetchWithTimeout(`${API_BASE_URL}/day-order`, {}, 2500);
+            if (dayRes.ok) {
+              const dayData = await dayRes.json();
+              if (dayData && dayData.day_order && dayData.day_order === expectedDayOrder) {
+                setTodayDayOrder(dayData.day_order);
+              }
             }
           } catch (e) {}
 
           // Fetch all timetable slots for this teacher across all days
-          const res = await fetch(`${API_BASE_URL}/timetable?teacher_id=${teacherId}`, { signal: controller.signal });
-          clearTimeout(timeoutId);
-          const data = await res.json();
-
-          if (Array.isArray(data) && data.length > 0) {
-            setAllClasses(data);
-          } else {
+          try {
+            const res = await fetchWithTimeout(`${API_BASE_URL}/timetable?teacher_id=${teacherId}`, {}, 3500);
+            if (res.ok) {
+              const data = await res.json();
+              if (Array.isArray(data) && data.length > 0) {
+                setAllClasses(data);
+                return;
+              }
+            }
+            setAllClasses(getTeacherFullTimetableFallback(teacherId, currentTeacher.name));
+          } catch (err) {
+            console.log('Failed to fetch faculty timetable:', err);
             setAllClasses(getTeacherFullTimetableFallback(teacherId, currentTeacher.name));
           }
         } catch (err) {
-          console.log('Failed to fetch faculty timetable:', err);
+          console.log('Failed to fetch faculty timetable outer:', err);
           setAllClasses(getTeacherFullTimetableFallback(currentTeacher?.id || 3, currentTeacher?.name));
         }
       };

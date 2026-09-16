@@ -125,24 +125,28 @@ export const PERIOD_SCHEDULE: Record<number, PeriodScheduleItem> = {
 
 export const getTeacherFullTimetableFallback = (teacherId: number, teacherName: string = '') => {
   const name = teacherName ? teacherName.toLowerCase() : '';
-  if (teacherId === 3 || name.includes('narmatha')) {
+  const numId = Number(teacherId) || 3;
+
+  if (numId === 3 || name.includes('narmatha') || name.includes('narmadha')) {
     return [
       { id: 4, day: 1, period: 4, section: 'III IT G', Subject: { title: 'Applied Cryptography' } },
       { id: 5, day: 1, period: 5, section: 'III IT G', Subject: { title: 'Applied Cryptography' } },
       { id: 8, day: 2, period: 3, section: 'III IT G', Subject: { title: 'Applied Cryptography' } },
       { id: 9, day: 2, period: 4, section: 'III IT G', Subject: { title: 'Applied Cryptography' } },
+      { id: 14, day: 3, period: 3, section: 'III IT G', Subject: { title: 'Applied Cryptography' } },
       { id: 16, day: 4, period: 1, section: 'III IT G', Subject: { title: 'Applied Cryptography' } },
       { id: 21, day: 5, period: 1, section: 'III IT G', Subject: { title: 'Applied Cryptography' } },
     ];
-  } else if (teacherId === 4 || name.includes('saranya')) {
+  } else if (numId === 4 || name.includes('saranya')) {
     return [
       { id: 3, day: 1, period: 3, section: 'III IT G', Subject: { title: 'Distributed Computing' } },
+      { id: 7, day: 2, period: 2, section: 'III IT G', Subject: { title: 'Distributed Computing' } },
       { id: 15, day: 3, period: 5, section: 'III IT G', Subject: { title: 'Distributed Computing' } },
       { id: 17, day: 4, period: 2, section: 'III IT G', Subject: { title: 'Distributed Computing' } },
       { id: 22, day: 5, period: 2, section: 'III IT G', Subject: { title: 'Distributed Computing' } },
       { id: 25, day: 5, period: 5, section: 'III IT G', Subject: { title: 'Distributed Computing' } },
     ];
-  } else if (teacherId === 2 || name.includes('guranna')) {
+  } else if (numId === 2 || name.includes('guranna')) {
     return [
       { id: 1, day: 1, period: 1, section: 'III IT G', Subject: { title: 'Software Testing' } },
       { id: 2, day: 1, period: 2, section: 'III IT G', Subject: { title: 'Software Testing' } },
@@ -154,11 +158,12 @@ export const getTeacherFullTimetableFallback = (teacherId: number, teacherName: 
       { id: 18, day: 4, period: 3, section: 'III IT G', Subject: { title: 'Cloud Infrastructure and Services Management' } },
       { id: 19, day: 4, period: 4, section: 'III IT G', Subject: { title: 'Cloud Infrastructure and Services Management' } },
     ];
-  } else if (teacherId === 5 || name.includes('edwin')) {
+  } else if (numId === 5 || name.includes('edwin')) {
     return [
       { id: 26, day: 1, period: 1, section: 'III IT E', Subject: { title: 'Applied Cryptography' } },
       { id: 29, day: 1, period: 4, section: 'III IT E', Subject: { title: 'Applied Cryptography' } },
       { id: 35, day: 2, period: 5, section: 'III IT E', Subject: { title: 'Applied Cryptography' } },
+      { id: 38, day: 3, period: 3, section: 'III IT E', Subject: { title: 'Applied Cryptography' } },
       { id: 40, day: 4, period: 2, section: 'III IT E', Subject: { title: 'Applied Cryptography' } },
       { id: 41, day: 4, period: 4, section: 'III IT E', Subject: { title: 'Applied Cryptography' } },
       { id: 45, day: 5, period: 3, section: 'III IT E', Subject: { title: 'Applied Cryptography' } },
@@ -170,6 +175,7 @@ export const getTeacherFullTimetableFallback = (teacherId: number, teacherName: 
     { id: 5, day: 1, period: 5, section: 'III IT G', Subject: { title: 'Applied Cryptography' } },
     { id: 8, day: 2, period: 3, section: 'III IT G', Subject: { title: 'Applied Cryptography' } },
     { id: 9, day: 2, period: 4, section: 'III IT G', Subject: { title: 'Applied Cryptography' } },
+    { id: 14, day: 3, period: 3, section: 'III IT G', Subject: { title: 'Applied Cryptography' } },
     { id: 16, day: 4, period: 1, section: 'III IT G', Subject: { title: 'Applied Cryptography' } },
     { id: 21, day: 5, period: 1, section: 'III IT G', Subject: { title: 'Applied Cryptography' } },
   ];

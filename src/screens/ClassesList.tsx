@@ -5,7 +5,7 @@ import { useNavigation, useRoute } from '@react-navigation/native';
 import Animated, { FadeInRight } from 'react-native-reanimated';
 import Icon from 'react-native-vector-icons/MaterialIcons';
 import { Colors } from '../constants/Colors';
-import { API_BASE_URL } from '../constants/Config';
+import { API_BASE_URL, fetchWithTimeout } from '../constants/Config';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import BreatheLoader from '../components/BreatheLoader';
 import { TODAY_CLASSES, DIRECTORY_CLASSES, getTeacherDirectoryFallback, getTeacherAttendanceFallback, PERIOD_SCHEDULE } from '../constants/DummyData';
@@ -21,8 +21,6 @@ export default function ClassesList() {
 
   React.useEffect(() => {
     let isMounted = true;
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 3500);
 
     const loadData = async () => {
       let currentTeacher = { id: 3, name: 'Ms. B Narmatha' };
@@ -35,75 +33,84 @@ export default function ClassesList() {
 
         if (mode === 'directory') {
           // Directory Mode: Fetch all timetable entries for this teacher across all days
-          const res = await fetch(`${API_BASE_URL}/timetable?teacher_id=${teacherId}`, { signal: controller.signal });
-          clearTimeout(timeoutId);
-          const data = await res.json();
-
-          if (!isMounted) return;
-
-          let uniqueClasses = new Map();
-          if (Array.isArray(data)) {
-            data.forEach((item: any) => {
-              if (item && item.Subject && item.section) {
-                let key = `${item.section}-${item.Subject.title}`;
-                if (!uniqueClasses.has(key)) {
-                  uniqueClasses.set(key, {
-                    id: String(item.id),
-                    time: null,
-                    className: item.section,
-                    subject: item.Subject.title,
-                    timetable_id: item.id
-                  });
+          try {
+            const res = await fetchWithTimeout(`${API_BASE_URL}/timetable?teacher_id=${teacherId}`, {}, 3500);
+            if (res.ok) {
+              const data = await res.json();
+              if (isMounted && Array.isArray(data) && data.length > 0) {
+                let uniqueClasses = new Map();
+                data.forEach((item: any) => {
+                  if (item && item.Subject && item.section) {
+                    let key = `${item.section}-${item.Subject.title}`;
+                    if (!uniqueClasses.has(key)) {
+                      uniqueClasses.set(key, {
+                        id: String(item.id),
+                        time: null,
+                        className: item.section,
+                        subject: item.Subject.title,
+                        timetable_id: item.id
+                      });
+                    }
+                  }
+                });
+                if (uniqueClasses.size > 0) {
+                  setClasses(Array.from(uniqueClasses.values()));
+                  setLoading(false);
+                  return;
                 }
               }
-            });
-          }
-
-          if (uniqueClasses.size > 0) {
-            setClasses(Array.from(uniqueClasses.values()));
-          } else {
-            setClasses(getTeacherDirectoryFallback(teacherId, currentTeacher.name));
-          }
-          setLoading(false);
-        } else {
-          // Attendance Mode: Fetch this teacher's classes for today's active Day Order (defaults to current academic day order)
-          const expectedDayOrder = getTodayDayOrder();
-          let currentDay = expectedDayOrder;
-          try {
-            const dayRes = await fetch(`${API_BASE_URL}/day-order`, { signal: controller.signal });
-            const dayData = await dayRes.json();
-            if (dayData && dayData.day_order && dayData.day_order === expectedDayOrder) {
-              currentDay = dayData.day_order;
             }
           } catch (e) {}
 
-          const res = await fetch(`${API_BASE_URL}/timetable?teacher_id=${teacherId}&day=${currentDay}`, { signal: controller.signal });
-          clearTimeout(timeoutId);
-          const data = await res.json();
-
-          if (!isMounted) return;
-
-          if (Array.isArray(data) && data.length > 0) {
-            const mapped = data.map((item: any) => ({
-              id: String(item.id),
-              time: `Period ${item.period} (${PERIOD_SCHEDULE[item.period]?.timeRange || ''})`,
-              className: item.section,
-              subject: item.Subject ? item.Subject.title : 'Course',
-              timetable_id: item.id
-            }));
-            setClasses(mapped);
-          } else {
-            // Teacher-specific mapped subject fallback
-            setClasses(getTeacherAttendanceFallback(teacherId, currentTeacher.name, currentDay));
+          if (isMounted) {
+            setClasses(getTeacherDirectoryFallback(teacherId, currentTeacher.name));
+            setLoading(false);
           }
-          setLoading(false);
+        } else {
+          // Attendance Mode: Fetch this teacher's classes for today's active Day Order
+          const expectedDayOrder = getTodayDayOrder();
+          let currentDay = expectedDayOrder;
+          try {
+            const dayRes = await fetchWithTimeout(`${API_BASE_URL}/day-order`, {}, 2500);
+            if (dayRes.ok) {
+              const dayData = await dayRes.json();
+              if (dayData && dayData.day_order && dayData.day_order === expectedDayOrder) {
+                currentDay = dayData.day_order;
+              }
+            }
+          } catch (e) {}
+
+          try {
+            const res = await fetchWithTimeout(`${API_BASE_URL}/timetable?teacher_id=${teacherId}&day=${currentDay}`, {}, 3500);
+            if (res.ok) {
+              const data = await res.json();
+              if (isMounted && Array.isArray(data) && data.length > 0) {
+                const mapped = data.map((item: any) => ({
+                  id: String(item.id),
+                  time: `Period ${item.period} (${PERIOD_SCHEDULE[item.period]?.timeRange || ''})`,
+                  className: item.section,
+                  subject: item.Subject ? item.Subject.title : 'Course',
+                  timetable_id: item.id
+                }));
+                setClasses(mapped);
+                setLoading(false);
+                return;
+              }
+            }
+          } catch (e) {}
+
+          if (isMounted) {
+            setClasses(getTeacherAttendanceFallback(teacherId, currentTeacher.name, currentDay));
+            setLoading(false);
+          }
         }
       } catch (e) {
         if (!isMounted) return;
         const teacherId = currentTeacher?.id || 3;
+        const expectedDayOrder = getTodayDayOrder();
         setClasses(mode === 'directory' 
           ? getTeacherDirectoryFallback(teacherId, currentTeacher?.name) 
-          : getTeacherAttendanceFallback(teacherId, currentTeacher?.name, 4));
+          : getTeacherAttendanceFallback(teacherId, currentTeacher?.name, expectedDayOrder));
         setLoading(false);
       }
     };
@@ -112,7 +119,6 @@ export default function ClassesList() {
 
     return () => {
       isMounted = false;
-      clearTimeout(timeoutId);
     };
   }, [mode]);
 
