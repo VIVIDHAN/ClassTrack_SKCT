@@ -87,7 +87,7 @@ export default function History() {
             className: session.className || 'III IT G',
             subject: session.subject || 'Class',
             absentCount: session.absentCount !== undefined ? session.absentCount : absList.length,
-            smsSent: true,
+            smsSent: absList.some(a => a.smsSent) || (session.absentees && session.absentees.some(a => a.smsSent)),
             absentees: absList,
           });
         });

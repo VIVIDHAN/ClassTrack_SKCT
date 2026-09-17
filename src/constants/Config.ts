@@ -1,4 +1,4 @@
-export const API_BASE_URL = 'http://3.108.234.156:3000/api';
+export const API_BASE_URL = 'http://13.235.69.194:3000/api';
 
 export const fetchWithTimeout = async (
   url: string,

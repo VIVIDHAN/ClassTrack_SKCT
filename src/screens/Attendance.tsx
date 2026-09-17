@@ -8,8 +8,8 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Colors } from '../constants/Colors';
 import { API_BASE_URL } from '../constants/Config';
 import BreatheLoader from '../components/BreatheLoader';
-import { SKCT_STUDENTS_G } from '../constants/DummyData';
-import { saveAttendanceLocally } from '../services/AttendanceService';
+import { SKCT_STUDENTS_G, PERIOD_SCHEDULE } from '../constants/DummyData';
+import { saveAttendanceLocally, getSavedAttendanceForSession, unlockAttendanceSession } from '../services/AttendanceService';
 
 export default function Attendance() {
   const navigation = useNavigation<any>();
@@ -18,46 +18,117 @@ export default function Attendance() {
   
   const [students, setStudents] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [isLocked, setIsLocked] = useState(false);
   const [absentInput, setAbsentInput] = useState('');
   const [fastMarkModalVisible, setFastMarkModalVisible] = useState(false);
 
+  const handleUnlockSession = () => {
+    Alert.alert(
+      'Unlock Session',
+      'Are you sure you want to unlock this attendance session to make changes?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Unlock',
+          style: 'destructive',
+          onPress: async () => {
+            const todayIso = new Date().toISOString().split('T')[0];
+            const targetTimetableId = classDetails.timetable_id || classDetails.timetableId || classDetails.id;
+            await unlockAttendanceSession(
+              todayIso,
+              classDetails.className,
+              classDetails.subject,
+              targetTimetableId
+            );
+            setIsLocked(false);
+            Alert.alert('Session Unlocked', 'You can now edit and re-submit attendance for this session.');
+          }
+        }
+      ]
+    );
+  };
+
   React.useEffect(() => {
+    let isMounted = true;
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 3000);
 
-    fetch(`${API_BASE_URL}/students?section=${encodeURIComponent(classDetails.className)}`, { signal: controller.signal })
-      .then(res => res.json())
-      .then(data => {
-        clearTimeout(timeoutId);
-        if (Array.isArray(data) && data.length > 0) {
-          const mapped = data.map((s: any) => ({
-            id: s.roll_no || s.rollNo,
-            db_id: s.id,
-            name: s.name,
-            phone: s.parent_phone || s.parentPhone || s.phone,
-            real_parent_phone: s.original_parent_phone || s.parent_phone || s.parentPhone || s.phone,
-            isAbsent: false,
-            isOnDuty: false
-          }));
-          setStudents(mapped);
-        } else {
-          setStudents(SKCT_STUDENTS_G.map(s => ({
+    const loadStudentsAndSavedState = async () => {
+      const todayIso = new Date().toISOString().split('T')[0];
+      const targetTimetableId = classDetails.timetable_id || classDetails.timetableId || classDetails.id;
+
+      // Check if attendance was already marked locally for this session
+      const savedSession = await getSavedAttendanceForSession(
+        todayIso,
+        classDetails.className,
+        classDetails.subject,
+        targetTimetableId
+      );
+
+      if (savedSession && (savedSession.isLocked || savedSession.smsSent)) {
+        setIsLocked(true);
+      } else {
+        setIsLocked(false);
+      }
+
+      const savedStatusMap = new Map<string, string>();
+      if (savedSession && Array.isArray(savedSession.records)) {
+        savedSession.records.forEach(r => {
+          if (r.id) savedStatusMap.set(String(r.id), r.status);
+        });
+      }
+
+      const applySavedStatus = (list: any[]) => {
+        const updated = list.map((s: any) => {
+          const status = savedStatusMap.get(String(s.id));
+          return {
             ...s,
-            real_parent_phone: s.phone
-          })));
+            isAbsent: status === 'Absent',
+            isOnDuty: status === 'OD',
+          };
+        });
+        return sortStudents(updated);
+      };
+
+      try {
+        const res = await fetch(`${API_BASE_URL}/students?section=${encodeURIComponent(classDetails.className)}`, { signal: controller.signal });
+        clearTimeout(timeoutId);
+        if (res.ok) {
+          const data = await res.json();
+          if (isMounted && Array.isArray(data) && data.length > 0) {
+            const mapped = data.map((s: any) => ({
+              id: s.roll_no || s.rollNo,
+              db_id: s.id,
+              name: s.name,
+              phone: s.parent_phone || s.parentPhone || s.phone,
+              real_parent_phone: s.original_parent_phone || s.parent_phone || s.parentPhone || s.phone,
+              isAbsent: false,
+              isOnDuty: false
+            }));
+            setStudents(applySavedStatus(mapped));
+            setLoading(false);
+            return;
+          }
         }
-        setLoading(false);
-      })
-      .catch(() => {
-        setStudents(SKCT_STUDENTS_G.map(s => ({
+      } catch (e) {}
+
+      if (isMounted) {
+        const fallbackList = SKCT_STUDENTS_G.map(s => ({
           ...s,
           real_parent_phone: s.phone
-        })));
+        }));
+        setStudents(applySavedStatus(fallbackList));
         setLoading(false);
-      });
+      }
+    };
 
-    return () => clearTimeout(timeoutId);
-  }, [classDetails.className]);
+    loadStudentsAndSavedState();
+
+    return () => {
+      isMounted = false;
+      clearTimeout(timeoutId);
+    };
+  }, [classDetails.className, classDetails.subject, classDetails.timetable_id]);
 
   const sortStudents = (list: any[]) => {
     return [...list].sort((a, b) => {
@@ -70,6 +141,7 @@ export default function Attendance() {
   };
 
   const markStatus = (id: string, status: 'present' | 'absent' | 'onduty') => {
+    if (isLocked) return;
     setStudents(prev => {
       const updated = prev.map(s => s.id === id ? { 
         ...s, 
@@ -81,11 +153,12 @@ export default function Attendance() {
   };
 
   const handleFastMark = () => {
-    if (absentInput.trim().length === 0) return;
+    if (isLocked || absentInput.trim().length === 0) return;
     setFastMarkModalVisible(true);
   };
 
   const applyFastMark = (status: 'present' | 'absent' | 'onduty') => {
+    if (isLocked) return;
     const identifiers = absentInput.split(',').map(s => s.trim()).filter(s => s.length > 0);
     setStudents(prev => {
       const updated = prev.map(student => {
@@ -101,7 +174,12 @@ export default function Attendance() {
     setFastMarkModalVisible(false);
   };
 
-  const handleSubmit = async () => {
+  const handleSubmit = async (sendSms: boolean = false) => {
+    if (isLocked) {
+      Alert.alert('Session Locked', 'Attendance for this session was already submitted with SMS alerts and cannot be edited.');
+      return;
+    }
+
     const absentStudents = students.filter(s => s.isAbsent);
     const targetTimetableId = classDetails.timetable_id || classDetails.timetableId || classDetails.id || 1;
     const now = new Date();
@@ -155,9 +233,11 @@ export default function Attendance() {
         phone: isTestMode ? testPhone : (s.real_parent_phone || s.phone || testPhone),
         real_parent_phone: s.real_parent_phone || s.phone || testPhone,
         called: false,
-        smsSent: false,
+        smsSent: sendSms,
       })),
       syncedToBackend: false,
+      isLocked: sendSms || isLocked,
+      smsSent: sendSms || isLocked,
       createdAt: now.toISOString(),
     };
 
@@ -203,12 +283,10 @@ export default function Attendance() {
     }
 
     // =========================================================================
-    // STEP 3: SMS DISPATCH FOR ABSENT STUDENTS
+    // STEP 3: OPTIONAL SMS DISPATCH FOR ABSENT STUDENTS
     // =========================================================================
-    let smsWasSent = false;
-    const failedSmsList: { phone: string; message: string }[] = [];
-
-    if (absentStudents.length > 0 && Platform.OS === 'android') {
+    if (sendSms && absentStudents.length > 0 && Platform.OS === 'android') {
+      const failedSmsList: { phone: string; message: string }[] = [];
       try {
         const granted = await PermissionsAndroid.request(
           PermissionsAndroid.PERMISSIONS.SEND_SMS,
@@ -226,13 +304,25 @@ export default function Attendance() {
         for (const student of absentStudents) {
           const destPhone = isTestMode ? testPhone : (student.real_parent_phone || student.phone);
           if (destPhone) {
-            const message = `Dear Parent, your ward ${student.name} (${student.id}) is marked ABSENT for ${classDetails.subject} today.\nஅன்பான பெற்றோரே, உங்கள் குழந்தை ${student.name} (${student.id}) இன்று ${classDetails.subject} வகுப்பிற்கு வரவில்லை.\nSKCT - Contact Class Teacher.`;
+            let periodInfo = '';
+            if (classDetails.time && classDetails.time.includes('(')) {
+              periodInfo = classDetails.time;
+            } else if (classDetails.time) {
+              periodInfo = classDetails.time;
+            } else if (classDetails.period && PERIOD_SCHEDULE[Number(classDetails.period)]) {
+              const sched = PERIOD_SCHEDULE[Number(classDetails.period)];
+              periodInfo = `Period ${classDetails.period} (${sched.timeRange})`;
+            } else if (classDetails.period) {
+              periodInfo = `Period ${classDetails.period}`;
+            } else {
+              periodInfo = 'Period Session';
+            }
+            const message = `Dear Parent, your ward ${student.name} (${student.id}) is marked ABSENT for ${classDetails.subject} [${periodInfo}] today.\nஅன்பான பெற்றோரே, உங்கள் குழந்தை ${student.name} (${student.id}) இன்று ${classDetails.subject} [${periodInfo}] வகுப்பிற்கு வரவில்லை.\nSKCT - Contact Class Teacher.`;
             let sentDirectly = false;
             if (granted === PermissionsAndroid.RESULTS.GRANTED && DirectSms && DirectSms.sendDirectSms) {
               try {
                 await DirectSms.sendDirectSms(destPhone, message);
                 sentDirectly = true;
-                smsWasSent = true;
               } catch (e) {
                 console.log('Direct background SMS failed for:', destPhone, e);
               }
@@ -262,7 +352,7 @@ export default function Attendance() {
   };
 
   const renderStudent = ({ item, index }: { item: any, index: number }) => (
-    <View>
+    <View style={{ opacity: isLocked ? 0.75 : 1 }}>
       <View style={styles.studentCard}>
         <View style={styles.studentInfo}>
           <Text style={styles.studentName}>{item.name}</Text>
@@ -272,18 +362,24 @@ export default function Attendance() {
           <TouchableOpacity 
             style={[styles.toggleBtn, (!item.isAbsent && !item.isOnDuty) ? styles.toggleBtnActivePresent : styles.toggleBtnInactive]}
             onPress={() => markStatus(item.id, 'present')}
+            disabled={isLocked}
+            activeOpacity={isLocked ? 1 : 0.7}
           >
             <Text style={[styles.toggleText, (!item.isAbsent && !item.isOnDuty) ? styles.toggleTextActive : styles.toggleTextInactive]}>Present</Text>
           </TouchableOpacity>
           <TouchableOpacity 
             style={[styles.toggleBtn, item.isAbsent ? styles.toggleBtnActiveAbsent : styles.toggleBtnInactive]}
             onPress={() => markStatus(item.id, 'absent')}
+            disabled={isLocked}
+            activeOpacity={isLocked ? 1 : 0.7}
           >
             <Text style={[styles.toggleText, item.isAbsent ? styles.toggleTextActive : styles.toggleTextInactive]}>Absent</Text>
           </TouchableOpacity>
           <TouchableOpacity 
             style={[styles.toggleBtn, item.isOnDuty ? styles.toggleBtnActiveOD : styles.toggleBtnInactive]}
             onPress={() => markStatus(item.id, 'onduty')}
+            disabled={isLocked}
+            activeOpacity={isLocked ? 1 : 0.7}
           >
             <Text style={[styles.toggleText, item.isOnDuty ? styles.toggleTextActive : styles.toggleTextInactive]}>OD</Text>
           </TouchableOpacity>
@@ -316,23 +412,40 @@ export default function Attendance() {
       </View>
 
       <View style={styles.listContainer}>
-        <Animated.View entering={FadeInDown.delay(100).duration(400)} style={styles.fastInputContainer}>
-          <Text style={styles.fastInputLabel}>Fast Absent Marking (Enter Last Digits)</Text>
-          <View style={styles.fastInputRow}>
-            <TextInput
-              style={styles.fastInput}
-              placeholder="e.g. 001, 005"
-              placeholderTextColor="#94A3B8"
-              value={absentInput}
-              onChangeText={setAbsentInput}
-              keyboardType="number-pad"
-            />
-            <TouchableOpacity style={styles.fastMarkBtn} onPress={handleFastMark}>
-              <Text style={styles.fastMarkBtnText}>Mark</Text>
-              <Icon name="keyboard-arrow-down" size={16} color="#ffffff" style={{ marginLeft: 4 }} />
+        {isLocked && (
+          <Animated.View entering={FadeInDown.duration(300)} style={styles.lockedBanner}>
+            <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center' }}>
+              <Icon name="lock" size={20} color="#92400E" style={{ marginRight: 8 }} />
+              <Text style={styles.lockedBannerText}>
+                Attendance Locked (SMS Sent).
+              </Text>
+            </View>
+            <TouchableOpacity style={styles.unlockBannerBtn} onPress={handleUnlockSession}>
+              <Icon name="lock-open" size={16} color="#D97706" style={{ marginRight: 4 }} />
+              <Text style={styles.unlockBannerText}>Unlock</Text>
             </TouchableOpacity>
-          </View>
-        </Animated.View>
+          </Animated.View>
+        )}
+
+        {!isLocked && (
+          <Animated.View entering={FadeInDown.delay(100).duration(400)} style={styles.fastInputContainer}>
+            <Text style={styles.fastInputLabel}>Fast Absent Marking (Enter Last Digits)</Text>
+            <View style={styles.fastInputRow}>
+              <TextInput
+                style={styles.fastInput}
+                placeholder="e.g. 001, 005"
+                placeholderTextColor="#94A3B8"
+                value={absentInput}
+                onChangeText={setAbsentInput}
+                keyboardType="number-pad"
+              />
+              <TouchableOpacity style={styles.fastMarkBtn} onPress={handleFastMark}>
+                <Text style={styles.fastMarkBtnText}>Mark</Text>
+                <Icon name="keyboard-arrow-down" size={16} color="#ffffff" style={{ marginLeft: 4 }} />
+              </TouchableOpacity>
+            </View>
+          </Animated.View>
+        )}
 
         <Animated.View entering={FadeInDown.delay(200).duration(400)} style={styles.statsGrid}>
           <View style={styles.statItem}>
@@ -360,9 +473,29 @@ export default function Attendance() {
       </View>
 
       <View style={styles.footer}>
-        <TouchableOpacity style={styles.submitButton} onPress={handleSubmit}>
-          <Text style={styles.submitText}>Submit & Send SMS</Text>
-        </TouchableOpacity>
+        {isLocked ? (
+          <View style={{ flex: 1, flexDirection: 'row', gap: 10 }}>
+            <View style={[styles.lockedFooterBtn, { flex: 1 }]}>
+              <Icon name="lock" size={18} color="#475569" style={{ marginRight: 6 }} />
+              <Text style={styles.lockedFooterText}>Locked</Text>
+            </View>
+            <TouchableOpacity style={styles.unlockFooterBtn} onPress={handleUnlockSession}>
+              <Icon name="lock-open" size={18} color="#ffffff" style={{ marginRight: 6 }} />
+              <Text style={styles.unlockFooterText}>Unlock Session</Text>
+            </TouchableOpacity>
+          </View>
+        ) : (
+          <>
+            <TouchableOpacity style={styles.submitOnlyBtn} onPress={() => handleSubmit(false)}>
+              <Icon name="check-circle-outline" size={20} color={Colors.primary} style={{ marginRight: 6 }} />
+              <Text style={styles.submitOnlyText}>Submit</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.submitSmsBtn} onPress={() => handleSubmit(true)}>
+              <Icon name="sms" size={20} color="#ffffff" style={{ marginRight: 6 }} />
+              <Text style={styles.submitSmsText}>Submit & Send SMS</Text>
+            </TouchableOpacity>
+          </>
+        )}
       </View>
 
       {/* CUSTOM FAST MARK MODAL */}
@@ -560,27 +693,111 @@ const styles = StyleSheet.create({
   toggleTextActive: {
     color: '#ffffff',
   },
+  lockedBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FEF3C7',
+    borderWidth: 1,
+    borderColor: '#F59E0B',
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 16,
+  },
+  lockedBannerText: {
+    flex: 1,
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#92400E',
+  },
+  unlockBannerBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FEF3C7',
+    borderWidth: 1.5,
+    borderColor: '#D97706',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
+    marginLeft: 8,
+  },
+  unlockBannerText: {
+    color: '#D97706',
+    fontSize: 13,
+    fontWeight: '800',
+  },
   footer: {
     backgroundColor: Colors.surface,
-    padding: 24,
-    paddingBottom: 40,
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    paddingBottom: Platform.OS === 'ios' ? 34 : 20,
     borderTopWidth: 1,
     borderTopColor: Colors.border,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
   },
-  submitButton: {
-    backgroundColor: Colors.primary,
-    paddingVertical: 16,
+  lockedFooterBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    backgroundColor: '#E2E8F0',
+    paddingVertical: 14,
     borderRadius: 14,
     alignItems: 'center',
+    justifyContent: 'center',
+  },
+  lockedFooterText: {
+    color: '#475569',
+    fontSize: 15,
+    fontWeight: '800',
+  },
+  unlockFooterBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    backgroundColor: Colors.primary,
+    paddingVertical: 14,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  unlockFooterText: {
+    color: '#ffffff',
+    fontSize: 15,
+    fontWeight: '800',
+  },
+  submitOnlyBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    backgroundColor: '#F1F5F9',
+    borderWidth: 1.5,
+    borderColor: Colors.primary,
+    paddingVertical: 14,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  submitOnlyText: {
+    color: Colors.primary,
+    fontSize: 15,
+    fontWeight: '800',
+  },
+  submitSmsBtn: {
+    flex: 1.3,
+    flexDirection: 'row',
+    backgroundColor: Colors.primary,
+    paddingVertical: 14,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.12,
     shadowRadius: 4,
     elevation: 2,
   },
-  submitText: {
+  submitSmsText: {
     color: '#ffffff',
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '800',
   },
   modalOverlay: { flex: 1, backgroundColor: 'rgba(15, 23, 42, 0.6)', justifyContent: 'center', alignItems: 'center', padding: 24 },

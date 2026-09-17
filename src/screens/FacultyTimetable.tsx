@@ -14,6 +14,7 @@ import Icon from 'react-native-vector-icons/MaterialIcons';
 import Animated, { FadeInUp, FadeInRight } from 'react-native-reanimated';
 import { Colors } from '../constants/Colors';
 import { API_BASE_URL, fetchWithTimeout } from '../constants/Config';
+import BreatheLoader from '../components/BreatheLoader';
 import {
   getWorkingCycleTabs,
   getTodayDayOrder,
@@ -103,13 +104,11 @@ export default function FacultyTimetable() {
   // Default to route.params.selectedDay if provided, else ALWAYS today's active day order (e.g. Day 4 for 7 Sep)
   const [selectedDay, setSelectedDay] = useState<number>(initialSelectedDay || todayTab.day);
   const [todayDayOrder, setTodayDayOrder] = useState<number>(todayTab.day);
-  const [teacher, setTeacher] = useState<any>({ id: 3, name: 'Ms. B Narmatha', department: 'Information Technology' });
+  const [teacher, setTeacher] = useState<any>(null);
 
-  // Pre-populate with full timetable immediately so the screen is NEVER blank
-  const [timetableByDay, setTimetableByDay] = useState<{ [day: number]: TimetableItem[] }>(() => {
-    return buildDayMapFromList(getTeacherFullTimetableFallback(3, 'Ms. B Narmatha'));
-  });
-  const [loading, setLoading] = useState(false);
+  // Initialized empty with loading=true to prevent flashing wrong faculty data
+  const [timetableByDay, setTimetableByDay] = useState<{ [day: number]: TimetableItem[] }>({ 1: [], 2: [], 3: [], 4: [], 5: [] });
+  const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
   // Synchronize route.params.selectedDay or ensure today's tab is selected on initial entry
@@ -261,8 +260,8 @@ export default function FacultyTimetable() {
       badgeTextColor = '#64748B';
     }
 
-    const subjectTitle = item.Subject?.title || 'Applied Cryptography';
-    const roomLabel = `Room 30${item.period || 1}, Block A`;
+    const subjectTitle = item.Subject?.title || (item as any).subject || 'Distributed Computing';
+    const roomLabel = `${item.section || 'III IT G'} • C6 16`;
 
     return {
       ...item,
@@ -307,17 +306,14 @@ export default function FacultyTimetable() {
 
       {/* FACULTY PROFILE & CALENDAR INFO CARD */}
       <Animated.View entering={FadeInUp.duration(400)} style={styles.facultyCard}>
-        <View style={styles.facultyProfileRow}>
-          <View style={styles.facultyAvatar}>
-            <Icon name="person" size={26} color="#FFF" />
-          </View>
-          <View style={{ flex: 1, marginLeft: 12 }}>
+        <View style={styles.greetingHeaderRow}>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.greeting}>Faculty Profile</Text>
             <Text style={styles.facultyName}>{teacher?.name || 'Faculty Member'}</Text>
-            <Text style={styles.facultyDept}>{teacher?.department || 'Information Technology'}</Text>
           </View>
-          <View style={styles.periodBadge}>
-            <Text style={styles.periodBadgeNum}>{totalWeeklyPeriods}</Text>
-            <Text style={styles.periodBadgeLabel}>Periods/Wk</Text>
+          <View style={styles.departmentBadge}>
+            <Icon name="business" size={14} color={Colors.primary} style={{ marginRight: 5 }} />
+            <Text style={styles.facultyDept}>{teacher?.department || 'Information Technology'}</Text>
           </View>
         </View>
 
@@ -388,9 +384,8 @@ export default function FacultyTimetable() {
 
       {/* TIMETABLE CONTENT */}
       {loading ? (
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={Colors.primary} />
-          <Text style={styles.loadingText}>Fetching your timetable from database...</Text>
+        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', minHeight: 300, paddingVertical: 40 }}>
+          <BreatheLoader message="Fetching your timetable..." />
         </View>
       ) : (
         <ScrollView
@@ -528,67 +523,60 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
   facultyCard: {
-    backgroundColor: '#0F172A',
+    backgroundColor: '#ffffff',
+    borderRadius: 24,
+    padding: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.04,
+    shadowRadius: 10,
+    elevation: 2,
+    borderWidth: 1,
+    borderColor: '#F1F5F9',
     marginHorizontal: 16,
     marginTop: 14,
     marginBottom: 14,
-    padding: 16,
-    borderRadius: 20,
-    shadowColor: '#0F172A',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.15,
-    shadowRadius: 10,
-    elevation: 4,
   },
-  facultyProfileRow: {
+  greetingHeaderRow: {
     flexDirection: 'row',
-    alignItems: 'center',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: 4,
   },
-  facultyAvatar: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: Colors.primary,
-    justifyContent: 'center',
-    alignItems: 'center',
+  greeting: {
+    fontSize: 13,
+    color: '#64748B',
+    fontWeight: '600',
+    textTransform: 'uppercase',
+    letterSpacing: 1.2,
   },
   facultyName: {
-    fontSize: 16,
-    fontWeight: '800',
-    color: '#FFF',
+    fontSize: 24,
+    fontWeight: '900',
+    color: '#0F172A',
+    marginTop: 2,
+    letterSpacing: -0.5,
+  },
+  departmentBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255, 93, 56, 0.1)',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 10,
   },
   facultyDept: {
     fontSize: 12,
-    color: '#94A3B8',
-    marginTop: 2,
-  },
-  periodBadge: {
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 12,
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.15)',
-  },
-  periodBadgeNum: {
-    fontSize: 16,
-    fontWeight: '800',
-    color: '#38BDF8',
-  },
-  periodBadgeLabel: {
-    fontSize: 10,
-    color: '#94A3B8',
-    fontWeight: '600',
-    marginTop: 1,
+    color: Colors.primary,
+    fontWeight: '700',
   },
   calendarInfoBox: {
-    backgroundColor: 'rgba(255, 255, 255, 0.08)',
-    borderRadius: 14,
-    paddingHorizontal: 12,
+    backgroundColor: '#F8FAFC',
+    borderRadius: 16,
+    paddingHorizontal: 14,
     paddingVertical: 10,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.1)',
+    borderColor: '#E2E8F0',
     marginTop: 12,
   },
   calendarLine1: {
@@ -597,9 +585,9 @@ const styles = StyleSheet.create({
     marginBottom: 6,
   },
   dateDayText: {
-    fontSize: 13,
+    fontSize: 14,
     fontWeight: '800',
-    color: '#FFFFFF',
+    color: '#0F172A',
     letterSpacing: -0.2,
   },
   calendarLine2: {
@@ -614,28 +602,30 @@ const styles = StyleSheet.create({
     borderRadius: 8,
   },
   dayOrderBadgeText: {
-    fontSize: 11,
+    fontSize: 12,
     fontWeight: '800',
-    color: '#FF7A59',
+    color: Colors.primary,
   },
   dotSeparator: {
     marginHorizontal: 8,
-    color: '#64748B',
+    color: '#94A3B8',
     fontWeight: '800',
-    fontSize: 12,
+    fontSize: 13,
   },
   periodCountBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(16, 185, 129, 0.2)',
+    backgroundColor: '#ECFDF5',
     paddingHorizontal: 8,
     paddingVertical: 3,
     borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#A7F3D0',
   },
   periodCountText: {
-    fontSize: 11,
+    fontSize: 12,
     fontWeight: '700',
-    color: '#34D399',
+    color: '#047857',
   },
   daySelectorContainer: {
     flexDirection: 'row',

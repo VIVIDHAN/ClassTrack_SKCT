@@ -36,6 +36,8 @@ export interface AttendanceSessionRecord {
   absentees: AbsenteeInfo[];
   syncedToBackend?: boolean;
   createdAt: string;
+  isLocked?: boolean;
+  smsSent?: boolean;
 }
 
 const STORAGE_KEYS = {
@@ -65,28 +67,34 @@ export function normalizeIsoDate(dateStr?: string): string {
  * 1. UNCONDITIONALLY SAVE ATTENDANCE LOCALLY
  * Guarantees that attendance is stored immediately in device AsyncStorage.
  */
+/**
+ * 1. UNCONDITIONALLY SAVE ATTENDANCE LOCALLY
+ * Guarantees that attendance is stored immediately in device AsyncStorage.
+ */
 export async function saveAttendanceLocally(
   session: AttendanceSessionRecord
 ): Promise<boolean> {
   try {
-    // 1. Save / Update in markedAttendanceSessions
     const rawSessions = await AsyncStorage.getItem(STORAGE_KEYS.SESSIONS);
     let sessionsList: AttendanceSessionRecord[] = rawSessions ? JSON.parse(rawSessions) : [];
 
-    // Check if session for this same subject, class, and date already exists
+    const normSessionDate = normalizeIsoDate(session.isoDate || session.date);
+
+    // Check if session for this same subject, class, timetable_id, and date already exists
     const existingIndex = sessionsList.findIndex(
       s =>
         s.sessionId === session.sessionId ||
-        (s.isoDate === session.isoDate &&
-          s.period === session.period &&
-          s.subject === session.subject &&
-          s.className === session.className)
+        (normalizeIsoDate(s.isoDate || s.date) === normSessionDate &&
+          ( (session.timetable_id && String(s.timetable_id) === String(session.timetable_id)) ||
+            (s.period === session.period &&
+             s.subject?.toLowerCase() === session.subject?.toLowerCase() &&
+             s.className?.toLowerCase() === session.className?.toLowerCase()) ))
     );
 
     if (existingIndex >= 0) {
-      sessionsList[existingIndex] = { ...sessionsList[existingIndex], ...session };
+      sessionsList[existingIndex] = { ...sessionsList[existingIndex], ...session, isoDate: normSessionDate };
     } else {
-      sessionsList = [session, ...sessionsList];
+      sessionsList = [{ ...session, isoDate: normSessionDate }, ...sessionsList];
     }
     await AsyncStorage.setItem(STORAGE_KEYS.SESSIONS, JSON.stringify(sessionsList));
 
@@ -97,26 +105,62 @@ export async function saveAttendanceLocally(
     const existingAbsIndex = absenteesList.findIndex(
       (s: any) =>
         s.sessionId === session.sessionId ||
-        (s.isoDate === session.isoDate &&
-          s.period === session.period &&
-          s.subject === session.subject &&
-          s.className === session.className)
+        (normalizeIsoDate(s.isoDate || s.date) === normSessionDate &&
+          ( (session.timetable_id && String(s.timetable_id) === String(session.timetable_id)) ||
+            (s.period === session.period &&
+             s.subject?.toLowerCase() === session.subject?.toLowerCase() &&
+             s.className?.toLowerCase() === session.className?.toLowerCase()) ))
     );
 
     if (existingAbsIndex >= 0) {
-      absenteesList[existingAbsIndex] = session;
+      absenteesList[existingAbsIndex] = { ...session, isoDate: normSessionDate };
     } else {
-      absenteesList = [session, ...absenteesList];
+      absenteesList = [{ ...session, isoDate: normSessionDate }, ...absenteesList];
     }
     await AsyncStorage.setItem(STORAGE_KEYS.ABSENTEES, JSON.stringify(absenteesList));
 
     // 3. Queue in pendingAttendanceSync for backend sync
-    await queueForBackendSync(session);
+    await queueForBackendSync({ ...session, isoDate: normSessionDate });
 
     return true;
   } catch (err) {
     console.error('Failed to save attendance locally:', err);
     return false;
+  }
+}
+
+/**
+ * Retrieves existing saved attendance session record for a given date, class, subject, and period
+ */
+export async function getSavedAttendanceForSession(
+  isoDate: string,
+  className: string,
+  subject: string,
+  timetableId?: string | number
+): Promise<AttendanceSessionRecord | null> {
+  try {
+    const rawSessions = await AsyncStorage.getItem(STORAGE_KEYS.SESSIONS);
+    if (!rawSessions) return null;
+    const sessionsList: AttendanceSessionRecord[] = JSON.parse(rawSessions);
+    const targetDate = normalizeIsoDate(isoDate);
+
+    const match = sessionsList.find(s => {
+      const sDate = normalizeIsoDate(s.isoDate || s.date);
+      if (sDate !== targetDate) return false;
+
+      if (timetableId && s.timetable_id && String(s.timetable_id) === String(timetableId)) {
+        return true;
+      }
+      return (
+        s.className?.toLowerCase() === className?.toLowerCase() &&
+        s.subject?.toLowerCase() === subject?.toLowerCase()
+      );
+    });
+
+    return match || null;
+  } catch (e) {
+    console.warn('Error fetching saved attendance session:', e);
+    return null;
   }
 }
 
@@ -274,3 +318,61 @@ export async function clearAttendanceStorage(): Promise<void> {
   await AsyncStorage.removeItem(STORAGE_KEYS.ABSENTEES);
   await AsyncStorage.removeItem(STORAGE_KEYS.PENDING_SYNC);
 }
+
+/**
+ * Unlocks a locked attendance session so it can be edited again
+ */
+export async function unlockAttendanceSession(
+  isoDate?: string,
+  className?: string,
+  subject?: string,
+  timetableId?: string | number
+): Promise<boolean> {
+  try {
+    const normDate = normalizeIsoDate(isoDate);
+
+    // Update in SESSIONS
+    const rawSessions = await AsyncStorage.getItem(STORAGE_KEYS.SESSIONS);
+    if (rawSessions) {
+      const sessionsList: AttendanceSessionRecord[] = JSON.parse(rawSessions);
+      const updated = sessionsList.map(s => {
+        const sDate = normalizeIsoDate(s.isoDate || s.date);
+        const matchesDate = !isoDate || sDate === normDate;
+        const matchesTimetable = timetableId && s.timetable_id && String(s.timetable_id) === String(timetableId);
+        const matchesClassSubject = (!className || s.className?.toLowerCase() === className?.toLowerCase()) &&
+                                    (!subject || s.subject?.toLowerCase() === subject?.toLowerCase());
+        
+        if (matchesDate && (matchesTimetable || matchesClassSubject || (!timetableId && !className && !subject))) {
+          return { ...s, isLocked: false, smsSent: false };
+        }
+        return s;
+      });
+      await AsyncStorage.setItem(STORAGE_KEYS.SESSIONS, JSON.stringify(updated));
+    }
+
+    // Update in ABSENTEES
+    const rawAbsentees = await AsyncStorage.getItem(STORAGE_KEYS.ABSENTEES);
+    if (rawAbsentees) {
+      const absenteesList: any[] = JSON.parse(rawAbsentees);
+      const updatedAbs = absenteesList.map(s => {
+        const sDate = normalizeIsoDate(s.isoDate || s.date);
+        const matchesDate = !isoDate || sDate === normDate;
+        const matchesTimetable = timetableId && s.timetable_id && String(s.timetable_id) === String(timetableId);
+        const matchesClassSubject = (!className || s.className?.toLowerCase() === className?.toLowerCase()) &&
+                                    (!subject || s.subject?.toLowerCase() === subject?.toLowerCase());
+        
+        if (matchesDate && (matchesTimetable || matchesClassSubject || (!timetableId && !className && !subject))) {
+          return { ...s, isLocked: false, smsSent: false };
+        }
+        return s;
+      });
+      await AsyncStorage.setItem(STORAGE_KEYS.ABSENTEES, JSON.stringify(updatedAbs));
+    }
+
+    return true;
+  } catch (e) {
+    console.error('Failed to unlock attendance session:', e);
+    return false;
+  }
+}
+

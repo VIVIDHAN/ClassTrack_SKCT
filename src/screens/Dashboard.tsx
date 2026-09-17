@@ -9,6 +9,7 @@ import { Colors } from '../constants/Colors';
 import { API_BASE_URL, fetchWithTimeout } from '../constants/Config';
 import { PERIOD_SCHEDULE, getTeacherFullTimetableFallback } from '../constants/DummyData';
 import { getTodayDayOrder } from '../constants/AcademicCalendar';
+import BreatheLoader from '../components/BreatheLoader';
 
 const { width, height } = Dimensions.get('window');
 
@@ -24,6 +25,7 @@ export default function Dashboard() {
   const [currentTime, setCurrentTime] = useState(new Date());
   const [todayDayOrder, setTodayDayOrder] = useState<number>(getTodayDayOrder());
   const [logoutModalVisible, setLogoutModalVisible] = useState(false);
+  const [scheduleLoading, setScheduleLoading] = useState(true);
 
   // Auto-refresh clock every 15 seconds to update ongoing/upcoming states accurately
   useEffect(() => {
@@ -57,6 +59,7 @@ export default function Dashboard() {
     React.useCallback(() => {
       let currentTeacher = { id: 3, name: 'Ms. B Narmatha', department: 'Information Technology' };
       const loadTeacherDashboard = async () => {
+        setScheduleLoading(true);
         try {
           const stored = await AsyncStorage.getItem('loggedInTeacher');
           if (stored) {
@@ -97,6 +100,8 @@ export default function Dashboard() {
         } catch (err) {
           console.log('Failed to fetch faculty timetable outer:', err);
           setAllClasses(getTeacherFullTimetableFallback(currentTeacher?.id || 3, currentTeacher?.name));
+        } finally {
+          setScheduleLoading(false);
         }
       };
 
@@ -127,10 +132,10 @@ export default function Dashboard() {
       return {
         id: String(item.id),
         period: item.period,
-        className: item.section,
-        section: item.section,
+        className: item.section || item.className || 'III IT G',
+        section: item.section || item.className || 'III IT G',
         subject: item.Subject ? item.Subject.title : (item.subject || 'IT Course'),
-        room: `Room 20${item.period || 4}`,
+        room: 'C6 16',
         timeRange: sched.timeRange,
         startTimeStr: sched.startTimeStr,
         endTimeStr: sched.endTimeStr,
@@ -225,57 +230,7 @@ export default function Dashboard() {
         };
       });
     } else {
-      // Representative default timeline matching screenshot layout
-      timelineItems = [
-        {
-          id: 'fb-1',
-          period: 3,
-          subject: 'Data Structures and Algorithms',
-          startTimeStr: '10:30 AM',
-          endTimeStr: '11:30 AM',
-          roomLabel: 'Room 301, Block A',
-          status: 'Ongoing',
-          dotColor: '#2563EB',
-          badgeBorder: '#2563EB',
-          badgeBg: '#EFF6FF',
-          badgeTextColor: '#2563EB',
-          section: 'III IT G',
-          timeRange: '10:30 AM - 11:30 AM',
-          timetable_id: 3
-        },
-        {
-          id: 'fb-2',
-          period: 4,
-          subject: 'Database Management Systems',
-          startTimeStr: '11:45 AM',
-          endTimeStr: '12:45 PM',
-          roomLabel: 'Room 305, Block A',
-          status: 'Upcoming',
-          dotColor: '#9333EA',
-          badgeBorder: '#A855F7',
-          badgeBg: '#FAF5FF',
-          badgeTextColor: '#9333EA',
-          section: 'III IT G',
-          timeRange: '11:45 AM - 12:45 PM',
-          timetable_id: 4
-        },
-        {
-          id: 'fb-3',
-          period: 5,
-          subject: 'Software Engineering',
-          startTimeStr: '02:00 PM',
-          endTimeStr: '03:00 PM',
-          roomLabel: 'Room 302, Block B',
-          status: 'Upcoming',
-          dotColor: '#EA580C',
-          badgeBorder: '#F97316',
-          badgeBg: '#FFF7ED',
-          badgeTextColor: '#EA580C',
-          section: 'III IT G',
-          timeRange: '02:00 PM - 03:00 PM',
-          timetable_id: 5
-        }
-      ];
+      timelineItems = [];
     }
 
     // Find Next Class on future days if today has no upcoming class or if weekend / all done
@@ -381,24 +336,8 @@ export default function Dashboard() {
           </View>
         </Animated.View>
 
+        {/* Quick Action Grid (Logs, Directory, Notify, My Timetable) */}
         <View style={styles.gridContainer}>
-          <TouchableOpacity 
-            style={styles.fullWidthCard} 
-            onPress={() => navigation.navigate('ClassesList', { mode: 'attendance' })}
-            activeOpacity={0.8}
-          >
-            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-              <View style={[styles.gridIconWrap, { backgroundColor: '#E0F2FE', marginBottom: 0, marginRight: 16 }]}>
-                <Icon name="fact-check" size={28} color="#0284C7" />
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.gridTitle}>Mark Attendance</Text>
-                <Text style={styles.gridSubtitle}>Select a class to mark</Text>
-              </View>
-              <Icon name="chevron-right" size={24} color="#94A3B8" />
-            </View>
-          </TouchableOpacity>
-
           <View style={styles.rowGrid}>
             <TouchableOpacity 
               style={styles.gridBox} 
@@ -452,7 +391,7 @@ export default function Dashboard() {
           </View>
         </View>
 
-        {/* Today's Schedule (Matching Provided Screenshot Design) */}
+        {/* Today's Schedule */}
         <Animated.View entering={FadeInUp.delay(150).duration(500)} style={styles.scheduleSectionContainer}>
           <View style={styles.scheduleHeaderRow}>
             <Text style={styles.scheduleTitleText}>Today's Schedule</Text>
@@ -467,56 +406,87 @@ export default function Dashboard() {
           </View>
 
           <View style={styles.timelineCard}>
-            {scheduleState.timelineItems.map((item: any, index: number) => {
-              const isLast = index === scheduleState.timelineItems.length - 1;
-              return (
-                <TouchableOpacity
-                  key={`${item.id}-${index}`}
-                  style={[styles.timelineRow, isLast && { paddingBottom: 4 }]}
-                  activeOpacity={0.85}
-                  onPress={() => navigation.navigate('FacultyTimetable', { selectedDay: todayDayOrder || 4 })}
-                >
-                  {/* Time Column */}
-                  <View style={styles.timeColumn}>
-                    <Text style={styles.startTimeText}>{item.startTimeStr}</Text>
-                    <Text style={styles.endTimeText}>{item.endTimeStr}</Text>
-                  </View>
-
-                  {/* Vertical Timeline Axis & Colored Dot Node */}
-                  <View style={styles.timelineAxisWrap}>
-                    {!isLast && <View style={styles.verticalTimelineLine} />}
-                    <View style={[styles.timelineDotNode, { backgroundColor: item.dotColor }]} />
-                  </View>
-
-                  {/* Content Column: Title & Room */}
-                  <View style={styles.contentColumn}>
-                    <Text style={styles.subjectTitleText} numberOfLines={2}>
-                      {item.subject}
-                    </Text>
-                    <Text style={styles.roomLabelText}>
-                      {item.roomLabel || `${item.room || 'Room 301'}, Block A`}
-                    </Text>
-                  </View>
-
-                  {/* Status Pill Badge */}
-                  <View
-                    style={[
-                      styles.statusPillBadge,
-                      {
-                        borderColor: item.badgeBorder,
-                        backgroundColor: item.badgeBg,
-                      },
-                    ]}
+            {scheduleLoading ? (
+              <View style={{ paddingVertical: 24, alignItems: 'center', justifyContent: 'center' }}>
+                <BreatheLoader message="Fetching your schedule..." />
+              </View>
+            ) : scheduleState.timelineItems.length === 0 ? (
+              <View style={{ paddingVertical: 24, alignItems: 'center', justifyContent: 'center' }}>
+                <Icon name="event-available" size={32} color="#94A3B8" style={{ marginBottom: 6 }} />
+                <Text style={{ fontSize: 14, color: '#64748B', fontWeight: '500' }}>No classes scheduled for today</Text>
+              </View>
+            ) : (
+              scheduleState.timelineItems.map((item: any, index: number) => {
+                const isLast = index === scheduleState.timelineItems.length - 1;
+                return (
+                  <TouchableOpacity
+                    key={`${item.id}-${index}`}
+                    style={[styles.timelineRow, isLast && { paddingBottom: 4 }]}
+                    activeOpacity={0.85}
+                    onPress={() => navigation.navigate('FacultyTimetable', { selectedDay: todayDayOrder || 4 })}
                   >
-                    <Text style={[styles.statusPillText, { color: item.badgeTextColor }]}>
-                      {item.status}
-                    </Text>
-                  </View>
-                </TouchableOpacity>
-              );
-            })}
+                    {/* Time Column */}
+                    <View style={styles.timeColumn}>
+                      <Text style={styles.startTimeText}>{item.startTimeStr}</Text>
+                      <Text style={styles.endTimeText}>{item.endTimeStr}</Text>
+                    </View>
+
+                    {/* Vertical Timeline Axis & Colored Dot Node */}
+                    <View style={styles.timelineAxisWrap}>
+                      {!isLast && <View style={styles.verticalTimelineLine} />}
+                      <View style={[styles.timelineDotNode, { backgroundColor: item.dotColor }]} />
+                    </View>
+
+                    {/* Content Column: Title & Class + Room */}
+                    <View style={styles.contentColumn}>
+                      <Text style={styles.subjectTitleText} numberOfLines={2}>
+                        {item.subject}
+                      </Text>
+                      <Text style={styles.roomLabelText}>
+                        {`${item.className || 'III IT G'} • ${item.room || 'C6 16'}`}
+                      </Text>
+                    </View>
+
+                    {/* Status Pill Badge */}
+                    <View
+                      style={[
+                        styles.statusPillBadge,
+                        {
+                          borderColor: item.badgeBorder,
+                          backgroundColor: item.badgeBg,
+                        },
+                      ]}
+                    >
+                      <Text style={[styles.statusPillText, { color: item.badgeTextColor }]}>
+                        {item.status}
+                      </Text>
+                    </View>
+                  </TouchableOpacity>
+                );
+              })
+            )}
           </View>
         </Animated.View>
+
+        {/* Mark Attendance Card (Below Today's Schedule) */}
+        <View style={[styles.gridContainer, { marginTop: 16 }]}>
+          <TouchableOpacity 
+            style={styles.fullWidthCard} 
+            onPress={() => navigation.navigate('ClassesList', { mode: 'attendance' })}
+            activeOpacity={0.8}
+          >
+            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+              <View style={[styles.gridIconWrap, { backgroundColor: '#E0F2FE', marginBottom: 0, marginRight: 16 }]}>
+                <Icon name="fact-check" size={28} color="#0284C7" />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.gridTitle}>Mark Attendance</Text>
+                <Text style={styles.gridSubtitle}>Select a class to mark</Text>
+              </View>
+              <Icon name="chevron-right" size={24} color="#94A3B8" />
+            </View>
+          </TouchableOpacity>
+        </View>
 
         {/* Daily Wisdom */}
         <Animated.View entering={FadeInUp.delay(200).duration(500)} style={styles.wisdomContainer}>
