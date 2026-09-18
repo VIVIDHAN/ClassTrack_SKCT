@@ -8,7 +8,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Colors } from '../constants/Colors';
 import { API_BASE_URL } from '../constants/Config';
 import BreatheLoader from '../components/BreatheLoader';
-import { SKCT_STUDENTS_G, PERIOD_SCHEDULE } from '../constants/DummyData';
+import { SKCT_STUDENTS_G, SKCT_STUDENTS_E, PERIOD_SCHEDULE } from '../constants/DummyData';
 import { saveAttendanceLocally, getSavedAttendanceForSession, unlockAttendanceSession } from '../services/AttendanceService';
 
 export default function Attendance() {
@@ -113,7 +113,9 @@ export default function Attendance() {
       } catch (e) {}
 
       if (isMounted) {
-        const fallbackList = SKCT_STUDENTS_G.map(s => ({
+        const isSectionE = classDetails.className && classDetails.className.includes('E');
+        const sourceList = isSectionE ? SKCT_STUDENTS_E : SKCT_STUDENTS_G;
+        const fallbackList = sourceList.map(s => ({
           ...s,
           real_parent_phone: s.phone
         }));

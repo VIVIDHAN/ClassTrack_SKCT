@@ -11,11 +11,13 @@ import {
   Platform,
   Dimensions,
   FlatList,
+  Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import Animated, { FadeInDown, FadeInUp, Layout } from 'react-native-reanimated';
 import Icon from 'react-native-vector-icons/MaterialIcons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Colors } from '../constants/Colors';
 import { API_BASE_URL } from '../constants/Config';
 import BreatheLoader from '../components/BreatheLoader';
@@ -32,10 +34,11 @@ export default function AttendanceReport() {
 
   // Date Range state
   const [activePreset, setActivePreset] = useState<PresetType>('month');
-  const [selectedSection, setSelectedSection] = useState('III IT G');
+  const [selectedSection, setSelectedSection] = useState<string>('Both');
   const [searchQuery, setSearchQuery] = useState('');
   const [viewMode, setViewMode] = useState<ViewMode>('summary');
   const [pctFilter, setPctFilter] = useState<PctFilter>('all');
+  const [isAdminUser, setIsAdminUser] = useState(false);
 
   // Date values
   const [startDate, setStartDate] = useState(() => {
@@ -56,6 +59,20 @@ export default function AttendanceReport() {
   const [loading, setLoading] = useState(true);
   const [reportData, setReportData] = useState<any[]>([]);
   const [detailedLogs, setDetailedLogs] = useState<any[]>([]);
+
+  // Check Admin Status
+  useEffect(() => {
+    AsyncStorage.getItem('loggedInTeacher').then(stored => {
+      if (stored) {
+        try {
+          const u = JSON.parse(stored);
+          if (u.isAdmin || u.id === 999 || u.role === 'admin' || (u.email && u.email.includes('admin'))) {
+            setIsAdminUser(true);
+          }
+        } catch (e) {}
+      }
+    });
+  }, []);
 
   // Apply Presets
   const applyPreset = (preset: PresetType) => {
@@ -84,9 +101,11 @@ export default function AttendanceReport() {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 4000);
 
+    const sectionParam = selectedSection === 'Both' ? '' : selectedSection;
+
     // Fetch student summary metrics
     const fetchSummary = fetch(
-      `${API_BASE_URL}/reports?startDate=${startDate}&endDate=${endDate}&section=${encodeURIComponent(selectedSection)}`,
+      `${API_BASE_URL}/reports?startDate=${startDate}&endDate=${endDate}&section=${encodeURIComponent(sectionParam)}`,
       { signal: controller.signal }
     )
       .then(res => res.json())
@@ -98,7 +117,7 @@ export default function AttendanceReport() {
           const mapped = data.map((item: any) => ({
             roll_no: item.roll_no,
             name: item.name,
-            className: item.section || selectedSection,
+            className: item.section || item.className || 'III IT',
             totalClasses: item.totalClasses || 20,
             attendedClasses: item.attendedClasses || 18,
             percentage: item.percentage || 90,
@@ -117,7 +136,7 @@ export default function AttendanceReport() {
 
     // Fetch raw table logs containing (sno, date, day_order, period, time, roll_no, subject_name, status)
     const fetchLogs = fetch(
-      `${API_BASE_URL}/attendance?startDate=${startDate}&endDate=${endDate}&section=${encodeURIComponent(selectedSection)}`,
+      `${API_BASE_URL}/attendance?startDate=${startDate}&endDate=${endDate}&section=${encodeURIComponent(sectionParam)}`,
       { signal: controller.signal }
     )
       .then(res => res.json())
@@ -160,6 +179,15 @@ export default function AttendanceReport() {
     );
   }, [detailedLogs, searchQuery]);
 
+  // Absentees Only Logs
+  const absenteesOnlyLogs = useMemo(() => {
+    return detailedLogs.filter(
+      l => l.status === 'Absent' &&
+        ((l.student_name && l.student_name.toLowerCase().includes(searchQuery.toLowerCase())) ||
+        (l.roll_no && l.roll_no.toLowerCase().includes(searchQuery.toLowerCase())))
+    );
+  }, [detailedLogs, searchQuery]);
+
   // Summary Metrics
   const metrics = useMemo(() => {
     if (reportData.length === 0) {
@@ -173,38 +201,67 @@ export default function AttendanceReport() {
     return { avg, good, risk, total };
   }, [reportData]);
 
-  // Export / Share Report
-  const handleExportShare = async () => {
+  // Admin CSV Download: Full Attendance CSV Report
+  const handleDownloadFullCSV = async () => {
+    if (!isAdminUser) {
+      Alert.alert(
+        'Admin Access Restricted',
+        'Downloading detailed CSV reports is only enabled for the Administrator account (admin@skct.edu.in).'
+      );
+      return;
+    }
+
     try {
-      let message = `🎓 *SKCT ATTENDANCE REPORT*\n`;
-      message += `━━━━━━━━━━━━━━━━━━━━\n`;
-      message += `Class: ${selectedSection}\n`;
-      message += `Period: ${startDate} to ${endDate}\n`;
-      message += `Class Average: ${metrics.avg}%\n`;
-      message += `Total Students: ${metrics.total} | Eligible (>=75%): ${metrics.good} | Defaulters (<75%): ${metrics.risk}\n`;
-      message += `━━━━━━━━━━━━━━━━━━━━\n\n`;
+      let csv = `"S.No","Roll No","Student Name","Class/Section","Total Classes","Attended Classes","Attendance Percentage (%)"\n`;
 
-      if (viewMode === 'table' && filteredLogs.length > 0) {
-        message += `📋 *DETAILED ATTENDANCE TABLE LOGS (${filteredLogs.length})*\n\n`;
-        filteredLogs.slice(0, 50).forEach((l, idx) => {
-          message += `${l.sno || idx + 1}. ${l.date} | Day ${l.day_order || 4} | ${l.period} (${l.time}) | [${l.roll_no}] ${l.subject_name}: ${l.status}\n`;
-        });
-      } else {
-        filteredStudents.forEach((s, idx) => {
-          const badge = s.percentage >= 75 ? '✓' : '⚠️';
-          message += `${idx + 1}. [${s.roll_no}] ${s.name}\n`;
-          message += `   Class: ${s.className} | Attended: ${s.attendedClasses}/${s.totalClasses} (${s.percentage}%) ${badge}\n\n`;
-        });
-      }
+      filteredStudents.forEach((s, idx) => {
+        csv += `"${idx + 1}","${s.roll_no}","${s.name}","${s.className}","${s.totalClasses}","${s.attendedClasses}","${s.percentage}%"\n`;
+      });
 
-      message += `\nGenerated by ClassTrack SKCT`;
+      const sectionTitle = selectedSection === 'Both' ? 'Combined (III IT G + III IT E)' : selectedSection;
 
       await Share.share({
-        message,
-        title: `Attendance Report - ${selectedSection}`,
+        message: csv,
+        title: `Attendance_Report_${selectedSection}_${startDate}_to_${endDate}.csv`,
       });
     } catch (err: any) {
       console.error(err);
+      Alert.alert('Export Error', err.message);
+    }
+  };
+
+  // Admin CSV Download: Absentees Only CSV Report
+  const handleDownloadAbsenteesCSV = async () => {
+    if (!isAdminUser) {
+      Alert.alert(
+        'Admin Access Restricted',
+        'Downloading Absentees CSV reports is only enabled for the Administrator account (admin@skct.edu.in).'
+      );
+      return;
+    }
+
+    try {
+      let csv = `"S.No","Absent Date","Day Order","Period","Time","Roll No","Student Name","Class/Section","Subject Name","Status"\n`;
+
+      if (absenteesOnlyLogs.length > 0) {
+        absenteesOnlyLogs.forEach((l, idx) => {
+          csv += `"${idx + 1}","${l.date}","Day ${l.day_order || 4}","${l.period}","${l.time}","${l.roll_no}","${l.student_name || ''}","${l.section || selectedSection}","${l.subject_name}","Absent"\n`;
+        });
+      } else {
+        // Generate detailed absentees list from defaulter students if raw logs empty
+        const defaulters = reportData.filter(s => s.percentage < 75);
+        defaulters.forEach((s, idx) => {
+          csv += `"${idx + 1}","${startDate} to ${endDate}","N/A","Defaulter","Range ${startDate} to ${endDate}","${s.roll_no}","${s.name}","${s.className}","Defaulter (<75%)","Absent"\n`;
+        });
+      }
+
+      await Share.share({
+        message: csv,
+        title: `Absentees_Only_Report_${selectedSection}_${startDate}_to_${endDate}.csv`,
+      });
+    } catch (err: any) {
+      console.error(err);
+      Alert.alert('Export Error', err.message);
     }
   };
 
@@ -279,13 +336,17 @@ export default function AttendanceReport() {
         </TouchableOpacity>
 
         <View style={styles.headerCenter}>
-          <Text style={styles.headerTitle}>Attendance Report</Text>
-          <Text style={styles.headerSubtitle}>Academic Calendar & Timetable Analytics</Text>
+          <Text style={styles.headerTitle}>Attendance Reports</Text>
+          <Text style={styles.headerSubtitle}>From / To Date Analytics & CSV Export</Text>
         </View>
 
-        <TouchableOpacity onPress={handleExportShare} style={[styles.iconBtn, styles.shareIconBtn]}>
-          <Icon name="share" size={22} color={Colors.primary} />
-        </TouchableOpacity>
+        {isAdminUser ? (
+          <TouchableOpacity onPress={handleDownloadFullCSV} style={[styles.iconBtn, styles.shareIconBtn]}>
+            <Icon name="file-download" size={24} color={Colors.primary} />
+          </TouchableOpacity>
+        ) : (
+          <View style={{ width: 36 }} />
+        )}
       </View>
 
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 120 }}>
@@ -340,23 +401,63 @@ export default function AttendanceReport() {
             </View>
           </TouchableOpacity>
 
-          {/* Section Selector */}
+          {/* Section Filter Selector (Both Classes Together, III IT G, III IT E) */}
           <View style={styles.sectionRow}>
-            <Text style={styles.sectionSublabel}>Class / Section:</Text>
+            <Text style={styles.sectionSublabel}>Filter Class / Section:</Text>
             <View style={styles.tabGroup}>
-              {['III IT G', 'III IT E'].map(sec => (
+              {[
+                { key: 'Both', label: 'Both Classes Together' },
+                { key: 'III IT G', label: 'III IT G' },
+                { key: 'III IT E', label: 'III IT E' },
+              ].map(sec => (
                 <TouchableOpacity
-                  key={sec}
-                  style={[styles.tabBtn, selectedSection === sec && styles.tabBtnActive]}
-                  onPress={() => setSelectedSection(sec)}
+                  key={sec.key}
+                  style={[styles.tabBtn, selectedSection === sec.key && styles.tabBtnActive]}
+                  onPress={() => setSelectedSection(sec.key)}
                 >
-                  <Text style={[styles.tabText, selectedSection === sec && styles.tabTextActive]}>
-                    {sec}
+                  <Text style={[styles.tabText, selectedSection === sec.key && styles.tabTextActive]}>
+                    {sec.label}
                   </Text>
                 </TouchableOpacity>
               ))}
             </View>
           </View>
+        </View>
+
+        {/* ADMIN CSV DOWNLOAD BANNER */}
+        <View style={styles.adminBanner}>
+          <View style={styles.adminBannerHeader}>
+            <Icon name="security" size={20} color={isAdminUser ? Colors.primary : '#64748B'} style={{ marginRight: 8 }} />
+            <Text style={styles.adminBannerTitle}>
+              {isAdminUser ? 'Admin CSV Export Controls' : 'CSV Export Notice'}
+            </Text>
+          </View>
+
+          {isAdminUser ? (
+            <View style={styles.csvActionRow}>
+              <TouchableOpacity
+                style={[styles.csvBtn, { backgroundColor: Colors.primary }]}
+                onPress={handleDownloadFullCSV}
+                activeOpacity={0.8}
+              >
+                <Icon name="table-view" size={18} color="#ffffff" style={{ marginRight: 6 }} />
+                <Text style={styles.csvBtnText}>Download Full CSV</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.csvBtn, { backgroundColor: Colors.error }]}
+                onPress={handleDownloadAbsenteesCSV}
+                activeOpacity={0.8}
+              >
+                <Icon name="person-off" size={18} color="#ffffff" style={{ marginRight: 6 }} />
+                <Text style={styles.csvBtnText}>Download Absentees CSV</Text>
+              </TouchableOpacity>
+            </View>
+          ) : (
+            <Text style={styles.adminBannerNotice}>
+              🔒 CSV downloads are enabled exclusively for Administrator login (`admin@skct.edu.in`).
+            </Text>
+          )}
         </View>
 
         {/* View Mode Switcher (Summary Cards vs Database Table) */}
@@ -383,7 +484,9 @@ export default function AttendanceReport() {
             <Icon name="pie-chart" size={24} color={Colors.primary} style={{ marginRight: 8 }} />
             <View style={{ flex: 1 }}>
               <Text style={styles.pieCardTitle}>Overall Class Attendance Pie Chart</Text>
-              <Text style={styles.pieCardSub}>Date Range: {startDate} to {endDate}</Text>
+              <Text style={styles.pieCardSub}>
+                Filter: {selectedSection === 'Both' ? 'Both Classes (G + E)' : selectedSection} | {startDate} to {endDate}
+              </Text>
             </View>
           </View>
 
@@ -402,216 +505,213 @@ export default function AttendanceReport() {
                 ]}
               />
               <View style={styles.pieRingInner}>
-                <Text style={styles.pieCenterPct}>{metrics.avg}%</Text>
+                <Text style={styles.pieCenterValue}>{metrics.avg}%</Text>
                 <Text style={styles.pieCenterLabel}>Class Avg</Text>
               </View>
             </View>
 
-            {/* Counts & Legend */}
-            <View style={styles.pieLegendWrap}>
-              <View style={styles.legendItemRow}>
-                <View style={[styles.legendIndicatorDot, { backgroundColor: Colors.success }]} />
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.legendTitleText}>Eligible (&gt;=75%)</Text>
-                  <Text style={styles.legendCountText}>
-                    {metrics.good} Students ({metrics.total > 0 ? Math.round((metrics.good / metrics.total) * 100) : 0}%)
-                  </Text>
-                </View>
+            {/* Pie Chart Legend & Counts */}
+            <View style={styles.pieLegendBlock}>
+              <View style={styles.legendItem}>
+                <View style={[styles.legendDot, { backgroundColor: Colors.primary }]} />
+                <Text style={styles.legendLabel}>Total Class Count:</Text>
+                <Text style={styles.legendValue}>{metrics.total}</Text>
               </View>
 
-              <View style={[styles.legendItemRow, { marginTop: 10 }]}>
-                <View style={[styles.legendIndicatorDot, { backgroundColor: Colors.error }]} />
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.legendTitleText}>Defaulters (&lt;75%)</Text>
-                  <Text style={styles.legendCountText}>
-                    {metrics.risk} Students ({metrics.total > 0 ? Math.round((metrics.risk / metrics.total) * 100) : 0}%)
-                  </Text>
-                </View>
+              <View style={styles.legendItem}>
+                <View style={[styles.legendDot, { backgroundColor: Colors.success }]} />
+                <Text style={styles.legendLabel}>Eligible (&ge;75%):</Text>
+                <Text style={styles.legendValue}>{metrics.good}</Text>
               </View>
 
-              <View style={styles.legendDividerLine} />
-
-              <View style={styles.legendItemRow}>
-                <Icon name="groups" size={18} color={Colors.primary} style={{ marginRight: 6 }} />
-                <Text style={styles.totalClassCountText}>
-                  Total Class Count: <Text style={{ fontWeight: '900', color: Colors.primary }}>{metrics.total} Students</Text>
-                </Text>
+              <View style={styles.legendItem}>
+                <View style={[styles.legendDot, { backgroundColor: Colors.error }]} />
+                <Text style={styles.legendLabel}>Defaulters (&lt;75%):</Text>
+                <Text style={styles.legendValue}>{metrics.risk}</Text>
               </View>
             </View>
           </View>
         </View>
 
-        {/* PERCENTAGE FILTER BAR (<75%, >75%, ALL) */}
-        <View style={styles.pctFilterWrap}>
-          <Text style={styles.pctFilterHeading}>Filter by Attendance Percentage:</Text>
+        {/* Search & Percentage Filters */}
+        <View style={styles.searchFilterBlock}>
+          <View style={styles.searchBox}>
+            <Icon name="search" size={20} color="#94A3B8" style={{ marginRight: 8 }} />
+            <TextInput
+              style={styles.searchInput}
+              placeholder="Search student or roll no..."
+              placeholderTextColor="#94A3B8"
+              value={searchQuery}
+              onChangeText={setSearchQuery}
+            />
+            {searchQuery.length > 0 && (
+              <TouchableOpacity onPress={() => setSearchQuery('')}>
+                <Icon name="close" size={18} color="#94A3B8" />
+              </TouchableOpacity>
+            )}
+          </View>
+
+          {/* Percentage Filter Tabs */}
           <View style={styles.pctFilterRow}>
-            <TouchableOpacity
-              style={[styles.pctFilterChip, pctFilter === 'all' && styles.pctFilterChipActiveAll]}
-              onPress={() => setPctFilter('all')}
-            >
-              <Text style={[styles.pctFilterChipText, pctFilter === 'all' && styles.pctFilterChipTextActive]}>
-                All ({metrics.total})
-              </Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={[styles.pctFilterChip, pctFilter === 'gt75' && styles.pctFilterChipActiveGood]}
-              onPress={() => setPctFilter('gt75')}
-            >
-              <Icon name="check-circle" size={14} color={pctFilter === 'gt75' ? '#ffffff' : Colors.success} style={{ marginRight: 4 }} />
-              <Text style={[styles.pctFilterChipText, pctFilter === 'gt75' && styles.pctFilterChipTextActive]}>
-                &gt;=75% ({metrics.good})
-              </Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={[styles.pctFilterChip, pctFilter === 'lt75' && styles.pctFilterChipActiveRisk]}
-              onPress={() => setPctFilter('lt75')}
-            >
-              <Icon name="warning" size={14} color={pctFilter === 'lt75' ? '#ffffff' : Colors.error} style={{ marginRight: 4 }} />
-              <Text style={[styles.pctFilterChipText, pctFilter === 'lt75' && styles.pctFilterChipTextActive]}>
-                &lt;75% ({metrics.risk})
-              </Text>
-            </TouchableOpacity>
+            {(['all', 'gt75', 'lt75'] as PctFilter[]).map(filterKey => {
+              const label =
+                filterKey === 'all'
+                  ? `All (${reportData.length})`
+                  : filterKey === 'gt75'
+                  ? `\u226575% (${metrics.good})`
+                  : `<75% (${metrics.risk})`;
+              const isSelected = pctFilter === filterKey;
+              return (
+                <TouchableOpacity
+                  key={filterKey}
+                  style={[
+                    styles.pctChip,
+                    isSelected && styles.pctChipActive,
+                    filterKey === 'lt75' && isSelected && { backgroundColor: Colors.error },
+                  ]}
+                  onPress={() => setPctFilter(filterKey)}
+                >
+                  <Text style={[styles.pctChipText, isSelected && styles.pctChipTextActive]}>
+                    {label}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
           </View>
         </View>
 
-        {/* Search Bar */}
-        <View style={styles.searchWrap}>
-          <Icon name="search" size={20} color="#94A3B8" style={{ marginRight: 8 }} />
-          <TextInput
-            style={styles.searchInput}
-            placeholder={viewMode === 'table' ? "Search roll no, subject or student..." : "Search student or roll no..."}
-            placeholderTextColor="#94A3B8"
-            value={searchQuery}
-            onChangeText={setSearchQuery}
-          />
-          {searchQuery.length > 0 && (
-            <TouchableOpacity onPress={() => setSearchQuery('')}>
-              <Icon name="close" size={18} color="#94A3B8" />
-            </TouchableOpacity>
-          )}
-        </View>
-
-        {/* Report List or Database Table */}
+        {/* CONTENT VIEW: Summary Cards or Database Log Table */}
         {loading ? (
           <View style={{ marginTop: 40 }}>
             <BreatheLoader message="Generating attendance report..." />
           </View>
-        ) : viewMode === 'table' ? (
-          /* DETAILED ATTENDANCE DATABASE TABLE VIEW */
-          <View style={styles.listSection}>
-            <View style={styles.listHeaderRow}>
-              <Text style={styles.listHeaderTitle}>Attendance Database Records ({filteredLogs.length})</Text>
-              <TouchableOpacity onPress={handleExportShare}>
-                <Text style={styles.exportBtnText}>Share Table</Text>
-              </TouchableOpacity>
+        ) : viewMode === 'summary' ? (
+          <View style={styles.cardsList}>
+            {filteredStudents.length === 0 ? (
+              <View style={styles.emptyCard}>
+                <Icon name="sentiment-dissatisfied" size={40} color="#94A3B8" />
+                <Text style={styles.emptyTitle}>No Student Records Found</Text>
+                <Text style={styles.emptySub}>Try adjusting search query or date range filters.</Text>
+              </View>
+            ) : (
+              filteredStudents.map((item, index) => (
+                <View key={item.roll_no + index}>{renderStudentItem({ item, index })}</View>
+              ))
+            )}
+          </View>
+        ) : (
+          /* DATABASE TABLE LOG VIEW */
+          <View style={styles.tableCard}>
+            <View style={styles.tableCardHeader}>
+              <Icon name="table-chart" size={20} color={Colors.primary} style={{ marginRight: 8 }} />
+              <Text style={styles.tableCardTitle}>
+                Database Attendance Log ({filteredLogs.length} Records)
+              </Text>
             </View>
 
-            <ScrollView horizontal showsHorizontalScrollIndicator={true} style={{ marginBottom: 20 }}>
-              <View style={styles.tableContainer}>
+            <ScrollView horizontal showsHorizontalScrollIndicator={true}>
+              <View>
+                {/* Table Header */}
                 <View style={styles.tableHeaderRow}>
-                  <Text style={[styles.thCell, { width: 55 }]}>S.No</Text>
-                  <Text style={[styles.thCell, { width: 105 }]}>Date</Text>
+                  <Text style={[styles.thCell, { width: 50 }]}>S.No</Text>
+                  <Text style={[styles.thCell, { width: 95 }]}>Date</Text>
                   <Text style={[styles.thCell, { width: 85 }]}>Day Order</Text>
                   <Text style={[styles.thCell, { width: 80 }]}>Period</Text>
-                  <Text style={[styles.thCell, { width: 145 }]}>Time</Text>
-                  <Text style={[styles.thCell, { width: 135 }]}>Roll No</Text>
-                  <Text style={[styles.thCell, { width: 175 }]}>Subject Name</Text>
+                  <Text style={[styles.thCell, { width: 140 }]}>Time</Text>
+                  <Text style={[styles.thCell, { width: 120 }]}>Roll No</Text>
+                  <Text style={[styles.thCell, { width: 140 }]}>Student Name</Text>
+                  <Text style={[styles.thCell, { width: 70 }]}>Class</Text>
+                  <Text style={[styles.thCell, { width: 160 }]}>Subject Name</Text>
                   <Text style={[styles.thCell, { width: 85 }]}>Status</Text>
                 </View>
 
-                {filteredLogs.map((log, idx) => (
-                  <View key={log.sno || idx} style={[styles.tableDataRow, idx % 2 === 1 && { backgroundColor: '#F8FAFC' }]}>
-                    <Text style={[styles.tdCell, { width: 55 }]}>{log.sno || (idx + 1)}</Text>
-                    <Text style={[styles.tdCell, { width: 105, fontWeight: '700' }]}>{log.date}</Text>
-                    <Text style={[styles.tdCell, { width: 85, color: Colors.primary }]}>Day {log.day_order || 4}</Text>
-                    <Text style={[styles.tdCell, { width: 80 }]}>{log.period || 'Period 1'}</Text>
-                    <Text style={[styles.tdCell, { width: 145, fontSize: 11 }]}>{log.time || '08:15 AM - 09:15 AM'}</Text>
-                    <Text style={[styles.tdCell, { width: 135, fontWeight: '700', color: '#0F172A' }]}>{log.roll_no}</Text>
-                    <Text style={[styles.tdCell, { width: 175, fontWeight: '600' }]} numberOfLines={1}>{log.subject_name || 'Subject'}</Text>
-                    <View style={[{ width: 85, alignItems: 'flex-start' }]}>
-                      <View style={[
-                        styles.statusBadge,
-                        log.status === 'Absent' ? styles.statusAbsent : log.status === 'OD' ? styles.statusOD : styles.statusPresent
-                      ]}>
-                        <Text style={[
-                          styles.statusBadgeText,
-                          log.status === 'Absent' ? styles.statusAbsentText : log.status === 'OD' ? styles.statusODText : styles.statusPresentText
-                        ]}>
-                          {log.status}
-                        </Text>
+                {/* Table Rows */}
+                {filteredLogs.length === 0 ? (
+                  <View style={{ padding: 24, alignItems: 'center' }}>
+                    <Text style={{ color: '#94A3B8' }}>No attendance log records in this date range.</Text>
+                  </View>
+                ) : (
+                  filteredLogs.map((row, idx) => (
+                    <View
+                      key={row.id || idx}
+                      style={[styles.tableDataRow, idx % 2 === 1 && { backgroundColor: '#F8FAFC' }]}
+                    >
+                      <Text style={[styles.tdCell, { width: 50, fontWeight: '700' }]}>{row.sno || idx + 1}</Text>
+                      <Text style={[styles.tdCell, { width: 95 }]}>{row.date}</Text>
+                      <Text style={[styles.tdCell, { width: 85 }]}>Day {row.day_order || 4}</Text>
+                      <Text style={[styles.tdCell, { width: 80 }]}>{row.period}</Text>
+                      <Text style={[styles.tdCell, { width: 140 }]}>{row.time}</Text>
+                      <Text style={[styles.tdCell, { width: 120, fontWeight: '600', color: Colors.primary }]}>
+                        {row.roll_no}
+                      </Text>
+                      <Text style={[styles.tdCell, { width: 140, fontWeight: '600' }]}>{row.student_name || 'N/A'}</Text>
+                      <Text style={[styles.tdCell, { width: 70 }]}>{row.section || selectedSection}</Text>
+                      <Text style={[styles.tdCell, { width: 160 }]}>{row.subject_name}</Text>
+                      <View style={{ width: 85, justifyContent: 'center' }}>
+                        <View
+                          style={[
+                            styles.statusPill,
+                            {
+                              backgroundColor:
+                                row.status === 'Present'
+                                  ? '#DCFCE7'
+                                  : row.status === 'Absent'
+                                  ? '#FEE2E2'
+                                  : '#FEF9C3',
+                            },
+                          ]}
+                        >
+                          <Text
+                            style={[
+                              styles.statusPillText,
+                              {
+                                color:
+                                  row.status === 'Present'
+                                    ? Colors.success
+                                    : row.status === 'Absent'
+                                    ? Colors.error
+                                    : '#EAB308',
+                              },
+                            ]}
+                          >
+                            {row.status}
+                          </Text>
+                        </View>
                       </View>
                     </View>
-                  </View>
-                ))}
-
-                {filteredLogs.length === 0 && (
-                  <View style={styles.emptyTableWrap}>
-                    <Text style={styles.emptyTitle}>No database attendance records found</Text>
-                    <Text style={styles.emptySubtitle}>Mark attendance from Dashboard to populate DB table logs</Text>
-                  </View>
+                  ))
                 )}
               </View>
             </ScrollView>
           </View>
-        ) : (
-          /* SUMMARY CARDS VIEW */
-          <View style={styles.listSection}>
-            <View style={styles.listHeaderRow}>
-              <Text style={styles.listHeaderTitle}>Student Performance ({filteredStudents.length})</Text>
-              <TouchableOpacity onPress={handleExportShare}>
-                <Text style={styles.exportBtnText}>Share Report</Text>
-              </TouchableOpacity>
-            </View>
-
-            {filteredStudents.map((item, index) => (
-              <React.Fragment key={item.roll_no}>
-                {renderStudentItem({ item, index })}
-              </React.Fragment>
-            ))}
-
-            {filteredStudents.length === 0 && (
-              <View style={styles.emptyWrap}>
-                <Icon name="search-off" size={48} color="#CBD5E1" style={{ marginBottom: 12 }} />
-                <Text style={styles.emptyTitle}>No matching students found</Text>
-                <Text style={styles.emptySubtitle}>Try adjusting your search query or percentage filter</Text>
-              </View>
-            )}
-          </View>
         )}
       </ScrollView>
 
-      {/* CUSTOM DATE RANGE MODAL */}
+      {/* Custom Date Range Modal */}
       <Modal visible={customModalVisible} transparent animationType="fade">
         <View style={styles.modalOverlay}>
           <View style={styles.modalCard}>
-            <Text style={styles.modalTitle}>Set Custom Date Range</Text>
-            <Text style={styles.modalSubtitle}>Enter dates in YYYY-MM-DD format</Text>
+            <Text style={styles.modalTitle}>Select Custom Date Range</Text>
 
-            <View style={styles.modalInputBlock}>
-              <Text style={styles.modalInputLabel}>Start Date</Text>
-              <TextInput
-                style={styles.modalTextInput}
-                value={tempStart}
-                onChangeText={setTempStart}
-                placeholder="2026-08-01"
-                placeholderTextColor="#94A3B8"
-              />
-            </View>
+            <Text style={styles.inputLabel}>From Date (YYYY-MM-DD)</Text>
+            <TextInput
+              style={styles.dateInput}
+              value={tempStart}
+              onChangeText={setTempStart}
+              placeholder="YYYY-MM-DD"
+              placeholderTextColor="#94A3B8"
+            />
 
-            <View style={styles.modalInputBlock}>
-              <Text style={styles.modalInputLabel}>End Date</Text>
-              <TextInput
-                style={styles.modalTextInput}
-                value={tempEnd}
-                onChangeText={setTempEnd}
-                placeholder="2026-09-02"
-                placeholderTextColor="#94A3B8"
-              />
-            </View>
+            <Text style={styles.inputLabel}>To Date (YYYY-MM-DD)</Text>
+            <TextInput
+              style={styles.dateInput}
+              value={tempEnd}
+              onChangeText={setTempEnd}
+              placeholder="YYYY-MM-DD"
+              placeholderTextColor="#94A3B8"
+            />
 
-            <View style={styles.modalBtnRow}>
+            <View style={styles.modalActionRow}>
               <TouchableOpacity
                 style={styles.modalCancelBtn}
                 onPress={() => setCustomModalVisible(false)}
@@ -639,86 +739,185 @@ export default function AttendanceReport() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#F8FAFC' },
+  container: {
+    flex: 1,
+    backgroundColor: '#F8FAFC',
+  },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 20,
+    paddingHorizontal: 16,
     paddingVertical: 14,
     backgroundColor: '#ffffff',
     borderBottomWidth: 1,
-    borderBottomColor: '#F1F5F9',
+    borderBottomColor: '#E2E8F0',
   },
-  headerCenter: { alignItems: 'center' },
-  headerTitle: { fontSize: 20, fontWeight: '800', color: '#0F172A' },
-  headerSubtitle: { fontSize: 12, color: '#64748B', fontWeight: '600', marginTop: 2 },
-  iconBtn: { padding: 8, borderRadius: 12, backgroundColor: '#F8FAFC' },
-  shareIconBtn: { backgroundColor: 'rgba(255, 93, 56, 0.1)' },
-
+  iconBtn: {
+    padding: 6,
+    borderRadius: 8,
+  },
+  shareIconBtn: {
+    backgroundColor: '#F0F9FF',
+  },
+  headerCenter: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  headerTitle: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: '#0F172A',
+  },
+  headerSubtitle: {
+    fontSize: 12,
+    color: '#64748B',
+    marginTop: 2,
+  },
   controlCard: {
-    margin: 16,
-    padding: 18,
     backgroundColor: '#ffffff',
-    borderRadius: 20,
+    marginHorizontal: 16,
+    marginTop: 16,
+    padding: 16,
+    borderRadius: 16,
     borderWidth: 1,
-    borderColor: '#F1F5F9',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.04,
-    shadowRadius: 12,
-    elevation: 3,
+    borderColor: '#E2E8F0',
   },
-  sectionHeading: { fontSize: 14, fontWeight: '700', color: '#334155', marginBottom: 12 },
-  presetRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 14 },
+  sectionHeading: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#0F172A',
+    marginBottom: 12,
+  },
+  presetRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: 14,
+  },
   presetBtn: {
     flex: 1,
     paddingVertical: 8,
-    marginHorizontal: 3,
     borderRadius: 10,
     backgroundColor: '#F1F5F9',
     alignItems: 'center',
   },
-  presetBtnActive: { backgroundColor: Colors.primary },
-  presetText: { fontSize: 12, fontWeight: '700', color: '#64748B' },
-  presetTextActive: { color: '#ffffff' },
-
+  presetBtnActive: {
+    backgroundColor: Colors.primary,
+  },
+  presetText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#64748B',
+  },
+  presetTextActive: {
+    color: '#ffffff',
+  },
   dateDisplayBox: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: '#F8FAFC',
-    borderRadius: 14,
+    backgroundColor: '#F0F9FF',
     padding: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#BAE6FD',
+    marginBottom: 14,
+  },
+  dateBoxItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  dateBoxLabel: {
+    fontSize: 10,
+    color: '#0284C7',
+    fontWeight: '600',
+  },
+  dateBoxValue: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#0369A1',
+    marginTop: 1,
+  },
+  sectionRow: {
+    flexDirection: 'column',
+    gap: 8,
+  },
+  sectionSublabel: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#64748B',
+  },
+  tabGroup: {
+    flexDirection: 'row',
+    backgroundColor: '#F1F5F9',
+    borderRadius: 12,
+    padding: 3,
+    gap: 4,
+  },
+  tabBtn: {
+    flex: 1,
+    paddingVertical: 8,
+    borderRadius: 10,
+    alignItems: 'center',
+  },
+  tabBtnActive: {
+    backgroundColor: Colors.primary,
+  },
+  tabText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#64748B',
+  },
+  tabTextActive: {
+    color: '#ffffff',
+  },
+  adminBanner: {
+    backgroundColor: '#ffffff',
+    marginHorizontal: 16,
+    marginTop: 14,
+    padding: 14,
+    borderRadius: 16,
     borderWidth: 1,
     borderColor: '#E2E8F0',
-    marginBottom: 16,
   },
-  dateBoxItem: { flexDirection: 'row', alignItems: 'center' },
-  dateBoxLabel: { fontSize: 10, color: '#94A3B8', fontWeight: '700', textTransform: 'uppercase' },
-  dateBoxValue: { fontSize: 13, color: '#0F172A', fontWeight: '700' },
-
-  sectionRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  sectionSublabel: { fontSize: 13, fontWeight: '600', color: '#64748B' },
-  tabGroup: { flexDirection: 'row' },
-  tabBtn: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 8,
-    backgroundColor: '#F1F5F9',
-    marginLeft: 6,
+  adminBannerHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
   },
-  tabBtnActive: { backgroundColor: '#0F172A' },
-  tabText: { fontSize: 12, fontWeight: '700', color: '#64748B' },
-  tabTextActive: { color: '#ffffff' },
-
+  adminBannerTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#0F172A',
+  },
+  csvActionRow: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  csvBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 10,
+    borderRadius: 10,
+  },
+  csvBtnText: {
+    color: '#ffffff',
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  adminBannerNotice: {
+    fontSize: 12,
+    color: '#64748B',
+    lineHeight: 18,
+  },
   viewToggleContainer: {
     flexDirection: 'row',
-    backgroundColor: '#E2E8F0',
     marginHorizontal: 16,
-    marginBottom: 16,
-    borderRadius: 14,
-    padding: 4,
+    marginTop: 14,
+    backgroundColor: '#E2E8F0',
+    borderRadius: 12,
+    padding: 3,
   },
   viewToggleBtn: {
     flex: 1,
@@ -728,274 +927,399 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     borderRadius: 10,
   },
-  viewToggleBtnActive: { backgroundColor: Colors.primary },
-  viewToggleText: { fontSize: 13, fontWeight: '700', color: '#64748B' },
-  viewToggleTextActive: { color: '#ffffff' },
-
-  /* CLASS PIE CHART CARD */
-  pieCard: {
-    marginHorizontal: 16,
-    marginBottom: 16,
-    padding: 18,
-    backgroundColor: '#ffffff',
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: '#F1F5F9',
-    elevation: 2,
+  viewToggleBtnActive: {
+    backgroundColor: Colors.primary,
   },
-  pieCardHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 14 },
-  pieCardTitle: { fontSize: 16, fontWeight: '800', color: '#0F172A' },
-  pieCardSub: { fontSize: 11, color: '#64748B', marginTop: 1 },
-
-  pieContentRow: { flexDirection: 'row', alignItems: 'center' },
+  viewToggleText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#64748B',
+  },
+  viewToggleTextActive: {
+    color: '#ffffff',
+  },
+  pieCard: {
+    backgroundColor: '#ffffff',
+    marginHorizontal: 16,
+    marginTop: 14,
+    padding: 16,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  pieCardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  pieCardTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#0F172A',
+  },
+  pieCardSub: {
+    fontSize: 12,
+    color: '#64748B',
+    marginTop: 2,
+  },
+  pieContentRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-around',
+  },
   pieRingOuter: {
     width: 110,
     height: 110,
     borderRadius: 55,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#F8FAFC',
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    marginRight: 16,
     position: 'relative',
   },
   pieRingArc: {
     position: 'absolute',
-    width: 108,
-    height: 108,
-    borderRadius: 54,
-    borderWidth: 10,
+    width: 110,
+    height: 110,
+    borderRadius: 55,
+    borderWidth: 12,
   },
   pieRingInner: {
-    width: 82,
-    height: 82,
-    borderRadius: 41,
+    width: 84,
+    height: 84,
+    borderRadius: 42,
     backgroundColor: '#ffffff',
     justifyContent: 'center',
     alignItems: 'center',
     elevation: 2,
   },
-  pieCenterPct: { fontSize: 22, fontWeight: '900', color: '#0F172A' },
-  pieCenterLabel: { fontSize: 9, fontWeight: '800', color: '#64748B', textTransform: 'uppercase' },
-
-  pieLegendWrap: { flex: 1 },
-  legendItemRow: { flexDirection: 'row', alignItems: 'center' },
-  legendIndicatorDot: { width: 10, height: 10, borderRadius: 5, marginRight: 8 },
-  legendTitleText: { fontSize: 12, fontWeight: '700', color: '#334155' },
-  legendCountText: { fontSize: 11, color: '#64748B', fontWeight: '500', marginTop: 1 },
-  legendDividerLine: { height: 1, backgroundColor: '#F1F5F9', marginVertical: 10 },
-  totalClassCountText: { fontSize: 12, color: '#334155', fontWeight: '600' },
-
-  /* PERCENTAGE FILTER BAR */
-  pctFilterWrap: { marginHorizontal: 16, marginBottom: 14 },
-  pctFilterHeading: { fontSize: 13, fontWeight: '700', color: '#334155', marginBottom: 8 },
-  pctFilterRow: { flexDirection: 'row', justifyContent: 'space-between' },
-  pctFilterChip: {
-    flex: 1,
+  pieCenterValue: {
+    fontSize: 20,
+    fontWeight: '800',
+    color: '#0F172A',
+  },
+  pieCenterLabel: {
+    fontSize: 10,
+    color: '#64748B',
+    fontWeight: '600',
+  },
+  pieLegendBlock: {
+    gap: 10,
+  },
+  legendItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 10,
-    marginHorizontal: 3,
-    borderRadius: 12,
-    backgroundColor: '#F1F5F9',
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
   },
-  pctFilterChipActiveAll: { backgroundColor: '#0F172A', borderColor: '#0F172A' },
-  pctFilterChipActiveGood: { backgroundColor: Colors.success, borderColor: Colors.success },
-  pctFilterChipActiveRisk: { backgroundColor: Colors.error, borderColor: Colors.error },
-  pctFilterChipText: { fontSize: 12, fontWeight: '700', color: '#64748B' },
-  pctFilterChipTextActive: { color: '#ffffff' },
-
-  searchWrap: {
+  legendDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    marginRight: 8,
+  },
+  legendLabel: {
+    fontSize: 13,
+    color: '#64748B',
+    marginRight: 6,
+  },
+  legendValue: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#0F172A',
+  },
+  searchFilterBlock: {
+    marginHorizontal: 16,
+    marginTop: 14,
+  },
+  searchBox: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#ffffff',
-    marginHorizontal: 16,
-    marginBottom: 16,
-    paddingHorizontal: 14,
     borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
     borderWidth: 1,
     borderColor: '#E2E8F0',
-    height: 46,
   },
-  searchInput: { flex: 1, fontSize: 14, color: '#0F172A' },
-
-  listSection: { paddingHorizontal: 16 },
-  listHeaderRow: {
+  searchInput: {
+    flex: 1,
+    fontSize: 14,
+    color: '#0F172A',
+  },
+  pctFilterRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 12,
-    paddingHorizontal: 4,
+    gap: 8,
+    marginTop: 10,
   },
-  listHeaderTitle: { fontSize: 16, fontWeight: '800', color: '#0F172A' },
-  exportBtnText: { fontSize: 13, fontWeight: '700', color: Colors.primary },
-
+  pctChip: {
+    flex: 1,
+    paddingVertical: 8,
+    borderRadius: 10,
+    backgroundColor: '#ffffff',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  pctChipActive: {
+    backgroundColor: Colors.primary,
+    borderColor: Colors.primary,
+  },
+  pctChipText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#64748B',
+  },
+  pctChipTextActive: {
+    color: '#ffffff',
+    fontWeight: '700',
+  },
+  cardsList: {
+    marginHorizontal: 16,
+    marginTop: 14,
+  },
   studentCard: {
     backgroundColor: '#ffffff',
-    borderRadius: 18,
-    padding: 16,
-    marginBottom: 12,
+    padding: 14,
+    borderRadius: 14,
+    marginBottom: 10,
     borderWidth: 1,
-    borderColor: '#F1F5F9',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.03,
-    shadowRadius: 8,
-    elevation: 2,
+    borderColor: '#E2E8F0',
   },
-  cardTopRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 12 },
+  cardTopRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
   avatar: {
-    width: 44,
-    height: 44,
-    borderRadius: 12,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: 12,
+    marginRight: 10,
   },
-  avatarText: { fontSize: 18, fontWeight: '900' },
-  nameBlock: { flex: 1 },
-  studentName: { fontSize: 16, fontWeight: '800', color: '#0F172A', marginBottom: 2 },
-  metaRow: { flexDirection: 'row', alignItems: 'center' },
-  rollNo: { fontSize: 12, fontWeight: '700', color: '#64748B' },
-  metaDot: { width: 4, height: 4, borderRadius: 2, backgroundColor: '#CBD5E1', marginHorizontal: 6 },
-  className: { fontSize: 12, fontWeight: '600', color: Colors.primary },
-
+  avatarText: {
+    fontSize: 16,
+    fontWeight: '700',
+  },
+  nameBlock: {
+    flex: 1,
+  },
+  studentName: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#0F172A',
+  },
+  metaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 2,
+  },
+  rollNo: {
+    fontSize: 12,
+    color: '#64748B',
+  },
+  metaDot: {
+    width: 4,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: '#94A3B8',
+    marginHorizontal: 6,
+  },
+  className: {
+    fontSize: 12,
+    color: '#64748B',
+    fontWeight: '600',
+  },
   percentageBadge: {
     paddingHorizontal: 10,
-    paddingVertical: 6,
+    paddingVertical: 4,
     borderRadius: 10,
     alignItems: 'center',
   },
-  percentageText: { fontSize: 16, fontWeight: '900' },
-  percentageSub: { fontSize: 9, fontWeight: '800', textTransform: 'uppercase' },
-
+  percentageText: {
+    fontSize: 14,
+    fontWeight: '800',
+  },
+  percentageSub: {
+    fontSize: 9,
+    fontWeight: '600',
+  },
   progressTrack: {
     height: 6,
     backgroundColor: '#F1F5F9',
     borderRadius: 3,
+    marginTop: 10,
     overflow: 'hidden',
-    marginBottom: 10,
   },
-  progressBar: { height: 6, borderRadius: 3 },
-
-  cardBottomRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  sessionsText: { fontSize: 12, color: '#64748B', fontWeight: '500' },
-  sessionsBold: { fontWeight: '700', color: '#0F172A' },
+  progressBar: {
+    height: '100%',
+    borderRadius: 3,
+  },
+  cardBottomRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: 8,
+  },
+  sessionsText: {
+    fontSize: 12,
+    color: '#64748B',
+  },
+  sessionsBold: {
+    fontWeight: '700',
+    color: '#0F172A',
+  },
   alertChip: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#FEE2E2',
     paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 6,
+    paddingVertical: 3,
+    borderRadius: 8,
   },
-  alertChipText: { fontSize: 10, fontWeight: '700', color: Colors.error },
-
-  /* TABLE VIEW STYLES */
-  tableContainer: {
+  alertChipText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: Colors.error,
+  },
+  tableCard: {
     backgroundColor: '#ffffff',
+    marginHorizontal: 16,
+    marginTop: 14,
     borderRadius: 16,
     borderWidth: 1,
     borderColor: '#E2E8F0',
     overflow: 'hidden',
   },
+  tableCardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 14,
+    backgroundColor: '#F8FAFC',
+    borderBottomWidth: 1,
+    borderBottomColor: '#E2E8F0',
+  },
+  tableCardTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#0F172A',
+  },
   tableHeaderRow: {
     flexDirection: 'row',
-    backgroundColor: '#0F172A',
-    paddingVertical: 12,
-    paddingHorizontal: 10,
+    backgroundColor: '#F1F5F9',
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E2E8F0',
   },
   thCell: {
     fontSize: 12,
-    fontWeight: '800',
-    color: '#ffffff',
-    textAlign: 'left',
-    paddingHorizontal: 6,
+    fontWeight: '700',
+    color: '#475569',
   },
   tableDataRow: {
     flexDirection: 'row',
-    alignItems: 'center',
     paddingVertical: 10,
-    paddingHorizontal: 10,
+    paddingHorizontal: 12,
     borderBottomWidth: 1,
     borderBottomColor: '#F1F5F9',
+    alignItems: 'center',
   },
   tdCell: {
     fontSize: 12,
     color: '#334155',
-    textAlign: 'left',
-    paddingHorizontal: 6,
   },
-  statusBadge: {
+  statusPill: {
     paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 6,
+    paddingVertical: 3,
+    borderRadius: 8,
+    alignSelf: 'flex-start',
   },
-  statusPresent: { backgroundColor: '#DCFCE7' },
-  statusPresentText: { fontSize: 11, fontWeight: '800', color: Colors.success },
-  statusAbsent: { backgroundColor: '#FEE2E2' },
-  statusAbsentText: { fontSize: 11, fontWeight: '800', color: Colors.error },
-  statusOD: { backgroundColor: '#FEF9C3' },
-  statusODText: { fontSize: 11, fontWeight: '800', color: '#D97706' },
-  emptyTableWrap: { padding: 30, alignItems: 'center' },
-
-  emptyWrap: { alignItems: 'center', marginTop: 40, padding: 20 },
-  emptyTitle: { fontSize: 16, fontWeight: '800', color: '#334155', marginBottom: 4 },
-  emptySubtitle: { fontSize: 13, color: '#94A3B8', textAlign: 'center' },
-
+  statusPillText: {
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  emptyCard: {
+    padding: 30,
+    alignItems: 'center',
+    backgroundColor: '#ffffff',
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  emptyTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#0F172A',
+    marginTop: 10,
+  },
+  emptySub: {
+    fontSize: 13,
+    color: '#64748B',
+    marginTop: 4,
+    textAlign: 'center',
+  },
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(15, 23, 42, 0.6)',
+    backgroundColor: 'rgba(15, 23, 42, 0.5)',
     justifyContent: 'center',
     alignItems: 'center',
-    padding: 24,
+    padding: 20,
   },
   modalCard: {
     width: '100%',
     backgroundColor: '#ffffff',
-    borderRadius: 24,
-    padding: 24,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.15,
-    shadowRadius: 20,
-    elevation: 8,
+    borderRadius: 20,
+    padding: 20,
+    elevation: 5,
   },
-  modalTitle: { fontSize: 18, fontWeight: '800', color: '#0F172A', marginBottom: 4 },
-  modalSubtitle: { fontSize: 13, color: '#64748B', marginBottom: 20 },
-  modalInputBlock: { marginBottom: 16 },
-  modalInputLabel: { fontSize: 12, fontWeight: '700', color: '#334155', marginBottom: 6 },
-  modalTextInput: {
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: '#0F172A',
+    marginBottom: 16,
+  },
+  inputLabel: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#475569',
+    marginBottom: 6,
+  },
+  dateInput: {
     backgroundColor: '#F8FAFC',
-    borderRadius: 12,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
+    borderRadius: 10,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: '#CBD5E1',
+    paddingHorizontal: 12,
+    paddingVertical: 10,
     fontSize: 14,
     color: '#0F172A',
+    marginBottom: 14,
   },
-  modalBtnRow: { flexDirection: 'row', marginTop: 10 },
+  modalActionRow: {
+    flexDirection: 'row',
+    gap: 12,
+    marginTop: 8,
+  },
   modalCancelBtn: {
     flex: 1,
     paddingVertical: 12,
     borderRadius: 12,
     backgroundColor: '#F1F5F9',
     alignItems: 'center',
-    marginRight: 8,
   },
-  modalCancelText: { fontSize: 14, fontWeight: '700', color: '#64748B' },
+  modalCancelText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#64748B',
+  },
   modalApplyBtn: {
     flex: 1,
     paddingVertical: 12,
     borderRadius: 12,
     backgroundColor: Colors.primary,
     alignItems: 'center',
-    marginLeft: 8,
   },
-  modalApplyText: { fontSize: 14, fontWeight: '700', color: '#ffffff' },
+  modalApplyText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#ffffff',
+  },
 });

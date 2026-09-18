@@ -109,11 +109,20 @@ export default function Login() {
       console.log('Online login timed out or failed, using local faculty resolver:', e);
     }
 
-    // Fallback: Resolve faculty locally
+    // Fallback: Resolve faculty / admin locally
     let checkEmail = inputEmail.replace('narmadha@', 'narmatha@');
     let matchedTeacher = null;
 
-    if (checkEmail.includes('narmatha')) {
+    if (checkEmail.includes('admin') || checkEmail.includes('hod')) {
+      matchedTeacher = {
+        id: 999,
+        name: 'Administrator (HOD / System Admin)',
+        email: 'admin@skct.edu.in',
+        department: 'Information Technology',
+        isAdmin: true,
+        role: 'admin',
+      };
+    } else if (checkEmail.includes('narmatha')) {
       matchedTeacher = {
         id: 3,
         name: 'Ms. B Narmatha',

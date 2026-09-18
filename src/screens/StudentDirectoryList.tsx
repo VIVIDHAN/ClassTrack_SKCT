@@ -7,22 +7,29 @@ import Icon from 'react-native-vector-icons/MaterialIcons';
 import { Colors } from '../constants/Colors';
 import { API_BASE_URL } from '../constants/Config';
 import BreatheLoader from '../components/BreatheLoader';
-import { SKCT_STUDENTS_G } from '../constants/DummyData';
+import { SKCT_STUDENTS_G, SKCT_STUDENTS_E } from '../constants/DummyData';
 
 export default function StudentDirectoryList() {
   const navigation = useNavigation<any>();
   const route = useRoute<any>();
-  const { classDetails } = route.params || { classDetails: { subject: 'Unknown', className: 'Unknown' } };
+  const { classDetails } = route.params || { classDetails: { subject: 'Student Directory', className: 'III IT G' } };
   
+  const [selectedSection, setSelectedSection] = useState<string>(
+    classDetails.className && classDetails.className !== 'Unknown' ? classDetails.className : 'III IT G'
+  );
   const [students, setStudents] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
 
   useEffect(() => {
+    setLoading(true);
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 3000);
 
-    fetch(`${API_BASE_URL}/students?section=${encodeURIComponent(classDetails.className)}`, { signal: controller.signal })
+    const isSectionE = selectedSection.includes('E');
+    const fallbackList = isSectionE ? SKCT_STUDENTS_E : SKCT_STUDENTS_G;
+
+    fetch(`${API_BASE_URL}/students?section=${encodeURIComponent(selectedSection)}`, { signal: controller.signal })
       .then(res => res.json())
       .then(data => {
         clearTimeout(timeoutId);
@@ -31,21 +38,21 @@ export default function StudentDirectoryList() {
             id: s.roll_no || s.rollNo,
             db_id: s.id,
             name: s.name,
-            phone: s.parentPhone || s.parent_phone,
+            phone: s.parentPhone || s.parent_phone || s.phone,
           }));
           setStudents(mapped);
         } else {
-          setStudents(SKCT_STUDENTS_G);
+          setStudents(fallbackList);
         }
         setLoading(false);
       })
       .catch(() => {
-        setStudents(SKCT_STUDENTS_G);
+        setStudents(fallbackList);
         setLoading(false);
       });
 
     return () => clearTimeout(timeoutId);
-  }, [classDetails.className]);
+  }, [selectedSection]);
 
   const filteredStudents = students.filter(s => 
     s.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
@@ -63,7 +70,7 @@ export default function StudentDirectoryList() {
       <View>
         <TouchableOpacity 
           style={styles.studentCard}
-          onPress={() => navigation.navigate('StudentProfile', { student: item, classDetails })}
+          onPress={() => navigation.navigate('StudentProfile', { student: item, classDetails: { ...classDetails, className: selectedSection } })}
           activeOpacity={0.7}
         >
           <View style={styles.studentAvatar}>
@@ -90,7 +97,7 @@ export default function StudentDirectoryList() {
     return (
       <SafeAreaView style={styles.container}>
         <View style={{ flex: 1, justifyContent: 'center' }}>
-          <BreatheLoader message="Loading student directory..." />
+          <BreatheLoader message={`Loading student directory (${selectedSection})...`} />
         </View>
       </SafeAreaView>
     );
@@ -103,10 +110,30 @@ export default function StudentDirectoryList() {
           <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
             <Icon name="arrow-back" size={28} color={Colors.text} />
           </TouchableOpacity>
-          <Text style={styles.title}>{classDetails.className}</Text>
+          <Text style={styles.title}>{selectedSection}</Text>
           <View style={{ width: 28 }} />
         </View>
-        <Text style={styles.subtitle}>{classDetails.subject ? `${classDetails.subject} • Directory` : 'Directory'}</Text>
+        
+        {/* Section Selector */}
+        <View style={styles.sectionToggleRow}>
+          {['III IT G', 'III IT E'].map((sec) => (
+            <TouchableOpacity
+              key={sec}
+              style={[styles.sectionBtn, selectedSection === sec && styles.sectionBtnActive]}
+              onPress={() => setSelectedSection(sec)}
+            >
+              <Text style={[styles.sectionBtnText, selectedSection === sec && styles.sectionBtnTextActive]}>
+                {sec}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+
+        <Text style={styles.subtitle}>
+          {classDetails.subject && classDetails.subject !== 'Unknown'
+            ? `${classDetails.subject} • Directory (${filteredStudents.length} Students)`
+            : `Student Directory (${filteredStudents.length} Students)`}
+        </Text>
       </View>
 
       <View style={styles.searchContainer}>
@@ -136,7 +163,7 @@ export default function StudentDirectoryList() {
           contentContainerStyle={{ paddingBottom: 20 }}
           itemLayoutAnimation={Layout.springify()}
           ListEmptyComponent={() => (
-            <Text style={styles.emptyText}>No students found.</Text>
+            <Text style={styles.emptyText}>No students found for {selectedSection}.</Text>
           )}
         />
       </View>
@@ -148,11 +175,10 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: Colors.surface,
-    
   },
   header: {
-    paddingHorizontal: 24,
-    paddingVertical: 16,
+    paddingHorizontal: 20,
+    paddingVertical: 14,
     backgroundColor: '#ffffff',
     borderBottomWidth: 1,
     borderBottomColor: '#F1F5F9',
@@ -167,19 +193,43 @@ const styles = StyleSheet.create({
     marginLeft: -4,
   },
   title: {
-    fontSize: 22,
+    fontSize: 20,
     fontWeight: '800',
     color: '#0F172A',
   },
+  sectionToggleRow: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginTop: 10,
+    gap: 8,
+  },
+  sectionBtn: {
+    paddingHorizontal: 16,
+    paddingVertical: 6,
+    borderRadius: 20,
+    backgroundColor: '#F1F5F9',
+  },
+  sectionBtnActive: {
+    backgroundColor: Colors.primary,
+  },
+  sectionBtnText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#64748B',
+  },
+  sectionBtnTextActive: {
+    color: '#ffffff',
+  },
   subtitle: {
-    fontSize: 14,
+    fontSize: 13,
     color: '#64748B',
     fontWeight: '600',
     marginTop: 8,
     textAlign: 'center',
   },
   searchContainer: {
-    padding: 20,
+    padding: 16,
     backgroundColor: '#ffffff',
     borderBottomWidth: 1,
     borderBottomColor: Colors.border,
@@ -189,78 +239,73 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     backgroundColor: '#F1F5F9',
     borderRadius: 12,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
   },
   searchInput: {
     flex: 1,
-    fontSize: 16,
+    fontSize: 15,
     color: Colors.text,
   },
   listContainer: {
     flex: 1,
-    backgroundColor: Colors.background,
-    padding: 24,
+    paddingHorizontal: 16,
+    paddingTop: 12,
   },
   studentCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: Colors.surface,
-    borderRadius: 16,
-    padding: 16,
-    marginBottom: 12,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
+    backgroundColor: '#ffffff',
+    padding: 14,
+    borderRadius: 14,
+    marginBottom: 10,
     elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 3,
   },
   studentAvatar: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     backgroundColor: '#E0F2FE',
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: 16,
+    marginRight: 12,
   },
   avatarText: {
-    fontSize: 20,
-    fontWeight: '800',
+    fontSize: 18,
+    fontWeight: '700',
     color: Colors.primary,
   },
   studentInfo: {
     flex: 1,
   },
   studentName: {
-    fontSize: 18,
-    fontWeight: '800',
-    color: Colors.text,
-    marginBottom: 4,
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#0F172A',
   },
   studentId: {
-    fontSize: 14,
-    color: Colors.textSecondary,
-    fontWeight: '600',
+    fontSize: 13,
+    color: '#64748B',
+    marginTop: 2,
+  },
+  attendanceBadge: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+    backgroundColor: '#F8FAFC',
+  },
+  attendanceText: {
+    fontSize: 13,
+    fontWeight: '700',
   },
   emptyText: {
     textAlign: 'center',
-    marginTop: 40,
     color: Colors.textSecondary,
-    fontSize: 16,
+    fontSize: 15,
+    marginTop: 40,
   },
-  attendanceBadge: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 12,
-    backgroundColor: '#F8FAFC',
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-  },
-  attendanceText: {
-    fontSize: 14,
-    fontWeight: '800',
-  }
 });

@@ -32,6 +32,23 @@ app.post('/api/login', async (req, res) => {
     let searchEmail = email.trim().toLowerCase();
     searchEmail = searchEmail.replace('narmadha@', 'narmatha@');
 
+    // Admin login override
+    if (searchEmail === 'admin@skct.edu.in' || searchEmail === 'admin' || searchEmail === 'hod@skct.edu.in') {
+      if (password === 'AdminSKCT@123' || password === 'admin123' || password === 'Admin@123' || password === 'admin') {
+        return res.json({
+          success: true,
+          teacher: {
+            id: 999,
+            name: 'Administrator (HOD / System Admin)',
+            email: 'admin@skct.edu.in',
+            department: 'Information Technology',
+            isAdmin: true,
+            role: 'admin'
+          }
+        });
+      }
+    }
+
     // Find teacher
     const teacher = await Teacher.findOne({
       where: sequelize.where(
@@ -162,7 +179,7 @@ app.get('/api/timetable', async (req, res) => {
       }
     }
     if (section) where.section = section;
-    if (teacher_id) where.teacher_id = teacher_id;
+    if (teacher_id && String(teacher_id) !== '999') where.teacher_id = teacher_id;
 
     const timetable = await Timetable.findAll({
       where,
@@ -422,7 +439,7 @@ app.get('/api/attendance', async (req, res) => {
     if (status) where.status = status;
 
     const include = [{ model: Student, attributes: ['id', 'name', 'section', 'roll_no'] }];
-    if (section) {
+    if (section && section !== 'Both' && section !== 'ALL' && section !== 'Both Classes Together') {
       include[0].where = { section };
     }
 
@@ -510,7 +527,7 @@ app.get('/api/history', async (req, res) => {
 app.get('/api/reports', async (req, res) => {
   try {
     const { startDate, endDate, section, roll_no, subject_name } = req.query;
-    const whereSection = section ? { section } : {};
+    const whereSection = (section && section !== 'Both' && section !== 'ALL' && section !== 'Both Classes Together') ? { section } : {};
     if (roll_no) whereSection.roll_no = roll_no;
 
     const students = await Student.findAll({ where: whereSection, order: [['roll_no', 'ASC']] });
