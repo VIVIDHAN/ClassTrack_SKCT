@@ -49,7 +49,7 @@ export const getTeacherDirectoryFallback = (teacherId: number, teacherName: stri
     return [
       { id: '33', className: 'III IT E', subject: 'Cloud Infrastructure and Services Management', timetable_id: 33 },
     ];
-  } else if (teacherId === 9 || name.includes('gayathri')) {
+  } else if (teacherId === 9 || teacherId === 12 || name.includes('gayathri') || name.includes('vaishnavi')) {
     return [
       { id: '27', className: 'III IT E', subject: 'Application Development', timetable_id: 27 },
     ];
@@ -91,7 +91,7 @@ export const getTeacherAttendanceFallback = (teacherId: number, teacherName: str
     return [
       { id: '33', time: 'Period 3 (10:45 - 11:45)', className: 'III IT E', subject: 'Cloud Infrastructure and Services Management', timetable_id: 33 },
     ];
-  } else if (teacherId === 9 || name.includes('gayathri')) {
+  } else if (teacherId === 9 || teacherId === 12 || name.includes('gayathri') || name.includes('vaishnavi')) {
     return [
       { id: '27', time: 'Period 4 (11:45 - 12:45)', className: 'III IT E', subject: 'Application Development', timetable_id: 27 },
     ];

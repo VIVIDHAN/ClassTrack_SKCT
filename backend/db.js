@@ -49,10 +49,32 @@ Timetable.belongsTo(Teacher, { foreignKey: 'teacher_id' });
 const Attendance = sequelize.define('Attendance', {
   id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
   date: { type: DataTypes.DATEONLY, allowNull: false },
+  day_order: { type: DataTypes.INTEGER, allowNull: true },
+  period: { type: DataTypes.STRING, allowNull: true },
+  time: { type: DataTypes.STRING, allowNull: true },
+  roll_no: { type: DataTypes.STRING, allowNull: true },
+  subject_name: { type: DataTypes.STRING, allowNull: true },
   status: { type: DataTypes.ENUM('Present', 'Absent', 'OD'), allowNull: false, defaultValue: 'Present' }
 });
 
 Attendance.belongsTo(Student, { foreignKey: 'student_id' });
 Attendance.belongsTo(Timetable, { foreignKey: 'timetable_id' });
 
-module.exports = { sequelize, Teacher, Student, Subject, Timetable, Attendance };
+async function syncDatabaseSchema() {
+  try {
+    const queryInterface = sequelize.getQueryInterface();
+    const tableInfo = await queryInterface.describeTable('Attendances').catch(() => null);
+    if (tableInfo) {
+      if (!tableInfo.day_order) await queryInterface.addColumn('Attendances', 'day_order', { type: DataTypes.INTEGER, allowNull: true });
+      if (!tableInfo.period) await queryInterface.addColumn('Attendances', 'period', { type: DataTypes.STRING, allowNull: true });
+      if (!tableInfo.time) await queryInterface.addColumn('Attendances', 'time', { type: DataTypes.STRING, allowNull: true });
+      if (!tableInfo.roll_no) await queryInterface.addColumn('Attendances', 'roll_no', { type: DataTypes.STRING, allowNull: true });
+      if (!tableInfo.subject_name) await queryInterface.addColumn('Attendances', 'subject_name', { type: DataTypes.STRING, allowNull: true });
+    }
+  } catch (err) {
+    console.warn('DB schema sync warning:', err.message);
+  }
+}
+
+module.exports = { sequelize, Teacher, Student, Subject, Timetable, Attendance, syncDatabaseSchema };
+

@@ -262,12 +262,22 @@ export default function Attendance() {
 
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 4000);
+      const periodVal = classDetails.period ? `Period ${classDetails.period}` : (classDetails.time ? (classDetails.time.includes('(') ? classDetails.time.split('(')[0].trim() : classDetails.time) : 'Period 1');
+      const timeVal = classDetails.time || '08:15 AM - 09:15 AM';
+      const subjectVal = classDetails.subject || 'Applied Cryptography';
+      const dayOrderVal = classDetails.day_order || classDetails.day || 4;
+
       const res = await fetch(`${API_BASE_URL}/attendance`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           timetable_id: targetTimetableId,
           date: isoDate,
+          day_order: dayOrderVal,
+          period: periodVal,
+          time: timeVal,
+          subject_name: subjectVal,
+          subject: subjectVal,
           section: classDetails.className || 'III IT G',
           records: recordsPayload
         }),

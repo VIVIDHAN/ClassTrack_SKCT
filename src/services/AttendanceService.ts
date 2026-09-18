@@ -23,6 +23,7 @@ export interface AttendanceSessionRecord {
   sessionId: string;
   date: string; // e.g. "7 Sep 2026"
   isoDate: string; // e.g. "2026-09-07"
+  day_order?: number;
   time: string; // e.g. "Period 4 (11:45 AM - 12:45 PM)"
   period: string; // e.g. "Period 4"
   className: string; // e.g. "III IT G"
@@ -206,6 +207,11 @@ export async function syncPendingAttendance(): Promise<{ synced: number; failed:
       try {
         const payload = {
           date: session.isoDate || normalizeIsoDate(session.date),
+          day_order: session.day_order,
+          period: session.period,
+          time: session.time,
+          subject_name: session.subject,
+          subject: session.subject,
           timetable_id: session.timetable_id || 1,
           section: session.className || 'III IT G',
           records: session.records.map((r, idx) => ({
