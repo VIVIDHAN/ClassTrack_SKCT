@@ -19,6 +19,69 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
+// 6. Direct Google Sheets Export Endpoint (Connects to Google Apps Script or Google API)
+app.post('/api/reports/google-sheet', async (req, res) => {
+  try {
+    const { title, headers, rows } = req.body;
+    const webAppUrl = process.env.GOOGLE_SHEETS_WEBAPP_URL || req.body.webapp_url;
+
+    if (!webAppUrl) {
+      return res.status(400).json({
+        success: false,
+        error: 'Google Sheets WebApp URL not configured. Set GOOGLE_SHEETS_WEBAPP_URL in backend/.env'
+      });
+    }
+
+    const response = await fetch(webAppUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      redirect: 'follow',
+      body: JSON.stringify({
+        title: title || 'ClassTrack_Attendance_Report',
+        headers: headers || ['S.No', 'Roll No', 'Name', 'Section', 'Total Classes', 'Attended Classes', 'Percentage %', 'Status'],
+        rows: rows || []
+      })
+    });
+
+    const responseText = await response.text();
+
+    if (response.status === 401 || responseText.includes('Google Drive -- Page Not Found')) {
+      return res.status(401).json({
+        success: false,
+        error: 'Google Apps Script Authorization Error (401). In script.google.com, click Deploy > Manage deployments > Edit ✏️, and set "Who has access" to "Anyone".'
+      });
+    }
+
+    let data = {};
+    try {
+      data = JSON.parse(responseText);
+    } catch (e) {
+      console.log('[RAW WEBAPP RESPONSE]:', responseText.substring(0, 300));
+      return res.status(500).json({
+        success: false,
+        error: 'Unexpected response from Google Apps Script Web App.'
+      });
+    }
+
+    if (data.success && (data.sheetUrl || data.url)) {
+      return res.json({
+        success: true,
+        sheetUrl: data.sheetUrl || data.url,
+        spreadsheetId: data.spreadsheetId,
+        message: 'Google Sheet created successfully!'
+      });
+    }
+
+    res.status(400).json({
+      success: false,
+      error: data.error || 'Failed to create Google Sheet via WebApp.'
+    });
+
+  } catch (err) {
+    console.error('[GOOGLE SHEETS EXPORT ERROR]:', err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
 
 // 0. Faculty Login
 app.post('/api/login', async (req, res) => {

@@ -12,6 +12,7 @@ import {
   Dimensions,
   FlatList,
   Alert,
+  Linking,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
@@ -265,6 +266,85 @@ export default function AttendanceReport() {
     }
   };
 
+  // Admin Action: Share report as Google Sheet link
+  const handleShareGoogleSheet = async () => {
+    if (!isAdminUser) {
+      Alert.alert(
+        'Admin Access Restricted',
+        'Sharing reports as Google Sheet is enabled exclusively for the Administrator account (admin@skct.edu.in).'
+      );
+      return;
+    }
+
+    try {
+      const title = `ClassTrack_Attendance_${selectedSection}_${startDate}_to_${endDate}`;
+      const headers = ['S.No', 'Roll No', 'Student Name', 'Section', 'Total Classes', 'Attended Classes', 'Attendance %', 'Status'];
+      const rows = filteredStudents.map((s, idx) => [
+        idx + 1,
+        s.roll_no,
+        s.name,
+        s.className || selectedSection,
+        s.totalClasses,
+        s.attendedClasses,
+        `${s.percentage}%`,
+        s.percentage < 75 ? 'Defaulter (<75%)' : 'Eligible'
+      ]);
+
+      // Call backend Google Sheet generator endpoint
+      const response = await fetch(`${API_BASE_URL}/api/reports/google-sheet`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title, headers, rows })
+      });
+
+      const resData = await response.json();
+
+      if (resData.success && resData.sheetUrl) {
+        Alert.alert(
+          'Google Sheet Generated! 📊',
+          'Your live Google Sheet report is ready to view and share.',
+          [
+            {
+              text: 'Open Google Sheet',
+              onPress: () => Linking.openURL(resData.sheetUrl)
+            },
+            {
+              text: 'Share Link',
+              onPress: () => Share.share({ message: resData.sheetUrl, title: title })
+            },
+            { text: 'Cancel', style: 'cancel' }
+          ]
+        );
+      } else {
+        // Fallback or setup helper option when WebApp URL is not yet connected
+        let tsvContent = `S.No\tRoll No\tStudent Name\tSection\tTotal Classes\tAttended Classes\tAttendance %\tStatus\n`;
+        rows.forEach(r => { tsvContent += r.join('\t') + '\n'; });
+
+        Alert.alert(
+          'Share as Google Sheet 📊',
+          `ClassTrack report prepared for ${selectedSection} (${startDate} to ${endDate}).\n\nTap "Open sheets.new" to create a blank Google Sheet, or "Share Live Text" to send formatted spreadsheet data.`,
+          [
+            {
+              text: 'Open sheets.new',
+              onPress: () => Linking.openURL('https://sheets.new')
+            },
+            {
+              text: 'Share Live Data',
+              onPress: () => Share.share({
+                message: `ClassTrack Attendance Report (${selectedSection})\nDate Range: ${startDate} to ${endDate}\n\n${tsvContent}`,
+                title: `${title}.tsv`
+              })
+            },
+            { text: 'Cancel', style: 'cancel' }
+          ]
+        );
+      }
+    } catch (err: any) {
+      console.error(err);
+      Linking.openURL('https://sheets.new').catch(() => {});
+    }
+  };
+
   const renderStudentItem = ({ item, index }: { item: any; index: number }) => {
     const isCritical = item.percentage < 75;
     const isGreat = item.percentage >= 85;
@@ -441,7 +521,7 @@ export default function AttendanceReport() {
                 activeOpacity={0.8}
               >
                 <Icon name="table-view" size={18} color="#ffffff" style={{ marginRight: 6 }} />
-                <Text style={styles.csvBtnText}>Download Full CSV</Text>
+                <Text style={styles.csvBtnText}>Full CSV</Text>
               </TouchableOpacity>
 
               <TouchableOpacity
@@ -450,7 +530,16 @@ export default function AttendanceReport() {
                 activeOpacity={0.8}
               >
                 <Icon name="person-off" size={18} color="#ffffff" style={{ marginRight: 6 }} />
-                <Text style={styles.csvBtnText}>Download Absentees CSV</Text>
+                <Text style={styles.csvBtnText}>Absentees CSV</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.csvBtn, { backgroundColor: '#10B981' }]}
+                onPress={handleShareGoogleSheet}
+                activeOpacity={0.8}
+              >
+                <Icon name="grid-on" size={18} color="#ffffff" style={{ marginRight: 6 }} />
+                <Text style={styles.csvBtnText}>Share Google Sheet</Text>
               </TouchableOpacity>
             </View>
           ) : (
