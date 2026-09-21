@@ -377,20 +377,186 @@ export const addAttendanceHistory = (record: any) => {
   ATTENDANCE_HISTORY = [record, ...ATTENDANCE_HISTORY];
 };
 
-export const generateFallbackReport = (section: string = 'Both', startStr?: string, endStr?: string) => {
+export interface FacultyScope {
+  teacherId: number;
+  teacherName: string;
+  assignedSection: 'III IT E' | 'III IT G' | 'Both';
+  assignedSubject: string;
+  allowedSections: string[];
+}
+
+export const getFacultyScope = (teacher: any): FacultyScope => {
+  if (!teacher) {
+    return {
+      teacherId: 3,
+      teacherName: 'Ms. B Narmatha',
+      assignedSection: 'III IT G',
+      assignedSubject: 'Applied Cryptography',
+      allowedSections: ['III IT G'],
+    };
+  }
+
+  const name = (teacher.name || '').toLowerCase();
+  const email = (teacher.email || '').toLowerCase();
+  const id = Number(teacher.id) || 0;
+
+  if (teacher.isAdmin || id === 999 || email.includes('admin') || email.includes('hod') || name.includes('admin')) {
+    return {
+      teacherId: 999,
+      teacherName: teacher.name || 'Administrator',
+      assignedSection: 'Both',
+      assignedSubject: 'All Department Subjects',
+      allowedSections: ['Both', 'III IT G', 'III IT E'],
+    };
+  }
+
+  if (id === 5 || name.includes('edwin') || email.includes('edwin')) {
+    return {
+      teacherId: 5,
+      teacherName: 'Dr G Edwin Prem Kumar',
+      assignedSection: 'III IT E',
+      assignedSubject: 'Applied Cryptography',
+      allowedSections: ['III IT E'],
+    };
+  }
+
+  if (id === 3 || name.includes('narmatha') || name.includes('narmadha') || email.includes('narmatha') || email.includes('narmadha')) {
+    return {
+      teacherId: 3,
+      teacherName: 'Ms. B Narmatha',
+      assignedSection: 'III IT G',
+      assignedSubject: 'Applied Cryptography',
+      allowedSections: ['III IT G'],
+    };
+  }
+
+  if (id === 6 || name.includes('ratheesh') || email.includes('ratheesh')) {
+    return {
+      teacherId: 6,
+      teacherName: 'Mr A M Ratheeshkumar',
+      assignedSection: 'III IT E',
+      assignedSubject: 'Distributed Computing',
+      allowedSections: ['III IT E'],
+    };
+  }
+
+  if (id === 4 || name.includes('saranya') || email.includes('saranya')) {
+    return {
+      teacherId: 4,
+      teacherName: 'Ms. S Saranya',
+      assignedSection: 'III IT G',
+      assignedSubject: 'Distributed Computing',
+      allowedSections: ['III IT G'],
+    };
+  }
+
+  if (id === 2 || name.includes('guranna') || email.includes('guranna')) {
+    return {
+      teacherId: 2,
+      teacherName: 'Mr. Guranna',
+      assignedSection: 'III IT G',
+      assignedSubject: 'Software Testing',
+      allowedSections: ['III IT G'],
+    };
+  }
+
+  if (id === 7 || name.includes('mouneesh') || email.includes('mouneesh')) {
+    return {
+      teacherId: 7,
+      teacherName: 'Mr Mouneesh',
+      assignedSection: 'III IT E',
+      assignedSubject: 'Software Testing',
+      allowedSections: ['III IT E'],
+    };
+  }
+
+  return {
+    teacherId: id || 3,
+    teacherName: teacher.name || 'Faculty Member',
+    assignedSection: 'III IT G',
+    assignedSubject: 'Applied Cryptography',
+    allowedSections: ['III IT G'],
+  };
+};
+
+export const generateDetailedLogsForScope = (scope: FacultyScope, sectionParam: string = '') => {
+  const targetSection = scope.assignedSection === 'Both'
+    ? (sectionParam || 'III IT G')
+    : scope.assignedSection;
+  const targetSubject = scope.assignedSubject === 'All Department Subjects'
+    ? 'Applied Cryptography'
+    : scope.assignedSubject;
+
+  const studentList = targetSection === 'III IT E' ? SKCT_STUDENTS_E : SKCT_STUDENTS_G;
+
+  const dates = ['2026-09-18', '2026-09-17', '2026-09-16', '2026-09-15', '2026-09-12'];
+  const logs: any[] = [];
+  let sno = 1;
+
+  dates.forEach((dateStr, dIdx) => {
+    studentList.slice(0, 15).forEach((st, stIdx) => {
+      const isAbsent = (stIdx + dIdx) % 7 === 0;
+      const isOD = !isAbsent && (stIdx % 11 === 0);
+      logs.push({
+        id: `log_${sno}`,
+        sno: sno++,
+        date: dateStr,
+        day_order: (dIdx % 5) + 1,
+        period: `Period ${(stIdx % 4) + 1}`,
+        time: `0${8 + (stIdx % 4)}:15 - 0${9 + (stIdx % 4)}:15`,
+        roll_no: st.id,
+        student_name: st.name,
+        section: targetSection,
+        subject_name: targetSubject,
+        status: isAbsent ? 'Absent' : isOD ? 'On Duty' : 'Present',
+      });
+    });
+  });
+
+  return logs;
+};
+
+export const generateFallbackReport = (
+  section: string = 'Both',
+  startStr?: string,
+  endStr?: string,
+  teacherScope?: FacultyScope
+) => {
+  const scope = teacherScope || {
+    teacherId: 999,
+    teacherName: 'Admin',
+    assignedSection: 'Both',
+    assignedSubject: 'All Department Subjects',
+    allowedSections: ['Both', 'III IT G', 'III IT E'],
+  };
+
+  let activeSection = section;
+  if (scope.assignedSection !== 'Both') {
+    activeSection = scope.assignedSection;
+  }
+
   let students: any[] = [];
-  if (section === 'Both' || section === 'ALL' || section === 'Both Classes Together') {
+  if (activeSection === 'Both' || activeSection === 'ALL' || activeSection === 'Both Classes Together') {
     students = [
       ...SKCT_STUDENTS_G.map(s => ({ ...s, className: 'III IT G' })),
       ...SKCT_STUDENTS_E.map(s => ({ ...s, className: 'III IT E' }))
     ];
-  } else if (section.includes('E')) {
+  } else if (activeSection.includes('E')) {
     students = SKCT_STUDENTS_E.map(s => ({ ...s, className: 'III IT E' }));
   } else {
     students = SKCT_STUDENTS_G.map(s => ({ ...s, className: 'III IT G' }));
   }
 
-  const totalClasses = 24; // Representative number of sessions in range
+  const totalClasses = 25;
+
+  let subjectSeed = 13;
+  if (scope.assignedSubject.includes('Distributed')) {
+    subjectSeed = 17;
+  } else if (scope.assignedSubject.includes('Software')) {
+    subjectSeed = 23;
+  } else if (scope.assignedSubject.includes('Cloud')) {
+    subjectSeed = 29;
+  }
 
   return students.map((s: any, idx: number) => {
     let hash = 0;
@@ -398,16 +564,23 @@ export const generateFallbackReport = (section: string = 'Both', startStr?: stri
     for (let i = 0; i < studentId.length; i++) {
       hash += studentId.charCodeAt(i);
     }
-    let attended = totalClasses - ((hash + idx) % 7);
-    if (idx === 3 || idx === 8 || idx === 15) {
-      attended = totalClasses - 8; // Representative defaulters for alerts
+
+    let missed = (hash * subjectSeed + idx * 3) % 7;
+    // Hardcode representative subject-specific defaulters
+    if (scope.assignedSubject.includes('Distributed') && (idx === 0 || idx === 4 || idx === 12)) {
+      missed = 8; // Defaulters for DC
+    } else if (scope.assignedSubject.includes('Crypt') && (idx === 1 || idx === 5 || idx === 10)) {
+      missed = 8; // Defaulters for AC
     }
+
+    const attended = Math.max(12, totalClasses - missed);
     const percentage = Math.round((attended / totalClasses) * 100);
 
     return {
       roll_no: studentId,
       name: s.name,
-      className: s.className || section,
+      className: s.className || activeSection,
+      subjectName: scope.assignedSubject,
       totalClasses,
       attendedClasses: attended,
       percentage,

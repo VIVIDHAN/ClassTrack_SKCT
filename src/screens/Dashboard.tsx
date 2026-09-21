@@ -118,7 +118,7 @@ export default function Dashboard() {
     }, [])
   );
 
-  // Evaluate ongoing and upcoming classes according to active DB Day Order (e.g. Day Order 3)
+  // Evaluate ongoing and upcoming classes according to active DB Day Order
   const scheduleState = useMemo(() => {
     const jsDay = currentTime.getDay();
     const isWeekend = jsDay === 0 || jsDay === 6;
@@ -191,27 +191,27 @@ export default function Dashboard() {
           status = 'Completed';
         }
 
-        let dotColor = '#2563EB';
-        let badgeBorder = '#2563EB';
-        let badgeBg = '#EFF6FF';
-        let badgeTextColor = '#2563EB';
+        let dotColor = Colors.primary;
+        let badgeBorder = Colors.primary;
+        let badgeBg = '#FFF7ED';
+        let badgeTextColor = Colors.primary;
 
         if (status === 'Ongoing') {
-          dotColor = '#2563EB';
-          badgeBorder = '#2563EB';
-          badgeBg = '#EFF6FF';
-          badgeTextColor = '#2563EB';
+          dotColor = Colors.primary;
+          badgeBorder = Colors.primary;
+          badgeBg = '#FFF7ED';
+          badgeTextColor = Colors.primary;
         } else if (status === 'Upcoming') {
           if (upcomingIndex === 0) {
-            dotColor = '#9333EA';
-            badgeBorder = '#A855F7';
-            badgeBg = '#FAF5FF';
-            badgeTextColor = '#9333EA';
+            dotColor = '#F59E0B';
+            badgeBorder = '#F59E0B';
+            badgeBg = '#FEF3C7';
+            badgeTextColor = '#D97706';
           } else {
-            dotColor = '#EA580C';
-            badgeBorder = '#F97316';
+            dotColor = Colors.primaryLight;
+            badgeBorder = Colors.primaryLight;
             badgeBg = '#FFF7ED';
-            badgeTextColor = '#EA580C';
+            badgeTextColor = Colors.primaryDark;
           }
           upcomingIndex++;
         } else {
@@ -242,14 +242,14 @@ export default function Dashboard() {
       timelineItems,
       todayClassCount: enrichedToday.length,
     };
-  }, [allClasses, currentTime]);
+  }, [allClasses, currentTime, todayDayOrder]);
 
   return (
     <SafeAreaView style={styles.container}>
-      {/* Header */}
+      {/* AppBar Header */}
       <View style={styles.appBar}>
         <TouchableOpacity style={styles.appBarBtn} onPress={() => setIsSidebarOpen(true)}>
-          <Icon name="menu" size={28} color="#0F172A" />
+          <Icon name="menu" size={26} color="#0F172A" />
         </TouchableOpacity>
 
         <View style={styles.headerLogoContainer}>
@@ -257,7 +257,7 @@ export default function Dashboard() {
         </View>
 
         <TouchableOpacity style={styles.appBarBtn} onPress={() => navigation.navigate('Notifications')}>
-          <Icon name="notifications-none" size={28} color="#0F172A" />
+          <Icon name="notifications-none" size={26} color="#0F172A" />
         </TouchableOpacity>
       </View>
 
@@ -300,16 +300,16 @@ export default function Dashboard() {
           </View>
         </Animated.View>
 
-        {/* Quick Action Grid (Reports, Directory, Notify, My Timetable) */}
+        {/* Quick Action 2x2 Grid */}
         <View style={styles.gridContainer}>
           <View style={styles.rowGrid}>
             <TouchableOpacity
               style={styles.gridBox}
               onPress={() => navigation.navigate('AttendanceReport')}
-              activeOpacity={0.8}
+              activeOpacity={0.85}
             >
-              <View style={[styles.gridIconWrap, { backgroundColor: '#FEE2E2' }]}>
-                <Icon name="pie-chart" size={26} color="#EF4444" />
+              <View style={[styles.gridIconWrap, { backgroundColor: '#FFF7ED' }]}>
+                <Icon name="pie-chart" size={26} color={Colors.primary} />
               </View>
               <Text style={styles.gridTitle}>Reports</Text>
               <Text style={styles.gridSubtitle}>Analytics & Pie Chart</Text>
@@ -318,9 +318,9 @@ export default function Dashboard() {
             <TouchableOpacity
               style={styles.gridBox}
               onPress={() => navigation.navigate('ClassesList', { mode: 'directory' })}
-              activeOpacity={0.8}
+              activeOpacity={0.85}
             >
-              <View style={[styles.gridIconWrap, { backgroundColor: '#DCFCE7' }]}>
+              <View style={[styles.gridIconWrap, { backgroundColor: '#ECFDF5' }]}>
                 <Icon name="people" size={26} color="#10B981" />
               </View>
               <Text style={styles.gridTitle}>Directory</Text>
@@ -332,7 +332,7 @@ export default function Dashboard() {
             <TouchableOpacity
               style={styles.gridBox}
               onPress={() => navigation.navigate('Notify')}
-              activeOpacity={0.8}
+              activeOpacity={0.85}
             >
               <View style={[styles.gridIconWrap, { backgroundColor: '#FEF3C7' }]}>
                 <Icon name="notifications" size={26} color="#F59E0B" />
@@ -344,10 +344,10 @@ export default function Dashboard() {
             <TouchableOpacity
               style={styles.gridBox}
               onPress={() => navigation.navigate('FacultyTimetable', { selectedDay: todayDayOrder })}
-              activeOpacity={0.8}
+              activeOpacity={0.85}
             >
-              <View style={[styles.gridIconWrap, { backgroundColor: '#EEF2FF' }]}>
-                <Icon name="calendar-month" size={26} color="#4F46E5" />
+              <View style={[styles.gridIconWrap, { backgroundColor: '#FFF7ED' }]}>
+                <Icon name="calendar-month" size={26} color={Colors.primaryDark} />
               </View>
               <Text style={styles.gridTitle}>My Timetable</Text>
               <Text style={styles.gridSubtitle}>Weekly schedule</Text>
@@ -355,7 +355,7 @@ export default function Dashboard() {
           </View>
         </View>
 
-        {/* Today's Schedule */}
+        {/* Today's Schedule Timeline Section */}
         <Animated.View entering={FadeInUp.delay(150).duration(500)} style={styles.scheduleSectionContainer}>
           <View style={styles.scheduleHeaderRow}>
             <Text style={styles.scheduleTitleText}>Today's Schedule</Text>
@@ -365,7 +365,7 @@ export default function Dashboard() {
               activeOpacity={0.7}
             >
               <Text style={styles.viewTimetableText}>View Timetable</Text>
-              <Icon name="chevron-right" size={18} color="#2563EB" style={{ marginLeft: 2 }} />
+              <Icon name="chevron-right" size={18} color={Colors.primary} style={{ marginLeft: 2 }} />
             </TouchableOpacity>
           </View>
 
@@ -428,30 +428,32 @@ export default function Dashboard() {
           </View>
         </Animated.View>
 
-        {/* Mark Attendance Card */}
+        {/* Mark Attendance Primary Card */}
         <View style={[styles.gridContainer, { marginTop: 16 }]}>
           <TouchableOpacity
             style={styles.fullWidthCard}
             onPress={() => navigation.navigate('ClassesList', { mode: 'attendance' })}
-            activeOpacity={0.8}
+            activeOpacity={0.85}
           >
             <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-              <View style={[styles.gridIconWrap, { backgroundColor: '#E0F2FE', marginBottom: 0, marginRight: 16 }]}>
-                <Icon name="fact-check" size={28} color="#0284C7" />
+              <View style={[styles.gridIconWrap, { backgroundColor: '#FFF7ED', marginBottom: 0, marginRight: 14 }]}>
+                <Icon name="fact-check" size={28} color={Colors.primary} />
               </View>
               <View style={{ flex: 1 }}>
                 <Text style={styles.gridTitle}>Mark Attendance</Text>
-                <Text style={styles.gridSubtitle}>Select a class to mark</Text>
+                <Text style={styles.gridSubtitle}>Select a class to mark attendance</Text>
               </View>
-              <Icon name="chevron-right" size={24} color="#94A3B8" />
+              <View style={styles.ctaArrowBox}>
+                <Icon name="chevron-right" size={20} color="#FFFFFF" />
+              </View>
             </View>
           </TouchableOpacity>
         </View>
 
-        {/* Daily Wisdom */}
+        {/* Daily Wisdom Quote */}
         <Animated.View entering={FadeInUp.delay(200).duration(500)} style={styles.wisdomContainer}>
           <View style={styles.wisdomCard}>
-            <Icon name="format-quote" size={36} color="rgba(255, 93, 56, 0.2)" style={styles.quoteIcon} />
+            <Icon name="format-quote" size={36} color="rgba(255, 107, 0, 0.15)" style={styles.quoteIcon} />
             <Text style={styles.wisdomTitle}>Daily Wisdom</Text>
             <Text style={styles.wisdomText}>"The beautiful thing about learning is that no one can take it away from you."</Text>
             <Text style={styles.wisdomAuthor}>- B.B. King</Text>
@@ -471,10 +473,10 @@ export default function Dashboard() {
             <View style={styles.sidebarHeader}>
               <View style={{ width: 28 }} />
               <View style={{ flex: 1, alignItems: 'center' }}>
-                <Image source={require('../assets/logo.png')} style={{ width: 170, height: 55 }} resizeMode="contain" />
+                <Image source={require('../assets/logo.png')} style={{ width: 160, height: 50 }} resizeMode="contain" />
               </View>
               <TouchableOpacity onPress={() => setIsSidebarOpen(false)}>
-                <Icon name="close" size={28} color="#0F172A" />
+                <Icon name="close" size={26} color="#0F172A" />
               </TouchableOpacity>
             </View>
 
@@ -559,12 +561,12 @@ export default function Dashboard() {
         </View>
       )}
 
-      {/* LOGOUT MODAL */}
+      {/* LOGOUT CONFIRMATION MODAL */}
       <Modal transparent visible={logoutModalVisible} animationType="fade">
         <View style={styles.modalOverlay}>
           <View style={styles.modalCard}>
             <View style={styles.modalIconBox}>
-              <Icon name="logout" size={32} color={Colors.error} />
+              <Icon name="logout" size={30} color={Colors.error} />
             </View>
             <Text style={styles.modalTitle}>Confirm Logout</Text>
             <Text style={styles.modalSubtitle}>Are you sure you want to log out of your session?</Text>
@@ -585,42 +587,42 @@ export default function Dashboard() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#F8FAFC' },
+  container: { flex: 1, backgroundColor: Colors.background },
   appBar: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 20,
     paddingVertical: 12,
-    backgroundColor: '#ffffff',
+    backgroundColor: '#FFFFFF',
     borderBottomWidth: 1,
     borderBottomColor: '#F1F5F9',
   },
   appBarBtn: { padding: 8, borderRadius: 12, backgroundColor: '#F8FAFC' },
   headerLogoContainer: { flex: 1, alignItems: 'center' },
-  headerLogo: { width: 170, height: 50 },
+  headerLogo: { width: 165, height: 48 },
 
-  welcomeContainer: { paddingHorizontal: 16, marginTop: 12, marginBottom: 14 },
+  welcomeContainer: { paddingHorizontal: 16, marginTop: 14, marginBottom: 14 },
   facultyCard: {
-    backgroundColor: '#ffffff',
+    backgroundColor: '#FFFFFF',
     borderRadius: 20,
     padding: 18,
     borderWidth: 1,
     borderColor: '#F1F5F9',
-    shadowColor: '#000',
+    shadowColor: '#0F172A',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.04,
     shadowRadius: 10,
-    elevation: 3,
+    elevation: 2,
   },
   facultyCardContent: { flex: 1 },
   greetingHeaderRow: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 14 },
   greeting: { fontSize: 13, color: '#64748B', fontWeight: '600' },
-  name: { fontSize: 20, fontWeight: '900', color: '#0F172A', marginTop: 2 },
+  name: { fontSize: 20, fontWeight: '900', color: '#0F172A', marginTop: 2, letterSpacing: -0.3 },
   departmentBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(255, 93, 56, 0.1)',
+    backgroundColor: 'rgba(255, 107, 0, 0.08)',
     paddingHorizontal: 10,
     paddingVertical: 6,
     borderRadius: 10,
@@ -631,23 +633,23 @@ const styles = StyleSheet.create({
   calendarLine1: { flexDirection: 'row', alignItems: 'center', marginBottom: 6 },
   dateDayText: { fontSize: 13, fontWeight: '700', color: '#1E293B' },
   calendarLine2: { flexDirection: 'row', alignItems: 'center' },
-  dayOrderBadge: { backgroundColor: '#EFF6FF', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 6 },
-  dayOrderBadgeText: { fontSize: 11, fontWeight: '800', color: '#2563EB' },
+  dayOrderBadge: { backgroundColor: '#FFF7ED', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 },
+  dayOrderBadgeText: { fontSize: 11, fontWeight: '800', color: Colors.primary },
   dotSeparator: { marginHorizontal: 8, color: '#94A3B8', fontSize: 14 },
-  periodCountBadge: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#ECFDF5', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 6 },
+  periodCountBadge: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#ECFDF5', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 },
   periodCountText: { fontSize: 11, fontWeight: '700', color: '#047857' },
 
   gridContainer: { paddingHorizontal: 16 },
   rowGrid: { flexDirection: 'row', justifyContent: 'space-between' },
   gridBox: {
     flex: 1,
-    backgroundColor: '#ffffff',
+    backgroundColor: '#FFFFFF',
     borderRadius: 18,
     padding: 16,
     marginHorizontal: 4,
     borderWidth: 1,
     borderColor: '#F1F5F9',
-    shadowColor: '#000',
+    shadowColor: '#0F172A',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.03,
     shadowRadius: 6,
@@ -657,31 +659,39 @@ const styles = StyleSheet.create({
   gridTitle: { fontSize: 15, fontWeight: '800', color: '#0F172A' },
   gridSubtitle: { fontSize: 12, color: '#64748B', marginTop: 2 },
   fullWidthCard: {
-    backgroundColor: '#ffffff',
+    backgroundColor: '#FFFFFF',
     borderRadius: 18,
     padding: 16,
     borderWidth: 1,
     borderColor: '#F1F5F9',
-    shadowColor: '#000',
+    shadowColor: '#0F172A',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.03,
     shadowRadius: 6,
     elevation: 2,
+  },
+  ctaArrowBox: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: Colors.primary,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
 
   scheduleSectionContainer: { paddingHorizontal: 16, marginTop: 18 },
   scheduleHeaderRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
   scheduleTitleText: { fontSize: 17, fontWeight: '800', color: '#0F172A' },
   viewTimetableBtn: { flexDirection: 'row', alignItems: 'center' },
-  viewTimetableText: { fontSize: 13, fontWeight: '700', color: '#2563EB' },
+  viewTimetableText: { fontSize: 13, fontWeight: '700', color: Colors.primary },
 
   timelineCard: {
-    backgroundColor: '#ffffff',
+    backgroundColor: '#FFFFFF',
     borderRadius: 20,
     padding: 18,
     borderWidth: 1,
     borderColor: '#F1F5F9',
-    shadowColor: '#000',
+    shadowColor: '#0F172A',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.03,
     shadowRadius: 8,
@@ -705,7 +715,7 @@ const styles = StyleSheet.create({
 
   wisdomContainer: { paddingHorizontal: 16, marginTop: 18 },
   wisdomCard: {
-    backgroundColor: '#ffffff',
+    backgroundColor: '#FFFFFF',
     borderRadius: 20,
     padding: 20,
     borderWidth: 1,
@@ -718,14 +728,14 @@ const styles = StyleSheet.create({
   wisdomAuthor: { fontSize: 12, fontWeight: '700', color: '#64748B', marginTop: 6, textAlign: 'right' },
 
   /* SIDEBAR STYLES */
-  sidebarOverlay: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(15, 23, 42, 0.5)' },
+  sidebarOverlay: { ...StyleSheet.absoluteFill, backgroundColor: 'rgba(15, 23, 42, 0.5)' },
   sidebarContainer: {
     position: 'absolute',
     top: 0,
     bottom: 0,
     left: 0,
     width: width * 0.78,
-    backgroundColor: '#ffffff',
+    backgroundColor: '#FFFFFF',
     paddingTop: Platform.OS === 'ios' ? 50 : 20,
     paddingHorizontal: 20,
     elevation: 10,
@@ -738,13 +748,13 @@ const styles = StyleSheet.create({
 
   /* MODAL STYLES */
   modalOverlay: { flex: 1, backgroundColor: 'rgba(15, 23, 42, 0.6)', justifyContent: 'center', alignItems: 'center', padding: 24 },
-  modalCard: { width: '100%', backgroundColor: '#ffffff', borderRadius: 24, padding: 24, elevation: 8 },
-  modalIconBox: { width: 54, height: 54, borderRadius: 27, backgroundColor: '#FEE2E2', justifyContent: 'center', alignItems: 'center', alignSelf: 'center', marginBottom: 14 },
+  modalCard: { width: '100%', backgroundColor: '#FFFFFF', borderRadius: 24, padding: 24, elevation: 8 },
+  modalIconBox: { width: 52, height: 52, borderRadius: 26, backgroundColor: '#FEE2E2', justifyContent: 'center', alignItems: 'center', alignSelf: 'center', marginBottom: 14 },
   modalTitle: { fontSize: 18, fontWeight: '800', color: '#0F172A', textAlign: 'center', marginBottom: 4 },
   modalSubtitle: { fontSize: 13, color: '#64748B', textAlign: 'center', marginBottom: 20 },
   modalBtnRow: { flexDirection: 'row', marginTop: 10 },
   modalCancelBtn: { flex: 1, paddingVertical: 12, borderRadius: 12, backgroundColor: '#F1F5F9', alignItems: 'center', marginRight: 8 },
   modalCancelText: { fontSize: 14, fontWeight: '700', color: '#64748B' },
   modalLogoutBtn: { flex: 1, paddingVertical: 12, borderRadius: 12, backgroundColor: Colors.error, alignItems: 'center', marginLeft: 8 },
-  modalLogoutText: { fontSize: 14, fontWeight: '700', color: '#ffffff' },
+  modalLogoutText: { fontSize: 14, fontWeight: '700', color: '#FFFFFF' },
 });

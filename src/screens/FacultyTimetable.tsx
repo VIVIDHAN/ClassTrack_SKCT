@@ -7,6 +7,7 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   RefreshControl,
+  Platform,
 } from 'react-native';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -42,17 +43,6 @@ interface TimetableItem {
   };
 }
 
-const PERIOD_TIMINGS: { [key: number]: string } = {
-  1: '08:15 AM - 09:15 AM',
-  2: '09:15 AM - 10:15 AM',
-  3: '10:45 AM - 11:45 AM',
-  4: '11:45 AM - 12:45 PM',
-  5: '01:45 PM - 02:45 PM',
-  6: '02:45 PM - 03:45 PM',
-  7: '03:45 PM - 04:45 PM',
-  8: '04:45 PM - 05:30 PM',
-};
-
 const PERIOD_TIMING_MAP: { [key: number]: { startTimeStr: string; endTimeStr: string; startMinutes: number; endMinutes: number } } = {
   1: { startTimeStr: '08:15 AM', endTimeStr: '09:15 AM', startMinutes: 8 * 60 + 15, endMinutes: 9 * 60 + 15 },
   2: { startTimeStr: '09:15 AM', endTimeStr: '10:15 AM', startMinutes: 9 * 60 + 15, endMinutes: 10 * 60 + 15 },
@@ -77,7 +67,6 @@ export default function FacultyTimetable() {
   const route = useRoute<any>();
   const initialSelectedDay = route.params?.selectedDay;
 
-  // Derive weekly tabs synchronized with current date from academic calendar
   const weekDays: TabDayInfo[] = React.useMemo(() => getWorkingCycleTabs(new Date()), []);
   const todayTab = weekDays.find(w => w.isToday) || weekDays[0];
 
@@ -101,17 +90,14 @@ export default function FacultyTimetable() {
     return map;
   };
 
-  // Default to route.params.selectedDay if provided, else ALWAYS today's active day order (e.g. Day 4 for 7 Sep)
   const [selectedDay, setSelectedDay] = useState<number>(initialSelectedDay || todayTab.day);
   const [todayDayOrder, setTodayDayOrder] = useState<number>(todayTab.day);
   const [teacher, setTeacher] = useState<any>(null);
 
-  // Initialized empty with loading=true to prevent flashing wrong faculty data
   const [timetableByDay, setTimetableByDay] = useState<{ [day: number]: TimetableItem[] }>({ 1: [], 2: [], 3: [], 4: [], 5: [] });
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
-  // Synchronize route.params.selectedDay or ensure today's tab is selected on initial entry
   useEffect(() => {
     if (route.params?.selectedDay) {
       setSelectedDay(route.params.selectedDay);
@@ -120,7 +106,6 @@ export default function FacultyTimetable() {
     }
   }, [route.params?.selectedDay, todayTab.day]);
 
-  // Fetch timetable for this teacher (Single resilient network call with timeout)
   const fetchTimetable = useCallback(async (teacherId: number, teacherName: string = '') => {
     const numId = Number(teacherId) || 3;
     const fallbackData = getTeacherFullTimetableFallback(numId, teacherName);
@@ -133,7 +118,6 @@ export default function FacultyTimetable() {
         const data = await res.json();
         if (Array.isArray(data) && data.length > 0) {
           const liveMap = buildDayMapFromList(data);
-          // If live database has entries, use live map merged with fallback for any day without classes
           [1, 2, 3, 4, 5].forEach(d => {
             if (!liveMap[d] || liveMap[d].length === 0) {
               liveMap[d] = fallbackMap[d] || [];
@@ -145,7 +129,6 @@ export default function FacultyTimetable() {
       }
       setTimetableByDay(fallbackMap);
     } catch (e) {
-      // Network failed / offline: keep guaranteed fallback schedule active
       setTimetableByDay(fallbackMap);
     } finally {
       setLoading(false);
@@ -153,7 +136,6 @@ export default function FacultyTimetable() {
     }
   }, []);
 
-  // Load teacher from storage and fetch
   useEffect(() => {
     const init = async () => {
       let currentTeacher = { id: 3, name: 'Ms. B Narmatha', department: 'Information Technology' };
@@ -167,7 +149,6 @@ export default function FacultyTimetable() {
       setTeacher(currentTeacher);
       fetchTimetable(currentTeacher.id, currentTeacher.name);
 
-      // Check backend for day-order
       try {
         const dayRes = await fetchWithTimeout(`${API_BASE_URL}/day-order`, {}, 2500);
         if (dayRes.ok) {
@@ -230,27 +211,27 @@ export default function FacultyTimetable() {
       }
     }
 
-    let dotColor = '#2563EB';
-    let badgeBorder = '#2563EB';
-    let badgeBg = '#EFF6FF';
-    let badgeTextColor = '#2563EB';
+    let dotColor = Colors.primary;
+    let badgeBorder = Colors.primary;
+    let badgeBg = '#FFF7ED';
+    let badgeTextColor = Colors.primary;
 
     if (status === 'Ongoing') {
-      dotColor = '#2563EB';
-      badgeBorder = '#2563EB';
-      badgeBg = '#EFF6FF';
-      badgeTextColor = '#2563EB';
+      dotColor = Colors.primary;
+      badgeBorder = Colors.primary;
+      badgeBg = '#FFF7ED';
+      badgeTextColor = Colors.primary;
     } else if (status === 'Upcoming') {
       if (upcomingCount === 0) {
-        dotColor = '#9333EA';
-        badgeBorder = '#A855F7';
-        badgeBg = '#FAF5FF';
-        badgeTextColor = '#9333EA';
+        dotColor = '#F59E0B';
+        badgeBorder = '#F59E0B';
+        badgeBg = '#FEF3C7';
+        badgeTextColor = '#D97706';
       } else {
-        dotColor = '#EA580C';
-        badgeBorder = '#F97316';
+        dotColor = Colors.primaryLight;
+        badgeBorder = Colors.primaryLight;
         badgeBg = '#FFF7ED';
-        badgeTextColor = '#EA580C';
+        badgeTextColor = Colors.primaryDark;
       }
       upcomingCount++;
     } else {
@@ -277,7 +258,6 @@ export default function FacultyTimetable() {
     };
   });
 
-  const totalWeeklyPeriods = Object.values(timetableByDay).reduce((sum, arr) => sum + arr.length, 0);
   const selectedTabInfo = weekDays.find(w => w.day === selectedDay);
   const formattedDateAndDay = selectedTabInfo 
     ? `${selectedTabInfo.fullDateStr}, 2026`
@@ -319,13 +299,11 @@ export default function FacultyTimetable() {
 
         {/* Date, Day, Day Order & Period Count Info Box */}
         <View style={styles.calendarInfoBox}>
-          {/* Line 1: Date and Day */}
           <View style={styles.calendarLine1}>
             <Icon name="event" size={15} color={Colors.primary} style={{ marginRight: 6 }} />
             <Text style={styles.dateDayText}>{formattedDateAndDay}</Text>
           </View>
 
-          {/* Line 2: Day Order & Period Count */}
           <View style={styles.calendarLine2}>
             <View style={styles.dayOrderBadge}>
               <Text style={styles.dayOrderBadgeText}>Day Order {selectedDay}</Text>
@@ -353,7 +331,6 @@ export default function FacultyTimetable() {
               onPress={() => setSelectedDay(d.day)}
               activeOpacity={0.7}
             >
-              {/* Line 1: Day & Date e.g. "Thu, 3 Sep" */}
               <Text 
                 style={[styles.dayTabLabel, isSelected && styles.dayTabLabelActive]}
                 numberOfLines={1}
@@ -362,12 +339,10 @@ export default function FacultyTimetable() {
                 {d.shortDay}, {d.dateStr}
               </Text>
 
-              {/* Line 2: Day Order e.g. "Day 4 • Today" */}
               <Text style={[styles.dayTabSub, isSelected && styles.dayTabSubActive]}>
                 Day {d.day}{d.isToday ? ' • Today' : ''}
               </Text>
 
-              {/* Line 3: Period count circle */}
               {classCount > 0 ? (
                 <View style={[styles.dayDot, isSelected && styles.dayDotActive]}>
                   <Text style={[styles.dayDotText, isSelected && styles.dayDotTextActive]}>
@@ -434,19 +409,16 @@ export default function FacultyTimetable() {
                       });
                     }}
                   >
-                    {/* Left Column: Time */}
                     <View style={styles.timeColumn}>
                       <Text style={styles.startTimeText}>{item.startTimeStr}</Text>
                       <Text style={styles.endTimeText}>{item.endTimeStr}</Text>
                     </View>
 
-                    {/* Middle: Vertical Timeline Axis & Colored Dot Node */}
                     <View style={styles.timelineAxisWrap}>
                       {!isLast && <View style={styles.verticalTimelineLine} />}
                       <View style={[styles.timelineDotNode, { backgroundColor: item.dotColor }]} />
                     </View>
 
-                    {/* Center Column: Subject & Room */}
                     <View style={styles.contentColumn}>
                       <Text style={styles.subjectTitleText} numberOfLines={2}>
                         {item.subjectTitle}
@@ -454,7 +426,6 @@ export default function FacultyTimetable() {
                       <Text style={styles.roomLabelText}>{item.roomLabel}</Text>
                     </View>
 
-                    {/* Right Column: Status Pill */}
                     <View
                       style={[
                         styles.statusPillBadge,
@@ -482,32 +453,32 @@ export default function FacultyTimetable() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F8FAFC',
+    backgroundColor: Colors.background,
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 16,
-    paddingTop: 50,
+    paddingTop: Platform.OS === 'ios' ? 50 : 20,
     paddingBottom: 14,
-    backgroundColor: '#FFF',
+    backgroundColor: '#FFFFFF',
     borderBottomWidth: 1,
     borderBottomColor: '#F1F5F9',
   },
   backButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: '#F1F5F9',
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: '#F8FAFC',
     justifyContent: 'center',
     alignItems: 'center',
   },
   refreshIconBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: '#EEF2FF',
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: Colors.primarySoft,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -515,7 +486,6 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '800',
     color: '#0F172A',
-    fontFamily: 'Inter',
   },
   headerSubtitle: {
     fontSize: 12,
@@ -523,19 +493,19 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
   facultyCard: {
-    backgroundColor: '#ffffff',
-    borderRadius: 24,
-    padding: 20,
-    shadowColor: '#000',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 20,
+    padding: 18,
+    shadowColor: '#0F172A',
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.04,
+    shadowOpacity: 0.03,
     shadowRadius: 10,
     elevation: 2,
     borderWidth: 1,
     borderColor: '#F1F5F9',
     marginHorizontal: 16,
     marginTop: 14,
-    marginBottom: 14,
+    marginBottom: 12,
   },
   greetingHeaderRow: {
     flexDirection: 'row',
@@ -544,40 +514,40 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   greeting: {
-    fontSize: 13,
+    fontSize: 12,
     color: '#64748B',
     fontWeight: '600',
     textTransform: 'uppercase',
-    letterSpacing: 1.2,
+    letterSpacing: 1,
   },
   facultyName: {
-    fontSize: 24,
+    fontSize: 22,
     fontWeight: '900',
     color: '#0F172A',
     marginTop: 2,
-    letterSpacing: -0.5,
+    letterSpacing: -0.4,
   },
   departmentBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(255, 93, 56, 0.1)',
+    backgroundColor: Colors.primarySoft,
     paddingHorizontal: 10,
     paddingVertical: 5,
     borderRadius: 10,
   },
   facultyDept: {
-    fontSize: 12,
+    fontSize: 11,
     color: Colors.primary,
     fontWeight: '700',
   },
   calendarInfoBox: {
     backgroundColor: '#F8FAFC',
-    borderRadius: 16,
-    paddingHorizontal: 14,
+    borderRadius: 14,
+    paddingHorizontal: 12,
     paddingVertical: 10,
     borderWidth: 1,
     borderColor: '#E2E8F0',
-    marginTop: 12,
+    marginTop: 10,
   },
   calendarLine1: {
     flexDirection: 'row',
@@ -585,10 +555,9 @@ const styles = StyleSheet.create({
     marginBottom: 6,
   },
   dateDayText: {
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '800',
     color: '#0F172A',
-    letterSpacing: -0.2,
   },
   calendarLine2: {
     flexDirection: 'row',
@@ -596,13 +565,13 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
   },
   dayOrderBadge: {
-    backgroundColor: 'rgba(255, 93, 56, 0.12)',
+    backgroundColor: '#FFF7ED',
     paddingHorizontal: 8,
     paddingVertical: 3,
-    borderRadius: 8,
+    borderRadius: 6,
   },
   dayOrderBadgeText: {
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '800',
     color: Colors.primary,
   },
@@ -618,44 +587,44 @@ const styles = StyleSheet.create({
     backgroundColor: '#ECFDF5',
     paddingHorizontal: 8,
     paddingVertical: 3,
-    borderRadius: 8,
+    borderRadius: 6,
     borderWidth: 1,
     borderColor: '#A7F3D0',
   },
   periodCountText: {
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '700',
     color: '#047857',
   },
   daySelectorContainer: {
     flexDirection: 'row',
     marginHorizontal: 16,
-    marginBottom: 16,
+    marginBottom: 14,
     backgroundColor: '#FFFFFF',
-    borderRadius: 22,
-    padding: 6,
+    borderRadius: 20,
+    padding: 5,
     borderWidth: 1,
     borderColor: '#E2E8F0',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.04,
-    shadowRadius: 10,
+    shadowColor: '#0F172A',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.03,
+    shadowRadius: 8,
     elevation: 2,
     justifyContent: 'space-between',
   },
   dayTab: {
     flex: 1,
-    paddingVertical: 12,
+    paddingVertical: 10,
     paddingHorizontal: 2,
     alignItems: 'center',
     justifyContent: 'center',
-    borderRadius: 16,
+    borderRadius: 15,
   },
   dayTabActive: {
     backgroundColor: Colors.primary,
-    shadowColor: '#000',
+    shadowColor: Colors.primary,
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.12,
+    shadowOpacity: 0.2,
     shadowRadius: 4,
     elevation: 2,
   },
@@ -664,14 +633,13 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     color: '#334155',
     textAlign: 'center',
-    letterSpacing: -0.2,
   },
   dayTabLabelActive: {
     color: '#FFFFFF',
     fontWeight: '900',
   },
   dayTabSub: {
-    fontSize: 11,
+    fontSize: 10,
     color: '#94A3B8',
     marginTop: 2,
     fontWeight: '600',
@@ -682,11 +650,11 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   dayDot: {
-    marginTop: 6,
-    backgroundColor: '#EEF2FF',
-    width: 20,
-    height: 20,
-    borderRadius: 10,
+    marginTop: 5,
+    backgroundColor: Colors.primarySoft,
+    width: 18,
+    height: 18,
+    borderRadius: 9,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -694,7 +662,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
   },
   dayDotText: {
-    fontSize: 11,
+    fontSize: 10,
     fontWeight: '800',
     color: Colors.primary,
   },
@@ -706,21 +674,10 @@ const styles = StyleSheet.create({
     height: 6,
     borderRadius: 3,
     backgroundColor: '#E2E8F0',
-    marginTop: 13,
+    marginTop: 11,
   },
   dayDotEmptyActive: {
     backgroundColor: 'rgba(255, 255, 255, 0.5)',
-  },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 30,
-  },
-  loadingText: {
-    marginTop: 12,
-    fontSize: 14,
-    color: '#64748B',
   },
   scrollList: {
     flex: 1,
@@ -730,11 +687,11 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 12,
-    marginTop: 4,
+    marginBottom: 10,
+    marginTop: 2,
   },
   dayHeaderTitle: {
-    fontSize: 17,
+    fontSize: 16,
     fontWeight: '800',
     color: '#0F172A',
   },
@@ -744,9 +701,9 @@ const styles = StyleSheet.create({
     color: '#64748B',
   },
   emptyCard: {
-    backgroundColor: '#FFF',
+    backgroundColor: '#FFFFFF',
     borderRadius: 20,
-    padding: 32,
+    padding: 30,
     alignItems: 'center',
     marginTop: 10,
     borderWidth: 1,
@@ -754,13 +711,13 @@ const styles = StyleSheet.create({
     borderStyle: 'dashed',
   },
   emptyIconCircle: {
-    width: 72,
-    height: 72,
-    borderRadius: 36,
+    width: 68,
+    height: 68,
+    borderRadius: 34,
     backgroundColor: '#F1F5F9',
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 16,
+    marginBottom: 14,
   },
   emptyTitle: {
     fontSize: 16,
@@ -773,144 +730,85 @@ const styles = StyleSheet.create({
     color: '#64748B',
     textAlign: 'center',
     lineHeight: 19,
-    paddingHorizontal: 16,
   },
   timelineCard: {
-    backgroundColor: '#ffffff',
-    borderRadius: 24,
-    paddingHorizontal: 20,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 20,
+    paddingHorizontal: 18,
     paddingVertical: 12,
     borderWidth: 1,
     borderColor: '#F1F5F9',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.04,
-    shadowRadius: 10,
+    shadowColor: '#0F172A',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.03,
+    shadowRadius: 8,
     elevation: 2,
-    marginTop: 4,
+    marginTop: 2,
   },
   timelineRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 16,
+    paddingVertical: 14,
     position: 'relative',
   },
   timeColumn: {
-    width: 72,
+    width: 68,
     alignItems: 'flex-start',
   },
   startTimeText: {
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '800',
     color: '#0F172A',
-    letterSpacing: -0.2,
   },
   endTimeText: {
-    fontSize: 12.5,
+    fontSize: 11,
     fontWeight: '600',
     color: '#94A3B8',
-    marginTop: 3,
+    marginTop: 2,
   },
   timelineAxisWrap: {
-    width: 28,
+    width: 24,
     alignItems: 'center',
-    justifyContent: 'center',
-    alignSelf: 'stretch',
-    marginRight: 6,
+    position: 'relative',
   },
   verticalTimelineLine: {
     position: 'absolute',
-    top: '50%',
-    bottom: '-50%',
+    top: 10,
+    bottom: -18,
     width: 2,
     backgroundColor: '#E2E8F0',
-    zIndex: 1,
   },
   timelineDotNode: {
     width: 12,
     height: 12,
     borderRadius: 6,
-    zIndex: 2,
+    marginTop: 2,
   },
   contentColumn: {
     flex: 1,
-    paddingRight: 10,
+    paddingLeft: 8,
+    paddingRight: 8,
   },
   subjectTitleText: {
-    fontSize: 14.5,
+    fontSize: 14,
     fontWeight: '800',
     color: '#0F172A',
-    lineHeight: 20,
   },
   roomLabelText: {
-    fontSize: 12.5,
-    fontWeight: '600',
+    fontSize: 12,
     color: '#64748B',
-    marginTop: 4,
+    fontWeight: '500',
+    marginTop: 2,
   },
   statusPillBadge: {
-    paddingHorizontal: 16,
-    paddingVertical: 6,
-    borderRadius: 20,
-    borderWidth: 1.5,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  statusPillText: {
-    fontSize: 13,
-    fontWeight: '700',
-  },
-  sectionBadge: {
-    backgroundColor: '#F1F5F9',
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 8,
-  },
-  sectionBadgeText: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: '#334155',
-  },
-  subjectTitle: {
-    fontSize: 16,
-    fontWeight: '800',
-    color: '#0F172A',
-    marginBottom: 8,
-  },
-  subjectMetaRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 6,
-    marginBottom: 14,
-  },
-  metaBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#F8FAFC',
-    paddingHorizontal: 7,
-    paddingVertical: 3,
-    borderRadius: 6,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    alignSelf: 'center',
   },
-  metaBadgeText: {
-    fontSize: 11,
-    color: '#64748B',
-    fontWeight: '500',
-  },
-  markAttendanceBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: Colors.primary,
-    paddingVertical: 10,
-    paddingHorizontal: 14,
-    borderRadius: 12,
-  },
-  markAttendanceBtnText: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#FFF',
-    flex: 1,
+  statusPillText: {
+    fontSize: 10,
+    fontWeight: '800',
   },
 });

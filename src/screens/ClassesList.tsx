@@ -32,7 +32,6 @@ export default function ClassesList() {
         const teacherId = currentTeacher.id || 3;
 
         if (mode === 'directory') {
-          // Directory Mode: Fetch all timetable entries for this teacher across all days
           try {
             const res = await fetchWithTimeout(`${API_BASE_URL}/timetable?teacher_id=${teacherId}`, {}, 3500);
             if (res.ok) {
@@ -67,7 +66,6 @@ export default function ClassesList() {
             setLoading(false);
           }
         } else {
-          // Attendance Mode: Fetch this teacher's classes for today's active Day Order
           const expectedDayOrder = getTodayDayOrder();
           let currentDay = expectedDayOrder;
           try {
@@ -133,12 +131,12 @@ export default function ClassesList() {
             navigation.navigate('Attendance', { classDetails: item });
           }
         }}
-        activeOpacity={0.75}
+        activeOpacity={0.8}
       >
         <View style={styles.cardLeft}>
           {item.time ? (
             <View style={styles.timeRow}>
-              <Icon name="access-time" size={16} color={Colors.primary} style={{ marginRight: 6 }} />
+              <Icon name="access-time" size={15} color={Colors.primary} style={{ marginRight: 6 }} />
               <Text style={styles.classTime}>{item.time}</Text>
             </View>
           ) : (
@@ -150,7 +148,7 @@ export default function ClassesList() {
         <View style={styles.cardRight}>
           <View style={styles.takeAttendanceBtn}>
             <Text style={styles.takeAttendanceText}>{mode === 'directory' ? 'View' : 'Mark'}</Text>
-            <Icon name="chevron-right" size={18} color="#ffffff" />
+            <Icon name="chevron-right" size={18} color="#FFFFFF" />
           </View>
         </View>
       </TouchableOpacity>
@@ -172,26 +170,26 @@ export default function ClassesList() {
       <View style={styles.header}>
         <View style={styles.headerTop}>
           <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
-            <Icon name="arrow-back" size={28} color={Colors.text} />
+            <Icon name="arrow-back" size={26} color={Colors.text} />
           </TouchableOpacity>
           <Text style={styles.title}>{mode === 'directory' ? 'Student Directory' : 'Mark Attendance'}</Text>
-          <View style={{ width: 28 }} /> {/* Balancer */}
+          <View style={{ width: 28 }} />
         </View>
         <Text style={styles.subtitle}>{mode === 'directory' ? 'Mapped Classes' : 'Today\'s Schedule'}</Text>
       </View>
 
-        <ScrollView contentContainerStyle={styles.listContainer} showsVerticalScrollIndicator={false}>
-          {classes.map((item, index) => (
-            <React.Fragment key={item.id}>
-              {renderClassItem({ item, index })}
-            </React.Fragment>
-          ))}
-          {classes.length === 0 ? (
-             <Text style={{ textAlign: 'center', color: '#94A3B8', marginTop: 40 }}>
-               {mode === 'directory' ? 'No classes assigned in timetable.' : 'No classes scheduled for today.'}
-             </Text>
-          ) : null}
-        </ScrollView>
+      <ScrollView contentContainerStyle={styles.listContainer} showsVerticalScrollIndicator={false}>
+        {classes.map((item, index) => (
+          <React.Fragment key={item.id}>
+            {renderClassItem({ item, index })}
+          </React.Fragment>
+        ))}
+        {classes.length === 0 ? (
+          <Text style={{ textAlign: 'center', color: '#94A3B8', marginTop: 40, fontSize: 14, fontWeight: '500' }}>
+            {mode === 'directory' ? 'No classes assigned in timetable.' : 'No classes scheduled for today.'}
+          </Text>
+        ) : null}
+      </ScrollView>
     </SafeAreaView>
   );
 }
@@ -199,13 +197,12 @@ export default function ClassesList() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F8FAFC',
-    
+    backgroundColor: Colors.background,
   },
   header: {
-    paddingHorizontal: 24,
-    paddingVertical: 16,
-    backgroundColor: '#ffffff',
+    paddingHorizontal: 20,
+    paddingVertical: 14,
+    backgroundColor: '#FFFFFF',
     borderBottomWidth: 1,
     borderBottomColor: '#F1F5F9',
   },
@@ -219,43 +216,55 @@ const styles = StyleSheet.create({
     marginLeft: -4,
   },
   title: {
-    fontSize: 22,
+    fontSize: 20,
     fontWeight: '800',
     color: '#0F172A',
   },
   subtitle: {
-    fontSize: 14,
+    fontSize: 13,
     color: '#64748B',
     fontWeight: '600',
-    marginTop: 8,
+    marginTop: 6,
     textAlign: 'center',
   },
   listContainer: {
-    padding: 20,
+    padding: 16,
     paddingBottom: 100,
   },
   classCard: {
     flexDirection: 'row',
-    backgroundColor: '#ffffff',
+    backgroundColor: '#FFFFFF',
     borderRadius: 20,
-    padding: 20,
-    marginBottom: 16,
+    padding: 18,
+    marginBottom: 14,
     borderWidth: 1,
     borderColor: '#F1F5F9',
     alignItems: 'center',
     justifyContent: 'space-between',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
+    shadowColor: '#0F172A',
+    shadowOffset: { width: 0, height: 3 },
     shadowOpacity: 0.03,
-    shadowRadius: 12,
+    shadowRadius: 8,
     elevation: 2,
   },
   cardLeft: { flex: 1 },
-  timeRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 8 },
+  timeRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 6 },
   classTime: { color: Colors.primary, fontWeight: '700', fontSize: 13 },
-  className: { fontSize: 18, fontWeight: '800', color: '#0F172A', marginBottom: 4 },
-  subjectName: { fontSize: 14, color: '#64748B', fontWeight: '600' },
-  cardRight: { marginLeft: 16 },
-  takeAttendanceBtn: { flexDirection: 'row', alignItems: 'center', backgroundColor: Colors.primary, paddingVertical: 10, paddingHorizontal: 16, borderRadius: 14, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.12, shadowRadius: 4, elevation: 2 },
-  takeAttendanceText: { color: '#ffffff', fontWeight: '700', fontSize: 14, marginRight: 4 },
+  className: { fontSize: 18, fontWeight: '800', color: '#0F172A', marginBottom: 3 },
+  subjectName: { fontSize: 13, color: '#64748B', fontWeight: '500' },
+  cardRight: { marginLeft: 14 },
+  takeAttendanceBtn: { 
+    flexDirection: 'row', 
+    alignItems: 'center', 
+    backgroundColor: Colors.primary, 
+    paddingVertical: 9, 
+    paddingHorizontal: 16, 
+    borderRadius: 12, 
+    shadowColor: Colors.primary, 
+    shadowOffset: { width: 0, height: 2 }, 
+    shadowOpacity: 0.2, 
+    shadowRadius: 4, 
+    elevation: 2 
+  },
+  takeAttendanceText: { color: '#FFFFFF', fontWeight: '800', fontSize: 13, marginRight: 2 },
 });

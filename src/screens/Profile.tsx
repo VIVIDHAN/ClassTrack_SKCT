@@ -52,15 +52,15 @@ export default function Profile() {
   };
 
   const MenuItem = ({ icon, title, subtitle, isDestructive = false, onPress }: any) => (
-    <TouchableOpacity style={styles.menuItem} onPress={onPress} activeOpacity={0.7}>
-      <View style={[styles.iconBox, { backgroundColor: isDestructive ? 'rgba(239, 68, 68, 0.1)' : '#F1F5F9' }]}>
-        <Icon name={icon} size={22} color={isDestructive ? '#EF4444' : '#64748B'} />
+    <TouchableOpacity style={styles.menuItem} onPress={onPress} activeOpacity={0.75}>
+      <View style={[styles.iconBox, { backgroundColor: isDestructive ? 'rgba(239, 68, 68, 0.1)' : Colors.primarySoft }]}>
+        <Icon name={icon} size={22} color={isDestructive ? Colors.error : Colors.primary} />
       </View>
       <View style={styles.menuTextContainer}>
-        <Text style={[styles.menuTitle, { color: isDestructive ? '#EF4444' : '#0F172A' }]}>{title}</Text>
+        <Text style={[styles.menuTitle, { color: isDestructive ? Colors.error : '#0F172A' }]}>{title}</Text>
         {subtitle ? <Text style={styles.menuSubtitle}>{subtitle}</Text> : null}
       </View>
-      {!isDestructive && <Icon name="chevron-right" size={24} color="#CBD5E1" />}
+      {!isDestructive && <Icon name="chevron-right" size={22} color="#CBD5E1" />}
     </TouchableOpacity>
   );
 
@@ -79,7 +79,7 @@ export default function Profile() {
       <View style={styles.header}>
         <View style={styles.headerTop}>
           <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
-            <Icon name="arrow-back" size={28} color={Colors.text} />
+            <Icon name="arrow-back" size={26} color={Colors.text} />
           </TouchableOpacity>
           <Text style={styles.title}>My Account</Text>
           <View style={{ width: 28 }} />
@@ -87,11 +87,10 @@ export default function Profile() {
       </View>
       
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
-        
-        {/* User Info Card */}
+        {/* Profile User Header Card */}
         <View style={styles.profileCard}>
           <View style={styles.avatarContainer}>
-            <Icon name="person" size={40} color={Colors.primary} />
+            <Icon name="person" size={38} color={Colors.primary} />
           </View>
           <View style={styles.userInfo}>
             <Text style={styles.userName}>{facultyName}</Text>
@@ -100,7 +99,7 @@ export default function Profile() {
           </View>
         </View>
 
-        {/* Menu Sections */}
+        {/* Preferences Menu */}
         <Text style={styles.sectionTitle}>Preferences</Text>
         <View style={styles.menuCard}>
           <MenuItem icon="person-outline" title="Personal Details" subtitle="Name, DOB, Gender" onPress={() => navigation.navigate('PersonalDetails')} />
@@ -110,7 +109,7 @@ export default function Profile() {
           <MenuItem icon="security" title="Security & Password" onPress={() => navigation.navigate('SecurityPassword')} />
         </View>
 
-        <View style={[styles.menuCard, { marginTop: 12 }]}>
+        <View style={[styles.menuCard, { marginTop: 4 }]}>
           <MenuItem 
             icon="logout" 
             title="Log Out" 
@@ -119,7 +118,7 @@ export default function Profile() {
           />
         </View>
         
-        <Text style={styles.versionText}>App Version 1.0.0</Text>
+        <Text style={styles.versionText}>ClassTrack App Version 1.0.0</Text>
       </ScrollView>
 
       {/* CUSTOM LOGOUT MODAL */}
@@ -127,7 +126,7 @@ export default function Profile() {
         <View style={styles.modalOverlay}>
           <View style={styles.modalCard}>
             <View style={styles.modalIconBox}>
-              <Icon name="logout" size={32} color="#EF4444" />
+              <Icon name="logout" size={30} color={Colors.error} />
             </View>
             <Text style={styles.modalTitle}>Confirm Logout</Text>
             <Text style={styles.modalSubtitle}>Are you sure you want to log out of your session?</Text>
@@ -143,7 +142,6 @@ export default function Profile() {
           </View>
         </View>
       </Modal>
-
     </SafeAreaView>
   );
 }
@@ -151,13 +149,12 @@ export default function Profile() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F8FAFC',
-    
+    backgroundColor: Colors.background,
   },
   header: {
-    paddingHorizontal: 24,
-    paddingVertical: 16,
-    backgroundColor: '#ffffff',
+    paddingHorizontal: 20,
+    paddingVertical: 14,
+    backgroundColor: '#FFFFFF',
     borderBottomWidth: 1,
     borderBottomColor: '#F1F5F9',
   },
@@ -171,75 +168,73 @@ const styles = StyleSheet.create({
     marginLeft: -4,
   },
   title: {
-    fontSize: 22,
+    fontSize: 20,
     fontWeight: '800',
     color: '#0F172A',
   },
   scrollContent: {
-    padding: 20,
+    padding: 16,
     paddingBottom: 60,
   },
   profileCard: {
-    backgroundColor: '#ffffff',
-    borderRadius: 16,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 20,
     padding: 20,
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 24,
-    shadowColor: '#000',
+    marginBottom: 20,
+    shadowColor: '#0F172A',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
+    shadowOpacity: 0.03,
     shadowRadius: 8,
     elevation: 2,
     borderWidth: 1,
     borderColor: '#F1F5F9',
   },
   avatarContainer: {
-    width: 72,
-    height: 72,
-    borderRadius: 36,
-    backgroundColor: 'rgba(255, 93, 56, 0.1)',
+    width: 68,
+    height: 68,
+    borderRadius: 34,
+    backgroundColor: Colors.primarySoft,
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: 'rgba(255, 93, 56, 0.2)',
+    borderColor: 'rgba(255, 107, 0, 0.2)',
   },
   userInfo: {
     flex: 1,
-    marginLeft: 16,
+    marginLeft: 14,
   },
   userName: {
-    fontSize: 20,
-    fontWeight: '800',
+    fontSize: 19,
+    fontWeight: '900',
     color: '#0F172A',
-    marginBottom: 4,
+    marginBottom: 2,
   },
   userEmail: {
-    fontSize: 14,
+    fontSize: 13,
     color: '#64748B',
     marginBottom: 2,
   },
   userPhone: {
-    fontSize: 14,
+    fontSize: 13,
     color: '#64748B',
-  },
-  editBtn: {
-    padding: 8,
+    fontWeight: '500',
   },
   sectionTitle: {
-    fontSize: 14,
+    fontSize: 12,
     fontWeight: '700',
     color: '#94A3B8',
     textTransform: 'uppercase',
     letterSpacing: 1,
-    marginBottom: 12,
-    marginLeft: 8,
+    marginBottom: 10,
+    marginLeft: 6,
   },
   menuCard: {
-    backgroundColor: '#ffffff',
-    borderRadius: 16,
-    marginBottom: 24,
-    shadowColor: '#000',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 18,
+    marginBottom: 20,
+    shadowColor: '#0F172A',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.03,
     shadowRadius: 8,
@@ -259,40 +254,40 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: 16,
+    marginRight: 14,
   },
   menuTextContainer: {
     flex: 1,
   },
   menuTitle: {
-    fontSize: 16,
-    fontWeight: '600',
+    fontSize: 15,
+    fontWeight: '700',
   },
   menuSubtitle: {
-    fontSize: 13,
+    fontSize: 12,
     color: '#94A3B8',
     marginTop: 2,
   },
   divider: {
     height: 1,
     backgroundColor: '#F1F5F9',
-    marginLeft: 72, 
+    marginLeft: 70, 
   },
   versionText: {
     textAlign: 'center',
     color: '#94A3B8',
-    fontSize: 13,
-    fontWeight: '500',
+    fontSize: 12,
+    fontWeight: '600',
     marginTop: 12,
   },
   modalOverlay: { flex: 1, backgroundColor: 'rgba(15, 23, 42, 0.6)', justifyContent: 'center', alignItems: 'center', padding: 24 },
-  modalCard: { backgroundColor: '#ffffff', borderRadius: 24, padding: 24, width: '100%', alignItems: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.2, shadowRadius: 20, elevation: 10 },
-  modalIconBox: { width: 64, height: 64, borderRadius: 32, backgroundColor: 'rgba(239, 68, 68, 0.1)', justifyContent: 'center', alignItems: 'center', marginBottom: 16 },
-  modalTitle: { fontSize: 20, fontWeight: '800', color: '#0F172A', marginBottom: 8 },
-  modalSubtitle: { fontSize: 14, color: '#64748B', textAlign: 'center', marginBottom: 24, lineHeight: 20 },
-  modalBtnRow: { flexDirection: 'row', width: '100%' },
-  modalCancelBtn: { flex: 1, paddingVertical: 14, backgroundColor: '#F1F5F9', borderRadius: 12, alignItems: 'center', marginRight: 8 },
-  modalCancelText: { color: '#64748B', fontWeight: '700', fontSize: 15 },
-  modalConfirmBtn: { flex: 1, paddingVertical: 14, backgroundColor: '#EF4444', borderRadius: 12, alignItems: 'center', marginLeft: 8 },
-  modalConfirmText: { color: '#ffffff', fontWeight: '700', fontSize: 15 }
+  modalCard: { backgroundColor: '#FFFFFF', borderRadius: 24, padding: 24, width: '100%', alignItems: 'center', elevation: 8 },
+  modalIconBox: { width: 56, height: 56, borderRadius: 28, backgroundColor: Colors.errorSoft, justifyContent: 'center', alignItems: 'center', marginBottom: 14 },
+  modalTitle: { fontSize: 18, fontWeight: '800', color: '#0F172A', marginBottom: 6 },
+  modalSubtitle: { fontSize: 13, color: '#64748B', textAlign: 'center', marginBottom: 20 },
+  modalBtnRow: { flexDirection: 'row', width: '100%', gap: 10 },
+  modalCancelBtn: { flex: 1, paddingVertical: 12, backgroundColor: '#F1F5F9', borderRadius: 12, alignItems: 'center' },
+  modalCancelText: { color: '#64748B', fontWeight: '700', fontSize: 14 },
+  modalConfirmBtn: { flex: 1, paddingVertical: 12, backgroundColor: Colors.error, borderRadius: 12, alignItems: 'center' },
+  modalConfirmText: { color: '#FFFFFF', fontWeight: '800', fontSize: 14 }
 });

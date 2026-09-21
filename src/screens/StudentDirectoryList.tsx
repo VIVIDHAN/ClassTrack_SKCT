@@ -71,7 +71,7 @@ export default function StudentDirectoryList() {
         <TouchableOpacity 
           style={styles.studentCard}
           onPress={() => navigation.navigate('StudentProfile', { student: item, classDetails: { ...classDetails, className: selectedSection } })}
-          activeOpacity={0.7}
+          activeOpacity={0.75}
         >
           <View style={styles.studentAvatar}>
             <Text style={styles.avatarText}>{item.name.charAt(0)}</Text>
@@ -83,7 +83,7 @@ export default function StudentDirectoryList() {
           <View style={styles.attendanceBadge}>
             <Text style={[
               styles.attendanceText, 
-              { color: mockAttendance >= 85 ? Colors.success : mockAttendance >= 75 ? '#EAB308' : Colors.error }
+              { color: mockAttendance >= 85 ? Colors.success : mockAttendance >= 75 ? Colors.warning : Colors.error }
             ]}>
               {mockAttendance}%
             </Text>
@@ -108,7 +108,7 @@ export default function StudentDirectoryList() {
       <View style={styles.header}>
         <View style={styles.headerTop}>
           <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
-            <Icon name="arrow-back" size={28} color={Colors.text} />
+            <Icon name="arrow-back" size={26} color={Colors.text} />
           </TouchableOpacity>
           <Text style={styles.title}>{selectedSection}</Text>
           <View style={{ width: 28 }} />
@@ -138,7 +138,7 @@ export default function StudentDirectoryList() {
 
       <View style={styles.searchContainer}>
         <View style={styles.searchBox}>
-          <Icon name="search" size={24} color={Colors.textSecondary} style={{ marginRight: 8 }} />
+          <Icon name="search" size={22} color={Colors.textSecondary} style={{ marginRight: 8 }} />
           <TextInput
             style={styles.searchInput}
             placeholder="Search by name or roll no..."
@@ -148,7 +148,7 @@ export default function StudentDirectoryList() {
           />
           {searchQuery.length > 0 && (
             <TouchableOpacity onPress={() => setSearchQuery('')}>
-              <Icon name="close" size={20} color={Colors.textSecondary} />
+              <Icon name="close" size={18} color={Colors.textSecondary} />
             </TouchableOpacity>
           )}
         </View>
@@ -174,12 +174,12 @@ export default function StudentDirectoryList() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.surface,
+    backgroundColor: Colors.background,
   },
   header: {
     paddingHorizontal: 20,
     paddingVertical: 14,
-    backgroundColor: '#ffffff',
+    backgroundColor: '#FFFFFF',
     borderBottomWidth: 1,
     borderBottomColor: '#F1F5F9',
   },
@@ -219,7 +219,7 @@ const styles = StyleSheet.create({
     color: '#64748B',
   },
   sectionBtnTextActive: {
-    color: '#ffffff',
+    color: '#FFFFFF',
   },
   subtitle: {
     fontSize: 13,
@@ -229,22 +229,25 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   searchContainer: {
-    padding: 16,
-    backgroundColor: '#ffffff',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    backgroundColor: '#FFFFFF',
     borderBottomWidth: 1,
     borderBottomColor: Colors.border,
   },
   searchBox: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#F1F5F9',
+    backgroundColor: '#F8FAFC',
     borderRadius: 12,
     paddingHorizontal: 14,
     paddingVertical: 10,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
   },
   searchInput: {
     flex: 1,
-    fontSize: 15,
+    fontSize: 14,
     color: Colors.text,
   },
   listContainer: {
@@ -255,28 +258,30 @@ const styles = StyleSheet.create({
   studentCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#ffffff',
+    backgroundColor: '#FFFFFF',
     padding: 14,
-    borderRadius: 14,
+    borderRadius: 16,
     marginBottom: 10,
+    borderWidth: 1,
+    borderColor: '#F1F5F9',
     elevation: 2,
-    shadowColor: '#000',
+    shadowColor: '#0F172A',
     shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 3,
+    shadowOpacity: 0.03,
+    shadowRadius: 4,
   },
   studentAvatar: {
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: '#E0F2FE',
+    backgroundColor: Colors.primarySoft,
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 12,
   },
   avatarText: {
     fontSize: 18,
-    fontWeight: '700',
+    fontWeight: '800',
     color: Colors.primary,
   },
   studentInfo: {
@@ -284,28 +289,30 @@ const styles = StyleSheet.create({
   },
   studentName: {
     fontSize: 15,
-    fontWeight: '700',
+    fontWeight: '800',
     color: '#0F172A',
   },
   studentId: {
     fontSize: 13,
     color: '#64748B',
     marginTop: 2,
+    fontWeight: '600',
   },
   attendanceBadge: {
     paddingHorizontal: 10,
     paddingVertical: 4,
-    borderRadius: 12,
+    borderRadius: 10,
     backgroundColor: '#F8FAFC',
   },
   attendanceText: {
     fontSize: 13,
-    fontWeight: '700',
+    fontWeight: '800',
   },
   emptyText: {
     textAlign: 'center',
     color: Colors.textSecondary,
-    fontSize: 15,
+    fontSize: 14,
     marginTop: 40,
+    fontWeight: '500',
   },
 });

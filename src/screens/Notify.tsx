@@ -165,6 +165,21 @@ export default function Notify() {
     });
   }, [syncSmsModeFromBackend]);
 
+  const [isAdminUser, setIsAdminUser] = useState(false);
+
+  useEffect(() => {
+    AsyncStorage.getItem('user').then(uStr => {
+      if (uStr) {
+        try {
+          const u = JSON.parse(uStr);
+          if (u.isAdmin || u.id === 999 || u.role === 'admin' || (u.email && u.email.includes('admin'))) {
+            setIsAdminUser(true);
+          }
+        } catch (e) {}
+      }
+    });
+  }, []);
+
   // Helper to compile template for a student
   const generateMessageForStudent = useCallback(
     (student: AbsenteeRecord, templateToUse: string = customTemplate) => {
@@ -584,6 +599,15 @@ export default function Notify() {
             {absentees.length > 0 && (
               <TouchableOpacity onPress={handleClearSessions} style={styles.iconActionBtn}>
                 <Icon name="delete-outline" size={22} color="#64748B" />
+              </TouchableOpacity>
+            )}
+            {isAdminUser && (
+              <TouchableOpacity
+                onPress={() => navigation.navigate('AttendanceReport')}
+                style={[styles.calHeaderBtn, { backgroundColor: '#FEE2E2', borderWidth: 1, borderColor: '#DC2626' }]}
+                activeOpacity={0.8}
+              >
+                <Icon name="file-download" size={20} color="#DC2626" />
               </TouchableOpacity>
             )}
             <TouchableOpacity

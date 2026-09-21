@@ -161,10 +161,18 @@ export default function Attendance() {
 
   const applyFastMark = (status: 'present' | 'absent' | 'onduty') => {
     if (isLocked) return;
-    const identifiers = absentInput.split(',').map(s => s.trim()).filter(s => s.length > 0);
+    const rawTokens = absentInput.split(/[\s,]+/).map(s => s.trim()).filter(s => s.length > 0);
     setStudents(prev => {
       const updated = prev.map(student => {
-        const isMarkedByInput = identifiers.some(id => String(student.id).endsWith(id));
+        const rollStr = String(student.id || student.roll_no || '').toUpperCase();
+        const isMarkedByInput = rawTokens.some(tok => {
+          const upperTok = tok.toUpperCase();
+          const numOnly = upperTok.replace(/^0+/, '');
+          const rollNumOnly = rollStr.replace(/^[A-Z0-9]*TUIT0*/i, '');
+          return rollStr.endsWith(upperTok) ||
+                 rollStr === upperTok ||
+                 (numOnly.length > 0 && rollNumOnly === numOnly);
+        });
         if (isMarkedByInput) {
           return { ...student, isAbsent: status === 'absent', isOnDuty: status === 'onduty' };
         }
@@ -172,7 +180,7 @@ export default function Attendance() {
       });
       return sortStudents(updated);
     });
-    setAbsentInput(''); // Clear it out after marking
+    setAbsentInput('');
     setFastMarkModalVisible(false);
   };
 
@@ -189,7 +197,6 @@ export default function Attendance() {
     const isoDate = now.toISOString().split('T')[0];
     const sessionId = `session-${Date.now()}`;
 
-    // Check SMS Mode (Testing Mode vs Live Mode)
     let isTestMode = true;
     let testPhone = '9442211279';
     try {
@@ -205,9 +212,6 @@ export default function Attendance() {
       isTestMode = true;
     }
 
-    // =========================================================================
-    // STEP 1: GUARANTEED IMMEDIATE LOCAL STORAGE (MUST HAPPEN FIRST)
-    // =========================================================================
     const fullAttendanceRecord = {
       sessionId,
       date: dateStr,
@@ -244,16 +248,11 @@ export default function Attendance() {
     };
 
     try {
-      // Save locally via AttendanceService immediately
       await saveAttendanceLocally(fullAttendanceRecord);
-      console.log('Attendance successfully stored locally in AsyncStorage');
     } catch (cacheErr) {
       console.error('Critical: Error saving attendance locally:', cacheErr);
     }
 
-    // =========================================================================
-    // STEP 2: SAVE TO REMOTE DATABASE / SYNC QUEUE
-    // =========================================================================
     try {
       const recordsPayload = students.map((s, idx) => ({
         student_id: s.db_id || (idx + 1),
@@ -263,7 +262,7 @@ export default function Attendance() {
       }));
 
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 4000);
+      const timeoutId = setTimeout(() => controller.abort(), 12000);
       const periodVal = classDetails.period ? `Period ${classDetails.period}` : (classDetails.time ? (classDetails.time.includes('(') ? classDetails.time.split('(')[0].trim() : classDetails.time) : 'Period 1');
       const timeVal = classDetails.time || '08:15 AM - 09:15 AM';
       const subjectVal = classDetails.subject || 'Applied Cryptography';
@@ -286,17 +285,8 @@ export default function Attendance() {
         signal: controller.signal
       });
       clearTimeout(timeoutId);
-      if (res.ok) {
-        const resData = await res.json();
-        console.log('Attendance API response:', resData);
-      }
-    } catch (err) {
-      console.log('Remote attendance API offline (safely stored locally):', err);
-    }
+    } catch (err: any) {}
 
-    // =========================================================================
-    // STEP 3: OPTIONAL SMS DISPATCH FOR ABSENT STUDENTS
-    // =========================================================================
     if (sendSms && absentStudents.length > 0 && Platform.OS === 'android') {
       const failedSmsList: { phone: string; message: string }[] = [];
       try {
@@ -316,28 +306,14 @@ export default function Attendance() {
         for (const student of absentStudents) {
           const destPhone = isTestMode ? testPhone : (student.real_parent_phone || student.phone);
           if (destPhone) {
-            let periodInfo = '';
-            if (classDetails.time && classDetails.time.includes('(')) {
-              periodInfo = classDetails.time;
-            } else if (classDetails.time) {
-              periodInfo = classDetails.time;
-            } else if (classDetails.period && PERIOD_SCHEDULE[Number(classDetails.period)]) {
-              const sched = PERIOD_SCHEDULE[Number(classDetails.period)];
-              periodInfo = `Period ${classDetails.period} (${sched.timeRange})`;
-            } else if (classDetails.period) {
-              periodInfo = `Period ${classDetails.period}`;
-            } else {
-              periodInfo = 'Period Session';
-            }
-            const message = `Dear Parent, your ward ${student.name} (${student.id}) is marked ABSENT for ${classDetails.subject} [${periodInfo}] today.\nஅன்பான பெற்றோரே, உங்கள் குழந்தை ${student.name} (${student.id}) இன்று ${classDetails.subject} [${periodInfo}] வகுப்பிற்கு வரவில்லை.\nSKCT - Contact Class Teacher.`;
+            let periodInfo = classDetails.time || 'Period Session';
+            const message = `Dear Parent, your ward ${student.name} (${student.id}) is marked ABSENT for ${classDetails.subject} [${periodInfo}] today.\nSKCT - Contact Class Teacher.`;
             let sentDirectly = false;
             if (granted === PermissionsAndroid.RESULTS.GRANTED && DirectSms && DirectSms.sendDirectSms) {
               try {
                 await DirectSms.sendDirectSms(destPhone, message);
                 sentDirectly = true;
-              } catch (e) {
-                console.log('Direct background SMS failed for:', destPhone, e);
-              }
+              } catch (e) {}
             }
             if (!sentDirectly) {
               failedSmsList.push({ phone: destPhone, message });
@@ -345,7 +321,6 @@ export default function Attendance() {
           }
         }
 
-        // If direct SMS was blocked, open native SMS app for the first absentee
         if (failedSmsList.length > 0) {
           const target = failedSmsList[0];
           const smsUrl = `sms:${target.phone}?body=${encodeURIComponent(target.message)}`;
@@ -355,9 +330,7 @@ export default function Attendance() {
             }
           }).catch(() => {});
         }
-      } catch (err) {
-        console.warn('SMS dispatch error:', err);
-      }
+      } catch (err) {}
     }
 
     navigation.navigate('Success', { absentStudents, classDetails });
@@ -415,7 +388,7 @@ export default function Attendance() {
       <View style={styles.header}>
         <View style={styles.headerTop}>
           <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
-            <Icon name="arrow-back" size={28} color={Colors.text} />
+            <Icon name="arrow-back" size={26} color={Colors.text} />
           </TouchableOpacity>
           <Text style={styles.title}>{classDetails.className}</Text>
           <View style={{ width: 28 }} />
@@ -453,7 +426,7 @@ export default function Attendance() {
               />
               <TouchableOpacity style={styles.fastMarkBtn} onPress={handleFastMark}>
                 <Text style={styles.fastMarkBtnText}>Mark</Text>
-                <Icon name="keyboard-arrow-down" size={16} color="#ffffff" style={{ marginLeft: 4 }} />
+                <Icon name="keyboard-arrow-down" size={16} color="#FFFFFF" style={{ marginLeft: 4 }} />
               </TouchableOpacity>
             </View>
           </Animated.View>
@@ -492,7 +465,7 @@ export default function Attendance() {
               <Text style={styles.lockedFooterText}>Locked</Text>
             </View>
             <TouchableOpacity style={styles.unlockFooterBtn} onPress={handleUnlockSession}>
-              <Icon name="lock-open" size={18} color="#ffffff" style={{ marginRight: 6 }} />
+              <Icon name="lock-open" size={18} color="#FFFFFF" style={{ marginRight: 6 }} />
               <Text style={styles.unlockFooterText}>Unlock Session</Text>
             </TouchableOpacity>
           </View>
@@ -503,14 +476,14 @@ export default function Attendance() {
               <Text style={styles.submitOnlyText}>Submit</Text>
             </TouchableOpacity>
             <TouchableOpacity style={styles.submitSmsBtn} onPress={() => handleSubmit(true)}>
-              <Icon name="sms" size={20} color="#ffffff" style={{ marginRight: 6 }} />
+              <Icon name="sms" size={20} color="#FFFFFF" style={{ marginRight: 6 }} />
               <Text style={styles.submitSmsText}>Submit & Send SMS</Text>
             </TouchableOpacity>
           </>
         )}
       </View>
 
-      {/* CUSTOM FAST MARK MODAL */}
+      {/* FAST MARK MODAL */}
       <Modal transparent visible={fastMarkModalVisible} animationType="fade">
         <View style={styles.modalOverlay}>
           <View style={styles.modalCard}>
@@ -519,15 +492,15 @@ export default function Attendance() {
             
             <View style={styles.modalOptionsContainer}>
               <TouchableOpacity style={[styles.modalOptionBtn, { backgroundColor: Colors.success }]} onPress={() => applyFastMark('present')}>
-                <Icon name="check-circle" size={24} color="#fff" />
+                <Icon name="check-circle" size={22} color="#FFFFFF" />
                 <Text style={styles.modalOptionText}>Present</Text>
               </TouchableOpacity>
               <TouchableOpacity style={[styles.modalOptionBtn, { backgroundColor: Colors.error }]} onPress={() => applyFastMark('absent')}>
-                <Icon name="cancel" size={24} color="#fff" />
+                <Icon name="cancel" size={22} color="#FFFFFF" />
                 <Text style={styles.modalOptionText}>Absent</Text>
               </TouchableOpacity>
               <TouchableOpacity style={[styles.modalOptionBtn, { backgroundColor: Colors.primary }]} onPress={() => applyFastMark('onduty')}>
-                <Icon name="business-center" size={24} color="#fff" />
+                <Icon name="business-center" size={22} color="#FFFFFF" />
                 <Text style={styles.modalOptionText}>On Duty (OD)</Text>
               </TouchableOpacity>
             </View>
@@ -545,13 +518,12 @@ export default function Attendance() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.surface, // Clean white header
-    
+    backgroundColor: Colors.surface,
   },
   header: {
-    paddingHorizontal: 24,
-    paddingVertical: 16,
-    backgroundColor: '#ffffff',
+    paddingHorizontal: 20,
+    paddingVertical: 14,
+    backgroundColor: '#FFFFFF',
     borderBottomWidth: 1,
     borderBottomColor: '#F1F5F9',
   },
@@ -565,22 +537,22 @@ const styles = StyleSheet.create({
     marginLeft: -4,
   },
   title: {
-    fontSize: 22,
+    fontSize: 20,
     fontWeight: '800',
     color: '#0F172A',
   },
   subtitle: {
-    fontSize: 14,
+    fontSize: 13,
     color: '#64748B',
     fontWeight: '600',
-    marginTop: 8,
+    marginTop: 6,
     textAlign: 'center',
   },
   fastInputContainer: {
-    marginBottom: 20,
+    marginBottom: 18,
   },
   fastInputLabel: {
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '700',
     color: Colors.textSecondary,
     marginBottom: 8,
@@ -594,8 +566,9 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.surface,
     borderWidth: 1,
     borderColor: Colors.border,
-    borderRadius: 10,
-    padding: 10,
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
     fontSize: 14,
     color: Colors.text,
     marginRight: 10,
@@ -604,63 +577,69 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.primary,
     paddingVertical: 10,
     paddingHorizontal: 16,
-    borderRadius: 10,
+    borderRadius: 12,
     justifyContent: 'center',
     alignItems: 'center',
     flexDirection: 'row',
   },
   fastMarkBtnText: {
-    color: '#ffffff',
+    color: '#FFFFFF',
     fontWeight: '800',
     fontSize: 13,
   },
   listContainer: {
     flex: 1,
-    backgroundColor: Colors.background, // Off-white for the list area
-    padding: 24,
+    backgroundColor: Colors.background,
+    paddingHorizontal: 20,
+    paddingTop: 18,
   },
   statsGrid: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginBottom: 24,
+    marginBottom: 18,
     paddingHorizontal: 16,
+    backgroundColor: '#FFFFFF',
+    paddingVertical: 14,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#F1F5F9',
   },
   statItem: {
     alignItems: 'center',
   },
   statLabel: {
-    fontSize: 12,
+    fontSize: 11,
     color: Colors.textSecondary,
     fontWeight: '700',
-    marginBottom: 4,
+    marginBottom: 2,
     textTransform: 'uppercase',
   },
   statValue: {
-    fontSize: 24,
+    fontSize: 22,
     fontWeight: '800',
     color: Colors.text,
   },
   studentCard: {
     backgroundColor: Colors.surface,
-    borderRadius: 12,
+    borderRadius: 16,
     padding: 16,
-    marginBottom: 12,
+    marginBottom: 10,
     borderWidth: 1,
-    borderColor: Colors.border,
-    shadowColor: '#000',
+    borderColor: Colors.borderLight,
+    shadowColor: '#0F172A',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
+    shadowOpacity: 0.03,
+    shadowRadius: 6,
     elevation: 2,
   },
   studentInfo: {
     marginBottom: 12,
   },
   studentName: {
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: '800',
     color: Colors.text,
-    marginBottom: 4,
+    marginBottom: 2,
   },
   studentId: {
     fontSize: 13,
@@ -673,11 +652,11 @@ const styles = StyleSheet.create({
   },
   toggleBtn: {
     flex: 1,
-    paddingVertical: 10,
+    paddingVertical: 9,
     borderRadius: 10,
     alignItems: 'center',
-    marginHorizontal: 4,
-    borderWidth: 2,
+    marginHorizontal: 3,
+    borderWidth: 1.5,
   },
   toggleBtnInactive: {
     backgroundColor: Colors.background,
@@ -696,14 +675,14 @@ const styles = StyleSheet.create({
     borderColor: Colors.primary,
   },
   toggleText: {
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '700',
   },
   toggleTextInactive: {
     color: Colors.textSecondary,
   },
   toggleTextActive: {
-    color: '#ffffff',
+    color: '#FFFFFF',
   },
   lockedBanner: {
     flexDirection: 'row',
@@ -740,14 +719,14 @@ const styles = StyleSheet.create({
   footer: {
     backgroundColor: Colors.surface,
     paddingHorizontal: 20,
-    paddingVertical: 16,
-    paddingBottom: Platform.OS === 'ios' ? 34 : 20,
+    paddingVertical: 14,
+    paddingBottom: Platform.OS === 'ios' ? 34 : 16,
     borderTopWidth: 1,
     borderTopColor: Colors.border,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    gap: 12,
+    gap: 10,
   },
   lockedFooterBtn: {
     flex: 1,
@@ -773,52 +752,52 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   unlockFooterText: {
-    color: '#ffffff',
+    color: '#FFFFFF',
     fontSize: 15,
     fontWeight: '800',
   },
   submitOnlyBtn: {
     flex: 1,
     flexDirection: 'row',
-    backgroundColor: '#F1F5F9',
+    backgroundColor: '#FFF7ED',
     borderWidth: 1.5,
     borderColor: Colors.primary,
-    paddingVertical: 14,
+    paddingVertical: 13,
     borderRadius: 14,
     alignItems: 'center',
     justifyContent: 'center',
   },
   submitOnlyText: {
     color: Colors.primary,
-    fontSize: 15,
+    fontSize: 14,
     fontWeight: '800',
   },
   submitSmsBtn: {
-    flex: 1.3,
+    flex: 1.2,
     flexDirection: 'row',
     backgroundColor: Colors.primary,
-    paddingVertical: 14,
+    paddingVertical: 13,
     borderRadius: 14,
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.12,
-    shadowRadius: 4,
-    elevation: 2,
+    shadowColor: Colors.primary,
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.2,
+    shadowRadius: 6,
+    elevation: 3,
   },
   submitSmsText: {
-    color: '#ffffff',
-    fontSize: 15,
+    color: '#FFFFFF',
+    fontSize: 14,
     fontWeight: '800',
   },
   modalOverlay: { flex: 1, backgroundColor: 'rgba(15, 23, 42, 0.6)', justifyContent: 'center', alignItems: 'center', padding: 24 },
-  modalCard: { backgroundColor: '#ffffff', borderRadius: 24, padding: 24, width: '100%', shadowColor: '#000', shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.2, shadowRadius: 20, elevation: 10 },
-  modalTitle: { fontSize: 22, fontWeight: '800', color: '#0F172A', marginBottom: 8, textAlign: 'center' },
-  modalSubtitle: { fontSize: 14, color: '#64748B', textAlign: 'center', marginBottom: 24, lineHeight: 20 },
-  modalOptionsContainer: { width: '100%', marginBottom: 16 },
-  modalOptionBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 14, borderRadius: 12, marginBottom: 12 },
-  modalOptionText: { color: '#ffffff', fontWeight: '700', fontSize: 16, marginLeft: 8 },
-  modalCancelBtn: { width: '100%', paddingVertical: 14, backgroundColor: '#F1F5F9', borderRadius: 12, alignItems: 'center' },
-  modalCancelText: { color: '#64748B', fontWeight: '700', fontSize: 15 }
+  modalCard: { width: '100%', backgroundColor: '#FFFFFF', borderRadius: 24, padding: 24, elevation: 8 },
+  modalTitle: { fontSize: 18, fontWeight: '800', color: '#0F172A', textAlign: 'center', marginBottom: 4 },
+  modalSubtitle: { fontSize: 13, color: '#64748B', textAlign: 'center', marginBottom: 18 },
+  modalOptionsContainer: { gap: 10, marginBottom: 16 },
+  modalOptionBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 13, borderRadius: 14, gap: 8 },
+  modalOptionText: { fontSize: 15, fontWeight: '800', color: '#FFFFFF' },
+  modalCancelBtn: { paddingVertical: 12, borderRadius: 12, backgroundColor: '#F1F5F9', alignItems: 'center' },
+  modalCancelText: { fontSize: 14, fontWeight: '700', color: '#64748B' },
 });

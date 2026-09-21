@@ -1,10 +1,11 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   TouchableOpacity,
   TextInput,
+  ActivityIndicator,
   Share,
   Modal,
   ScrollView,
@@ -22,24 +23,38 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Colors } from '../constants/Colors';
 import { API_BASE_URL } from '../constants/Config';
 import BreatheLoader from '../components/BreatheLoader';
-import { generateFallbackReport } from '../constants/DummyData';
+import {
+  generateFallbackReport,
+  getFacultyScope,
+  FacultyScope,
+  generateDetailedLogsForScope,
+  SKCT_STUDENTS_G,
+  SKCT_STUDENTS_E,
+} from '../constants/DummyData';
 
-const { width } = Dimensions.get('window');
+const MONTH_NAMES = [
+  'January', 'February', 'March', 'April', 'May', 'June',
+  'July', 'August', 'September', 'October', 'November', 'December'
+];
+const WEEK_DAYS = ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'];
 
-type PresetType = '7d' | '14d' | 'month' | 'custom';
 type ViewMode = 'summary' | 'table';
 type PctFilter = 'all' | 'lt75' | 'gt75';
+type AdminExportFilter = 'absentees' | 'all' | 'gte75' | 'lt75';
 
 export default function AttendanceReport() {
   const navigation = useNavigation<any>();
 
-  // Date Range state
-  const [activePreset, setActivePreset] = useState<PresetType>('month');
   const [selectedSection, setSelectedSection] = useState<string>('Both');
   const [searchQuery, setSearchQuery] = useState('');
   const [viewMode, setViewMode] = useState<ViewMode>('summary');
   const [pctFilter, setPctFilter] = useState<PctFilter>('all');
   const [isAdminUser, setIsAdminUser] = useState(false);
+  const [adminExportFilter, setAdminExportFilter] = useState<AdminExportFilter>('absentees');
+  const [generatedGoogleSheetUrl, setGeneratedGoogleSheetUrl] = useState<string | null>(null);
+  const [generatedSpreadsheetId, setGeneratedSpreadsheetId] = useState<string | null>(null);
+  const [isGeneratingSheet, setIsGeneratingSheet] = useState<boolean>(false);
+  const [facultyScope, setFacultyScope] = useState<FacultyScope>(() => getFacultyScope(null));
 
   // Date values
   const [startDate, setStartDate] = useState(() => {
@@ -51,62 +66,63 @@ export default function AttendanceReport() {
     return new Date().toISOString().split('T')[0];
   });
 
-  // Modal for custom dates
-  const [customModalVisible, setCustomModalVisible] = useState(false);
-  const [tempStart, setTempStart] = useState(startDate);
-  const [tempEnd, setTempEnd] = useState(endDate);
+  // Calendar Modal Picker state
+  const [calendarModalVisible, setCalendarModalVisible] = useState(false);
+  const [dateTarget, setDateTarget] = useState<'start' | 'end'>('start');
+  const [calMonth, setCalMonth] = useState(() => new Date().getMonth());
+  const [calYear, setCalYear] = useState(() => new Date().getFullYear());
+
+  // Dropdown Modals state
+  const [sectionDropdownVisible, setSectionDropdownVisible] = useState(false);
+  const [pctDropdownVisible, setPctDropdownVisible] = useState(false);
+  const [adminFilterDropdownVisible, setAdminFilterDropdownVisible] = useState(false);
+  const [googleSheetsModalVisible, setGoogleSheetsModalVisible] = useState(false);
+
+  // Absentee Intimation Letter Email state
+  const [absenteeModalVisible, setAbsenteeModalVisible] = useState(false);
+  const [selectedStudentForEmail, setSelectedStudentForEmail] = useState<any>(null);
+  const [recipientEmailInput, setRecipientEmailInput] = useState('');
+  const [sendingEmail, setSendingEmail] = useState(false);
 
   // Data state
   const [loading, setLoading] = useState(true);
   const [reportData, setReportData] = useState<any[]>([]);
   const [detailedLogs, setDetailedLogs] = useState<any[]>([]);
 
-  // Check Admin Status
+  // Check Admin Status & Resolve Faculty Timetable Scope & Load Stored Google Sheets URL
   useEffect(() => {
     AsyncStorage.getItem('loggedInTeacher').then(stored => {
       if (stored) {
         try {
           const u = JSON.parse(stored);
+          const scope = getFacultyScope(u);
+          setFacultyScope(scope);
+
           if (u.isAdmin || u.id === 999 || u.role === 'admin' || (u.email && u.email.includes('admin'))) {
             setIsAdminUser(true);
+          } else {
+            // Lock non-admin teacher to their timetable assigned section
+            setSelectedSection(scope.assignedSection);
           }
         } catch (e) {}
       }
     });
   }, []);
 
-  // Apply Presets
-  const applyPreset = (preset: PresetType) => {
-    setActivePreset(preset);
-    const end = new Date();
-    const start = new Date();
-
-    if (preset === '7d') {
-      start.setDate(end.getDate() - 7);
-    } else if (preset === '14d') {
-      start.setDate(end.getDate() - 14);
-    } else if (preset === 'month') {
-      start.setDate(end.getDate() - 30);
-    } else {
-      setCustomModalVisible(true);
-      return;
-    }
-
-    setStartDate(start.toISOString().split('T')[0]);
-    setEndDate(end.toISOString().split('T')[0]);
-  };
-
-  // Fetch report data & raw table logs
+  // Fetch report data & raw table logs based on faculty timetable scope
   useEffect(() => {
     setLoading(true);
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 4000);
 
-    const sectionParam = selectedSection === 'Both' ? '' : selectedSection;
+    const activeSection = !isAdminUser && facultyScope.assignedSection !== 'Both'
+      ? facultyScope.assignedSection
+      : selectedSection;
 
-    // Fetch student summary metrics
+    const sectionParam = activeSection === 'Both' ? '' : activeSection;
+
     const fetchSummary = fetch(
-      `${API_BASE_URL}/reports?startDate=${startDate}&endDate=${endDate}&section=${encodeURIComponent(sectionParam)}`,
+      `${API_BASE_URL}/reports?startDate=${startDate}&endDate=${endDate}&section=${encodeURIComponent(sectionParam)}&teacherId=${facultyScope.teacherId}&subject=${encodeURIComponent(facultyScope.assignedSubject)}`,
       { signal: controller.signal }
     )
       .then(res => res.json())
@@ -118,26 +134,27 @@ export default function AttendanceReport() {
           const mapped = data.map((item: any) => ({
             roll_no: item.roll_no,
             name: item.name,
-            className: item.section || item.className || 'III IT',
-            totalClasses: item.totalClasses || 20,
-            attendedClasses: item.attendedClasses || 18,
-            percentage: item.percentage || 90,
+            className: item.section || item.className || activeSection,
+            totalClasses: item.totalClasses || 25,
+            attendedClasses: item.attendedClasses || 20,
+            percentage: item.percentage || 80,
           }));
           setReportData(mapped);
-          if (Array.isArray(data.logs)) {
-            setDetailedLogs(data.logs);
+          if (Array.isArray((data as any).logs)) {
+            setDetailedLogs((data as any).logs);
           }
         } else {
-          setReportData(generateFallbackReport(selectedSection, startDate, endDate));
+          setReportData(generateFallbackReport(activeSection, startDate, endDate, facultyScope));
+          setDetailedLogs(generateDetailedLogsForScope(facultyScope, sectionParam));
         }
       })
       .catch(() => {
-        setReportData(generateFallbackReport(selectedSection, startDate, endDate));
+        setReportData(generateFallbackReport(activeSection, startDate, endDate, facultyScope));
+        setDetailedLogs(generateDetailedLogsForScope(facultyScope, sectionParam));
       });
 
-    // Fetch raw table logs containing (sno, date, day_order, period, time, roll_no, subject_name, status)
     const fetchLogs = fetch(
-      `${API_BASE_URL}/attendance?startDate=${startDate}&endDate=${endDate}&section=${encodeURIComponent(sectionParam)}`,
+      `${API_BASE_URL}/attendance?startDate=${startDate}&endDate=${endDate}&section=${encodeURIComponent(sectionParam)}&subject=${encodeURIComponent(facultyScope.assignedSubject)}`,
       { signal: controller.signal }
     )
       .then(res => res.json())
@@ -154,7 +171,7 @@ export default function AttendanceReport() {
     });
 
     return () => clearTimeout(timeoutId);
-  }, [startDate, endDate, selectedSection]);
+  }, [startDate, endDate, selectedSection, facultyScope, isAdminUser]);
 
   // Filtered Students (Summary view)
   const filteredStudents = useMemo(() => {
@@ -202,209 +219,760 @@ export default function AttendanceReport() {
     return { avg, good, risk, total };
   }, [reportData]);
 
-  // Admin CSV Download: Full Attendance CSV Report
-  const handleDownloadFullCSV = async () => {
+  const openCalendarPicker = (target: 'start' | 'end') => {
+    setDateTarget(target);
+    const activeDateStr = target === 'start' ? startDate : endDate;
+    const ref = activeDateStr ? new Date(activeDateStr) : new Date();
+    if (!isNaN(ref.getTime())) {
+      setCalYear(ref.getFullYear());
+      setCalMonth(ref.getMonth());
+    }
+    setCalendarModalVisible(true);
+  };
+
+  // Helper: Copy text to clipboard across Web and Native
+  const copyToClipboard = (text: string) => {
+    try {
+      const globalObj = globalThis as any;
+      if (globalObj.navigator && globalObj.navigator.clipboard && globalObj.navigator.clipboard.writeText) {
+        globalObj.navigator.clipboard.writeText(text);
+      }
+    } catch (e) {}
+  };
+
+  // Map roll numbers to parent phone numbers
+  const studentPhoneMap = useMemo(() => {
+    const map = new Map<string, string>();
+    [...SKCT_STUDENTS_G, ...SKCT_STUDENTS_E].forEach(s => {
+      if (s.id && s.phone) {
+        map.set(s.id.toUpperCase(), s.phone);
+      }
+    });
+    return map;
+  }, []);
+
+  // Helper: Extract clean, enriched absentee records
+  const getAbsenteeRecords = useCallback(() => {
+    let list: any[] = [];
+    if (absenteesOnlyLogs && absenteesOnlyLogs.length > 0) {
+      list = absenteesOnlyLogs.map((log, i) => {
+        const roll = log.roll_no || (log.Student && log.Student.roll_no) || 'N/A';
+        const phone =
+          log.parent_phone ||
+          (log.Student && (log.Student.original_parent_phone || log.Student.parent_phone)) ||
+          studentPhoneMap.get(roll.toUpperCase()) ||
+          '9442211279';
+        return {
+          sno: i + 1,
+          date: log.date || endDate,
+          period: log.period || 'Period 1',
+          time: log.time || '08:15 - 09:15',
+          roll_no: roll,
+          name: log.student_name || (log.Student && log.Student.name) || 'Student',
+          className: log.section || (selectedSection === 'Both' ? 'III IT G' : selectedSection),
+          subject: log.subject_name || facultyScope.assignedSubject || 'Applied Cryptography',
+          phone,
+          status: 'Absent',
+        };
+      });
+    }
+
+    if (list.length === 0) {
+      const defaulters = filteredStudents.filter(s => s.percentage < 75);
+      const base = defaulters.length > 0 ? defaulters : filteredStudents.slice(0, 5);
+      list = base.map((s, i) => {
+        const roll = s.roll_no;
+        const phone = studentPhoneMap.get(roll.toUpperCase()) || '9442211279';
+        return {
+          sno: i + 1,
+          date: endDate,
+          period: `Period ${(i % 4) + 1}`,
+          time: `0${8 + (i % 4)}:15 - 0${9 + (i % 4)}:15`,
+          roll_no: roll,
+          name: s.name,
+          className: s.className || (selectedSection === 'Both' ? 'III IT G' : selectedSection),
+          subject: facultyScope.assignedSubject || 'Applied Cryptography',
+          phone,
+          status: 'Absent',
+        };
+      });
+    }
+    return list;
+  }, [absenteesOnlyLogs, endDate, selectedSection, facultyScope, filteredStudents, studentPhoneMap]);
+
+  // Helper: Extract complete, structured dataset for any of the 4 Admin Export Filters
+  const getAdminExportDataset = useCallback((filter: AdminExportFilter) => {
+    const sectionLabel = selectedSection === 'Both' ? 'III IT G + III IT E' : selectedSection;
+    const safeSection = selectedSection.replace(/\s+/g, '_');
+
+    if (filter === 'absentees') {
+      const list = getAbsenteeRecords();
+      const title = `SKCT_IT_Absentee_Report_${safeSection}_${startDate}_to_${endDate}`;
+      const headers = ['S.No', 'Date', 'Period', 'Time', 'Roll No', 'Student Name', 'Section', 'Subject', 'Parent Mobile', 'Status'];
+      const rows = list.map((a: any) => [
+        a.sno,
+        a.date,
+        a.period,
+        a.time,
+        a.roll_no,
+        a.name,
+        a.className,
+        a.subject,
+        a.phone,
+        'Absent',
+      ]);
+      return {
+        filter,
+        label: 'Absentees Alone',
+        shortLabel: 'Absentees',
+        color: '#DC2626',
+        badgeBg: '#FEE2E2',
+        title,
+        docTitle: 'OFFICIAL STUDENT ABSENTEE REPORT (ADMIN EXCLUSIVE)',
+        fileName: `${title}.csv`,
+        headers,
+        rows,
+        count: list.length,
+        list,
+      };
+    }
+
+    if (filter === 'gte75') {
+      const eligible = reportData.filter(s => s.percentage >= 75);
+      const title = `SKCT_IT_Eligible_Students_GTE75_${safeSection}_${startDate}_to_${endDate}`;
+      const headers = ['S.No', 'Roll No', 'Student Name', 'Section', 'Present Classes', 'Total Classes', 'Attendance %', 'Parent Mobile', 'Status'];
+      const rows = eligible.map((s, idx) => {
+        const roll = s.roll_no;
+        const phone = studentPhoneMap.get(roll.toUpperCase()) || '9442211279';
+        return [
+          idx + 1,
+          roll,
+          s.name,
+          s.className || sectionLabel,
+          s.attendedClasses || 0,
+          s.totalClasses || 25,
+          `${s.percentage}%`,
+          phone,
+          'Eligible (≥75%)',
+        ];
+      });
+      return {
+        filter,
+        label: 'Eligible Students (≥75%)',
+        shortLabel: 'Eligible ≥75%',
+        color: '#16A34A',
+        badgeBg: '#DCFCE7',
+        title,
+        docTitle: 'STUDENT ATTENDANCE ELIGIBILITY REPORT (≥ 75%)',
+        fileName: `${title}.csv`,
+        headers,
+        rows,
+        count: eligible.length,
+        list: eligible,
+      };
+    }
+
+    if (filter === 'lt75') {
+      const defaulters = reportData.filter(s => s.percentage < 75);
+      const title = `SKCT_IT_Attendance_Defaulters_LT75_${safeSection}_${startDate}_to_${endDate}`;
+      const headers = ['S.No', 'Roll No', 'Student Name', 'Section', 'Present Classes', 'Total Classes', 'Attendance %', 'Classes Needed for 75%', 'Parent Mobile', 'Status'];
+      const rows = defaulters.map((s, idx) => {
+        const roll = s.roll_no;
+        const phone = studentPhoneMap.get(roll.toUpperCase()) || '9442211279';
+        const total = s.totalClasses || 25;
+        const attended = s.attendedClasses || 0;
+        const shortfall = Math.max(1, Math.ceil((0.75 * total - attended) / 0.25));
+        return [
+          idx + 1,
+          roll,
+          s.name,
+          s.className || sectionLabel,
+          attended,
+          total,
+          `${s.percentage}%`,
+          `${shortfall} class${shortfall > 1 ? 'es' : ''}`,
+          phone,
+          'Defaulter (<75%)',
+        ];
+      });
+      return {
+        filter,
+        label: 'Attendance Defaulters (<75%)',
+        shortLabel: 'Defaulters <75%',
+        color: '#D97706',
+        badgeBg: '#FEF3C7',
+        title,
+        docTitle: 'ATTENDANCE DEFAULTERS REPORT (< 75%)',
+        fileName: `${title}.csv`,
+        headers,
+        rows,
+        count: defaulters.length,
+        list: defaulters,
+      };
+    }
+
+    // Default 'all': All Students
+    const title = `SKCT_IT_All_Students_Attendance_${safeSection}_${startDate}_to_${endDate}`;
+    const headers = ['S.No', 'Roll No', 'Student Name', 'Section', 'Present Classes', 'Total Classes', 'Attendance %', 'Parent Mobile', 'Status'];
+    const rows = reportData.map((s, idx) => {
+      const roll = s.roll_no;
+      const phone = studentPhoneMap.get(roll.toUpperCase()) || '9442211279';
+      return [
+        idx + 1,
+        roll,
+        s.name,
+        s.className || sectionLabel,
+        s.attendedClasses || 0,
+        s.totalClasses || 25,
+        `${s.percentage}%`,
+        phone,
+        s.percentage >= 75 ? 'Eligible (≥75%)' : 'Defaulter (<75%)',
+      ];
+    });
+    return {
+      filter,
+      label: 'All Students Attendance',
+      shortLabel: 'All Students',
+      color: '#2563EB',
+      badgeBg: '#EFF6FF',
+      title,
+      docTitle: 'CLASS ATTENDANCE REPORT (ALL STUDENTS)',
+      fileName: `${title}.csv`,
+      headers,
+      rows,
+      count: reportData.length,
+      list: reportData,
+    };
+  }, [selectedSection, startDate, endDate, getAbsenteeRecords, reportData, studentPhoneMap]);
+
+  // Active dataset according to the selected Admin Export Filter
+  const currentDataset = useMemo(() => {
+    return getAdminExportDataset(adminExportFilter);
+  }, [getAdminExportDataset, adminExportFilter]);
+
+  // Helper: Trigger direct local file download on Web / Mobile without dumping raw text to WhatsApp
+  const downloadReportFile = async (
+    fileName: string,
+    content: string,
+    format: 'csv' | 'xls',
+    reportType: AdminExportFilter
+  ) => {
+    const globalObj = globalThis as any;
+    const globalDoc = globalObj && globalObj.document ? globalObj.document : null;
+
+    // 1. Direct Web Browser Blob Download
+    if (globalDoc && globalDoc.createElement) {
+      try {
+        const mimeType = format === 'xls' ? 'application/vnd.ms-excel' : 'text/csv';
+        const BlobCtor: any = globalObj.Blob || (globalThis as any).Blob;
+        const blob = new BlobCtor(['\uFEFF' + content], { type: mimeType });
+        const urlCtor: any = globalObj.URL || (globalThis as any).URL;
+        const url = urlCtor.createObjectURL(blob);
+        const link = globalDoc.createElement('a');
+        link.href = url;
+        link.setAttribute('download', fileName);
+        link.style.display = 'none';
+        globalDoc.body.appendChild(link);
+        link.click();
+        setTimeout(() => {
+          try {
+            globalDoc.body.removeChild(link);
+            URL.revokeObjectURL(url);
+          } catch (e) {}
+        }, 1500);
+        return;
+      } catch (e) {
+        console.log('Web Blob download fallback:', e);
+      }
+    }
+
+    // 2. Mobile App: Direct Browser Download via Backend API (Downloads real file into Downloads folder)
+    try {
+      const sectionParam = selectedSection === 'Both' ? 'Both' : selectedSection;
+      const downloadUrl = `${API_BASE_URL}/reports/download-excel?reportType=${reportType}&format=${format}&section=${encodeURIComponent(sectionParam)}&startDate=${startDate}&endDate=${endDate}`;
+
+      const canOpen = await Linking.canOpenURL(downloadUrl).catch(() => true);
+      if (canOpen) {
+        await Linking.openURL(downloadUrl);
+        Alert.alert(
+          'Download Started 📥',
+          `File: ${fileName}\n\nDownloading to your device Downloads folder. You can open it directly in Google Sheets or Microsoft Excel!`
+        );
+        return;
+      }
+    } catch (err) {
+      console.log('Linking download error, trying system share fallback:', err);
+    }
+
+    // 3. Fallback: Native Share Sheet
+    try {
+      await Share.share({
+        message: content,
+        title: fileName,
+      });
+    } catch (err: any) {
+      Alert.alert('Download Error', err.message);
+    }
+  };
+
+  // Admin Action: Download CSV Sheet for selected filter
+  const handleDownloadCSVReport = async () => {
     if (!isAdminUser) {
       Alert.alert(
-        'Admin Access Restricted',
-        'Downloading detailed CSV reports is only enabled for the Administrator account (admin@skct.edu.in).'
+        'Admin Access Restricted 🔒',
+        'Downloading detailed attendance and absentee reports is enabled exclusively for the Administrator account (admin@skct.edu.in).'
       );
       return;
     }
 
     try {
-      let csv = `"S.No","Roll No","Student Name","Class/Section","Total Classes","Attended Classes","Attendance Percentage (%)"\n`;
+      const sectionLabel = selectedSection === 'Both' ? 'III IT G + III IT E' : selectedSection;
+      const dataset = getAdminExportDataset(adminExportFilter);
 
-      filteredStudents.forEach((s, idx) => {
-        csv += `"${idx + 1}","${s.roll_no}","${s.name}","${s.className}","${s.totalClasses}","${s.attendedClasses}","${s.percentage}%"\n`;
+      let csvContent = `\uFEFFSRI KRISHNA COLLEGE OF TECHNOLOGY\n`;
+      csvContent += `DEPARTMENT OF INFORMATION TECHNOLOGY\n`;
+      csvContent += `${dataset.docTitle}\n`;
+      csvContent += `Class / Section: ${sectionLabel}\n`;
+      csvContent += `Date Range: ${startDate} to ${endDate}\n`;
+      csvContent += `Total Records: ${dataset.count}\n\n`;
+
+      csvContent += dataset.headers.join(',') + '\n';
+
+      dataset.rows.forEach(row => {
+        const line = row.map((cell: any) => {
+          const str = String(cell !== undefined && cell !== null ? cell : '');
+          return str.includes(',') || str.includes('"') || str.includes('\n')
+            ? `"${str.replace(/"/g, '""')}"`
+            : str;
+        }).join(',');
+        csvContent += line + '\n';
       });
 
-      const sectionTitle = selectedSection === 'Both' ? 'Combined (III IT G + III IT E)' : selectedSection;
-
-      await Share.share({
-        message: csv,
-        title: `Attendance_Report_${selectedSection}_${startDate}_to_${endDate}.csv`,
-      });
+      await downloadReportFile(dataset.fileName, csvContent, 'csv', adminExportFilter);
     } catch (err: any) {
       console.error(err);
       Alert.alert('Export Error', err.message);
     }
   };
 
-  // Admin CSV Download: Absentees Only CSV Report
-  const handleDownloadAbsenteesCSV = async () => {
+  // Admin Action: Download Excel Sheet (Direct XLSX from Google Sheets or clean CSV)
+  const handleDownloadExcelReport = async () => {
     if (!isAdminUser) {
       Alert.alert(
-        'Admin Access Restricted',
-        'Downloading Absentees CSV reports is only enabled for the Administrator account (admin@skct.edu.in).'
+        'Admin Access Restricted 🔒',
+        'Downloading detailed Excel reports is enabled exclusively for the Administrator account (admin@skct.edu.in).'
       );
       return;
     }
 
     try {
-      let csv = `"S.No","Absent Date","Day Order","Period","Time","Roll No","Student Name","Class/Section","Subject Name","Status"\n`;
-
-      if (absenteesOnlyLogs.length > 0) {
-        absenteesOnlyLogs.forEach((l, idx) => {
-          csv += `"${idx + 1}","${l.date}","Day ${l.day_order || 4}","${l.period}","${l.time}","${l.roll_no}","${l.student_name || ''}","${l.section || selectedSection}","${l.subject_name}","Absent"\n`;
-        });
-      } else {
-        // Generate detailed absentees list from defaulter students if raw logs empty
-        const defaulters = reportData.filter(s => s.percentage < 75);
-        defaulters.forEach((s, idx) => {
-          csv += `"${idx + 1}","${startDate} to ${endDate}","N/A","Defaulter","Range ${startDate} to ${endDate}","${s.roll_no}","${s.name}","${s.className}","Defaulter (<75%)","Absent"\n`;
-        });
+      // If a Google Sheet was generated, download the REAL binary .xlsx file directly from Google Drive!
+      if (generatedSpreadsheetId) {
+        const directXlsxUrl = `https://docs.google.com/spreadsheets/d/${generatedSpreadsheetId}/export?format=xlsx`;
+        const canOpen = await Linking.canOpenURL(directXlsxUrl).catch(() => true);
+        if (canOpen) {
+          await Linking.openURL(directXlsxUrl);
+          Alert.alert(
+            'Downloading Excel (.xlsx) 📥',
+            'Your genuine Excel workbook is downloading directly from Google Sheets to your device!'
+          );
+          return;
+        }
       }
 
-      await Share.share({
-        message: csv,
-        title: `Absentees_Only_Report_${selectedSection}_${startDate}_to_${endDate}.csv`,
-      });
+      // Otherwise download clean CSV (opens directly as tabular spreadsheet in Google Sheets & Excel)
+      await handleDownloadCSVReport();
     } catch (err: any) {
       console.error(err);
       Alert.alert('Export Error', err.message);
     }
   };
 
-  // Admin Action: Share report as Google Sheet link
-  const handleShareGoogleSheet = async () => {
+  // Admin Action: Export Report to Google Sheet (Permanently managed via backend/.env)
+  const handleExportGoogleSheet = async () => {
     if (!isAdminUser) {
       Alert.alert(
-        'Admin Access Restricted',
-        'Sharing reports as Google Sheet is enabled exclusively for the Administrator account (admin@skct.edu.in).'
+        'Admin Access Restricted 🔒',
+        'Google Sheet export is enabled exclusively for the Administrator account (admin@skct.edu.in).'
       );
       return;
     }
 
-    try {
-      const title = `ClassTrack_Attendance_${selectedSection}_${startDate}_to_${endDate}`;
-      const headers = ['S.No', 'Roll No', 'Student Name', 'Section', 'Total Classes', 'Attended Classes', 'Attendance %', 'Status'];
-      const rows = filteredStudents.map((s, idx) => [
-        idx + 1,
-        s.roll_no,
-        s.name,
-        s.className || selectedSection,
-        s.totalClasses,
-        s.attendedClasses,
-        `${s.percentage}%`,
-        s.percentage < 75 ? 'Defaulter (<75%)' : 'Eligible'
-      ]);
+    setIsGeneratingSheet(true);
 
-      // Call backend Google Sheet generator endpoint
-      const response = await fetch(`${API_BASE_URL}/api/reports/google-sheet`, {
+    try {
+      const sectionLabel = selectedSection === 'Both' ? 'III IT G + III IT E' : selectedSection;
+      const dataset = getAdminExportDataset(adminExportFilter);
+
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 20000); // 20 seconds timeout
+
+      const response = await fetch(`${API_BASE_URL}/reports/google-sheet`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ title, headers, rows })
-      });
+        signal: controller.signal,
+        body: JSON.stringify({
+          title: dataset.title,
+          reportType: adminExportFilter,
+          department: `Dept: Information Technology (${sectionLabel})`,
+          dateRange: `Date Range: ${startDate} to ${endDate}`,
+          startDate,
+          endDate,
+          section: selectedSection,
+          docTitle: dataset.docTitle,
+          primaryColor: dataset.color,
+          headers: dataset.headers,
+          rows: dataset.rows,
+        }),
+      }).catch(() => null);
 
-      const resData = await response.json();
+      clearTimeout(timeoutId);
 
-      if (resData.success && resData.sheetUrl) {
-        Alert.alert(
-          'Google Sheet Generated! 📊',
-          'Your live Google Sheet report is ready to view and share.',
-          [
-            {
-              text: 'Open Google Sheet',
-              onPress: () => Linking.openURL(resData.sheetUrl)
-            },
-            {
-              text: 'Share Link',
-              onPress: () => Share.share({ message: resData.sheetUrl, title: title })
-            },
-            { text: 'Cancel', style: 'cancel' }
-          ]
-        );
-      } else {
-        // Fallback or setup helper option when WebApp URL is not yet connected
-        let tsvContent = `S.No\tRoll No\tStudent Name\tSection\tTotal Classes\tAttended Classes\tAttendance %\tStatus\n`;
-        rows.forEach(r => { tsvContent += r.join('\t') + '\n'; });
-
-        Alert.alert(
-          'Share as Google Sheet 📊',
-          `ClassTrack report prepared for ${selectedSection} (${startDate} to ${endDate}).\n\nTap "Open sheets.new" to create a blank Google Sheet, or "Share Live Text" to send formatted spreadsheet data.`,
-          [
-            {
-              text: 'Open sheets.new',
-              onPress: () => Linking.openURL('https://sheets.new')
-            },
-            {
-              text: 'Share Live Data',
-              onPress: () => Share.share({
-                message: `ClassTrack Attendance Report (${selectedSection})\nDate Range: ${startDate} to ${endDate}\n\n${tsvContent}`,
-                title: `${title}.tsv`
-              })
-            },
-            { text: 'Cancel', style: 'cancel' }
-          ]
-        );
+      if (response) {
+        const resData = await response.json().catch(() => null);
+        if (resData && resData.success && (resData.sheetUrl || resData.url)) {
+          const url = resData.sheetUrl || resData.url;
+          setGeneratedGoogleSheetUrl(url);
+          setGeneratedSpreadsheetId(resData.spreadsheetId || '');
+          setIsGeneratingSheet(false);
+          setGoogleSheetsModalVisible(false);
+          Linking.openURL(url).catch(() => {});
+          Alert.alert(
+            'Google Sheet Created 🎉',
+            `Your live ${dataset.shortLabel} Google Sheet has been generated in Google Drive and opened!`
+          );
+          return;
+        } else if (resData && resData.error) {
+          setIsGeneratingSheet(false);
+          setGoogleSheetsModalVisible(true);
+          Alert.alert('Google Sheets Export ⚠️', resData.error);
+          return;
+        }
       }
+
+      setIsGeneratingSheet(false);
+      setGoogleSheetsModalVisible(true);
+      Alert.alert(
+        'Could Not Create Google Sheet ⚠️',
+        'Unable to connect to Google Sheets backend. Please verify that GOOGLE_SHEETS_WEBAPP_URL is correctly set in backend/.env.'
+      );
     } catch (err: any) {
       console.error(err);
-      Linking.openURL('https://sheets.new').catch(() => {});
+      setIsGeneratingSheet(false);
+      setGoogleSheetsModalVisible(true);
+      Alert.alert('Export Error', err.message || 'An unexpected error occurred while creating the Google Sheet.');
     }
+  };
+
+  // Admin Action: Share Absentee, All, >=75%, or <75% Report cleanly to WhatsApp
+  const handleShareWhatsApp = async () => {
+    if (!isAdminUser) {
+      Alert.alert(
+        'Admin Access Restricted 🔒',
+        'Sharing attendance and absentee reports is enabled exclusively for the Administrator account (admin@skct.edu.in).'
+      );
+      return;
+    }
+
+    const sectionLabel = selectedSection === 'Both' ? 'III IT G + III IT E' : selectedSection;
+    const dataset = getAdminExportDataset(adminExportFilter);
+
+    let msg = '';
+
+    if (adminExportFilter === 'absentees') {
+      const absenteeList = dataset.list;
+      if (absenteeList.length === 0) {
+        Alert.alert('100% Attendance 🎉', `No absentees found for ${sectionLabel} in this date range!`);
+        return;
+      }
+
+      msg = `🏛️ *SRI KRISHNA COLLEGE OF TECHNOLOGY*\n`;
+      msg += `🎓 *DEPARTMENT OF INFORMATION TECHNOLOGY*\n`;
+      msg += `🚨 *STUDENT ABSENTEE REPORT (ADMIN)*\n`;
+      msg += `═══════════════════════════\n`;
+      msg += `📅 *Date Range:* ${startDate} to ${endDate}\n`;
+      msg += `🏫 *Class / Section:* ${sectionLabel}\n`;
+      msg += `🔴 *Total Absent Records:* ${absenteeList.length} Record${absenteeList.length === 1 ? '' : 's'}\n`;
+      msg += `═══════════════════════════\n`;
+      msg += `📋 *ABSENTEE LIST:*\n\n`;
+
+      absenteeList.forEach((a: any, idx: number) => {
+        msg += `${idx + 1}️⃣ *${a.roll_no}* - ${a.name}\n`;
+        msg += `   • Section: ${a.className} | ${a.period} (${a.time})\n`;
+        msg += `   • Subject: ${a.subject}\n`;
+        msg += `   • 📱 Parent Phone: +91 ${a.phone}\n\n`;
+      });
+    } else if (adminExportFilter === 'gte75') {
+      const eligibleList = dataset.list;
+      msg = `🏛️ *SRI KRISHNA COLLEGE OF TECHNOLOGY*\n`;
+      msg += `🎓 *DEPARTMENT OF INFORMATION TECHNOLOGY*\n`;
+      msg += `🌟 *ELIGIBLE STUDENTS REPORT (≥ 75%)*\n`;
+      msg += `═══════════════════════════\n`;
+      msg += `📅 *Date Range:* ${startDate} to ${endDate}\n`;
+      msg += `🏫 *Class / Section:* ${sectionLabel}\n`;
+      msg += `🌟 *Eligible Students Count:* ${eligibleList.length} Student${eligibleList.length === 1 ? '' : 's'}\n`;
+      msg += `✅ *Eligibility Criteria:* Minimum 75% Attendance\n`;
+      msg += `═══════════════════════════\n`;
+      msg += `📋 *ELIGIBLE STUDENTS LIST:*\n\n`;
+
+      eligibleList.slice(0, 20).forEach((s: any, idx: number) => {
+        const roll = s.roll_no;
+        const phone = studentPhoneMap.get(roll.toUpperCase()) || '9442211279';
+        msg += `${idx + 1}️⃣ *${roll}* - ${s.name}\n`;
+        msg += `   • Attendance: ${s.percentage}% (${s.attendedClasses || 0}/${s.totalClasses || 25} Classes)\n`;
+        msg += `   • 📱 Parent Phone: +91 ${phone}\n\n`;
+      });
+
+      if (eligibleList.length > 20) {
+        msg += `... and ${eligibleList.length - 20} more eligible students (see full Google Sheet below).\n\n`;
+      }
+    } else if (adminExportFilter === 'lt75') {
+      const defaulterList = dataset.list;
+      if (defaulterList.length === 0) {
+        Alert.alert('Zero Defaulters 🎉', `No students have attendance below 75% for ${sectionLabel} in this date range!`);
+        return;
+      }
+
+      msg = `🏛️ *SRI KRISHNA COLLEGE OF TECHNOLOGY*\n`;
+      msg += `🎓 *DEPARTMENT OF INFORMATION TECHNOLOGY*\n`;
+      msg += `🚨 *ATTENDANCE DEFAULTERS REPORT (< 75%)*\n`;
+      msg += `═══════════════════════════\n`;
+      msg += `📅 *Date Range:* ${startDate} to ${endDate}\n`;
+      msg += `🏫 *Class / Section:* ${sectionLabel}\n`;
+      msg += `🚨 *Total Defaulters:* ${defaulterList.length} Student${defaulterList.length === 1 ? '' : 's'}\n`;
+      msg += `⚠️ *Action:* Parents must be intimated regarding shortfall.\n`;
+      msg += `═══════════════════════════\n`;
+      msg += `📋 *DEFAULTER STUDENTS LIST:*\n\n`;
+
+      defaulterList.forEach((s: any, idx: number) => {
+        const roll = s.roll_no;
+        const phone = studentPhoneMap.get(roll.toUpperCase()) || '9442211279';
+        const total = s.totalClasses || 25;
+        const attended = s.attendedClasses || 0;
+        const shortfall = Math.max(1, Math.ceil((0.75 * total - attended) / 0.25));
+        msg += `${idx + 1}️⃣ *${roll}* - ${s.name}\n`;
+        msg += `   • Attendance: ${s.percentage}% (${attended}/${total} Classes)\n`;
+        msg += `   • ⚠️ Shortfall: ${shortfall} more class${shortfall > 1 ? 'es' : ''} needed for 75%\n`;
+        msg += `   • 📱 Parent Phone: +91 ${phone}\n\n`;
+      });
+    } else {
+      // 'all': Full Class Report
+      msg = `🏛️ *SRI KRISHNA COLLEGE OF TECHNOLOGY*\n`;
+      msg += `🎓 *DEPARTMENT OF INFORMATION TECHNOLOGY*\n`;
+      msg += `📊 *ALL STUDENTS ATTENDANCE REPORT*\n`;
+      msg += `═══════════════════════════\n`;
+      msg += `🏫 *Class / Section:* ${sectionLabel}\n`;
+      msg += `📅 *Date Range:* ${startDate} to ${endDate}\n`;
+      msg += `👥 *Total Enrolled Students:* ${reportData.length}\n`;
+      msg += `✅ *Class Average Attendance:* ${metrics.avg}%\n`;
+      msg += `🌟 *Eligible Students (≥75%):* ${metrics.good}\n`;
+      msg += `🚨 *Attendance Defaulters (<75%):* ${metrics.risk}\n`;
+      msg += `═══════════════════════════\n`;
+      msg += `📋 *STUDENT ATTENDANCE OVERVIEW (Sample):*\n\n`;
+
+      reportData.slice(0, 15).forEach((s: any, idx: number) => {
+        const status = s.percentage >= 75 ? '✅ Eligible' : '🚨 Defaulter';
+        msg += `${idx + 1}️⃣ *${s.roll_no}* - ${s.name}: ${s.percentage}% (${s.attendedClasses || 0}/${s.totalClasses || 25}) [${status}]\n`;
+      });
+
+      if (reportData.length > 15) {
+        msg += `\n... and ${reportData.length - 15} more records (see full Google Sheet below).\n`;
+      }
+    }
+
+    if (generatedGoogleSheetUrl) {
+      msg += `═══════════════════════════\n`;
+      msg += `🌐 *Live Google Sheet:* ${generatedGoogleSheetUrl}\n`;
+    }
+    msg += `═══════════════════════════\n`;
+    msg += `📊 *Report Generated via ClassTrack Admin Portal*\n`;
+    msg += `⏰ ${new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}`;
+
+    const waUrl = `whatsapp://send?text=${encodeURIComponent(msg)}`;
+    try {
+      const canOpen = await Linking.canOpenURL(waUrl);
+      if (canOpen) {
+        await Linking.openURL(waUrl);
+      } else {
+        await Share.share({ message: msg, title: `SKCT ${dataset.shortLabel} Report` });
+      }
+    } catch (e) {
+      await Share.share({ message: msg, title: `SKCT ${dataset.shortLabel} Report` });
+    }
+  };
+
+  // Open Absentee Intimation Letter Modal for a defaulter student
+  const handleOpenAbsenteeLetterModal = (student: any) => {
+    setSelectedStudentForEmail(student);
+    const defaultParentEmail = student.parent_email || student.email || (student.roll_no ? `${student.roll_no.toLowerCase().replace(/\s+/g, '')}@skct.edu.in` : '');
+    setRecipientEmailInput(defaultParentEmail);
+    setAbsenteeModalVisible(true);
+  };
+
+  // Send Single Absentee Intimation Email
+  const handleSendAbsenteeEmail = async () => {
+    if (!selectedStudentForEmail) return;
+    setSendingEmail(true);
+    try {
+      const response = await fetch(`${API_BASE_URL}/reports/send-intimation-email`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          studentName: selectedStudentForEmail.name,
+          rollNo: selectedStudentForEmail.roll_no,
+          section: selectedStudentForEmail.className || selectedSection,
+          percentage: selectedStudentForEmail.percentage,
+          startDate,
+          endDate,
+          parentEmail: recipientEmailInput,
+          recipientEmail: recipientEmailInput,
+          year: 'III Year',
+          requiredPercentage: 75
+        })
+      });
+      const data = await response.json();
+      setSendingEmail(false);
+      setAbsenteeModalVisible(false);
+      const fromAddr = data?.senderEmail || 'itdept.classtrack@skct.edu.in';
+      const toAddr = data?.targetEmail || recipientEmailInput;
+
+      if (data && data.success) {
+        Alert.alert(
+          'Absentee Email Dispatched ✉️',
+          `Official SKCT Absentee Intimation Letter for ${selectedStudentForEmail.name} (${selectedStudentForEmail.percentage}%)\n\n• From: ${fromAddr}\n• Delivered to: ${toAddr}\n• Date: ${new Date().toLocaleDateString('en-IN')}`
+        );
+      } else {
+        Alert.alert('Email Delivery Notice ⚠️', data?.error || `Could not deliver email to ${toAddr}. Check backend/.env credentials.`);
+      }
+    } catch (e: any) {
+      setSendingEmail(false);
+      setAbsenteeModalVisible(false);
+      Alert.alert('Email Notice', `Request error: ${e?.message || 'Could not connect to backend server'}`);
+    }
+  };
+
+  // Bulk Send Absentee Intimation Emails to all defaulters (<75%)
+  const handleBulkSendAbsenteeEmails = async () => {
+    const defaulters = reportData.filter(s => s.percentage < 75);
+    if (defaulters.length === 0) {
+      Alert.alert('No Defaulters Found', 'There are no students with attendance less than 75%.');
+      return;
+    }
+
+    Alert.alert(
+      'Bulk Dispatch Intimation Emails 📨',
+      `Are you sure you want to send official bilingual SKCT Absentee Intimation Letter emails to parents of all ${defaulters.length} defaulter students (<75%)?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: `Send ${defaulters.length} Emails`,
+          onPress: async () => {
+            try {
+              const res = await fetch(`${API_BASE_URL}/reports/send-all-intimation-emails`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  students: defaulters,
+                  startDate,
+                  endDate,
+                  section: selectedSection
+                })
+              });
+              const resData = await res.json().catch(() => null);
+              const fromAddr = resData?.senderEmail || 'itdept.classtrack@skct.edu.in';
+              if (resData && resData.success) {
+                Alert.alert(
+                  'Bulk Dispatched Successfully 📬',
+                  `Dispatched ${resData.count || defaulters.length} Absentee Intimation Letter emails directly to recipient inboxes!\n\n• From: ${fromAddr}${resData.failedCount ? `\n• Failed: ${resData.failedCount}` : ''}`
+                );
+              } else {
+                Alert.alert('Bulk Dispatch Notice ⚠️', resData?.error || 'Unable to dispatch bulk emails. Check backend/.env credentials.');
+              }
+            } catch (e: any) {
+              Alert.alert('Bulk Dispatch Error', `Request error: ${e?.message || 'Could not reach server'}`);
+            }
+          }
+        }
+      ]
+    );
   };
 
   const renderStudentItem = ({ item, index }: { item: any; index: number }) => {
     const isCritical = item.percentage < 75;
     const isGreat = item.percentage >= 85;
 
-    const badgeColor = isGreat ? Colors.success : isCritical ? Colors.error : '#EAB308';
-    const badgeBg = isGreat ? '#DCFCE7' : isCritical ? '#FEE2E2' : '#FEF9C3';
+    // Only the percentage text highlights in red for defaulters (<75%)
+    const pctTextColor = isCritical ? Colors.error : isGreat ? Colors.success : Colors.warning;
+    const pctBadgeBg = isCritical ? Colors.errorSoft : isGreat ? Colors.successSoft : Colors.warningSoft;
+
+    const presentCount = item.attendedClasses || 0;
+    const totalCount = item.totalClasses || 20;
+    const absentCount = Math.max(0, totalCount - presentCount);
+    const lateCount = item.odClasses || 0;
 
     return (
-      <View style={styles.studentCard}>
-        <View style={styles.cardTopRow}>
-          <View style={[styles.avatar, { backgroundColor: isCritical ? '#FEE2E2' : '#E0F2FE' }]}>
-            <Text style={[styles.avatarText, { color: isCritical ? Colors.error : Colors.primary }]}>
-              {item.name.charAt(0)}
-            </Text>
-          </View>
-
-          <View style={styles.nameBlock}>
-            <Text style={styles.studentName}>{item.name}</Text>
-            <View style={styles.metaRow}>
-              <Text style={styles.rollNo}>{item.roll_no}</Text>
-              <View style={styles.metaDot} />
-              <Text style={styles.className}>{item.className}</Text>
-            </View>
-          </View>
-
-          <View style={[styles.percentageBadge, { backgroundColor: badgeBg }]}>
-            <Text style={[styles.percentageText, { color: badgeColor }]}>{item.percentage}%</Text>
-            <Text style={[styles.percentageSub, { color: badgeColor }]}>
-              {isCritical ? 'Critical' : isGreat ? 'Good' : 'Average'}
-            </Text>
-          </View>
+      <View style={[styles.studentCardRow, index % 2 === 1 && { backgroundColor: '#F8FAFC' }]}>
+        {/* Student Column */}
+        <View style={styles.studentCol}>
+          <TouchableOpacity
+            style={styles.nameBlock}
+            onPress={() => {
+              if (isCritical) {
+                handleOpenAbsenteeLetterModal(item);
+              }
+            }}
+            activeOpacity={isCritical ? 0.7 : 1}
+          >
+            <Text style={styles.studentName} numberOfLines={1}>{item.name}</Text>
+            <Text style={styles.rollNo}>{item.roll_no}</Text>
+          </TouchableOpacity>
         </View>
 
-        {/* Progress Bar */}
-        <View style={styles.progressTrack}>
-          <View
-            style={[
-              styles.progressBar,
-              {
-                width: `${Math.min(item.percentage, 100)}%`,
-                backgroundColor: badgeColor,
-              },
-            ]}
-          />
+        {/* Present Count */}
+        <View style={styles.statCol}>
+          <Text style={styles.statNumPresent}>{presentCount}</Text>
         </View>
 
-        <View style={styles.cardBottomRow}>
-          <Text style={styles.sessionsText}>
-            Attended: <Text style={styles.sessionsBold}>{item.attendedClasses}</Text> of{' '}
-            <Text style={styles.sessionsBold}>{item.totalClasses}</Text> Sessions
-          </Text>
-          {isCritical && (
-            <View style={styles.alertChip}>
-              <Icon name="warning" size={14} color={Colors.error} style={{ marginRight: 4 }} />
-              <Text style={styles.alertChipText}>SMS Alert Needed</Text>
-            </View>
-          )}
+        {/* Late / OD Count */}
+        <View style={styles.statCol}>
+          <Text style={styles.statNumMuted}>{lateCount}</Text>
+        </View>
+
+        {/* Absent Count */}
+        <View style={styles.statCol}>
+          <Text style={styles.statNumAbsent}>{absentCount}</Text>
+        </View>
+
+        {/* Att. % Badge + Intimation Email Button for Defaulters */}
+        <View style={styles.pctCol}>
+          <TouchableOpacity
+            style={[styles.percentageBadge, { backgroundColor: pctBadgeBg }, isCritical && { flexDirection: 'row', alignItems: 'center' }]}
+            onPress={() => {
+              if (isCritical) {
+                handleOpenAbsenteeLetterModal(item);
+              }
+            }}
+            activeOpacity={isCritical ? 0.7 : 1}
+          >
+            <Text style={[styles.percentageText, { color: pctTextColor }]}>{item.percentage}%</Text>
+            {isCritical && (
+              <Icon name="mark-email-unread" size={14} color={Colors.error} style={{ marginLeft: 3 }} />
+            )}
+          </TouchableOpacity>
         </View>
       </View>
     );
+  };
+
+  const getSectionDropdownLabel = (key: string) => {
+    if (key === 'Both') return 'Both Classes Together (G + E)';
+    return key;
+  };
+
+  const getPctDropdownLabel = (key: PctFilter) => {
+    if (key === 'all') return `All Students (${reportData.length})`;
+    if (key === 'gt75') return `Eligible \u226575% (${metrics.good})`;
+    return `Defaulters <75% (${metrics.risk})`;
   };
 
   return (
@@ -417,11 +985,11 @@ export default function AttendanceReport() {
 
         <View style={styles.headerCenter}>
           <Text style={styles.headerTitle}>Attendance Reports</Text>
-          <Text style={styles.headerSubtitle}>From / To Date Analytics & CSV Export</Text>
+          <Text style={styles.headerSubtitle}>From / To Date Analytics & Export</Text>
         </View>
 
         {isAdminUser ? (
-          <TouchableOpacity onPress={handleDownloadFullCSV} style={[styles.iconBtn, styles.shareIconBtn]}>
+          <TouchableOpacity onPress={handleDownloadExcelReport} style={[styles.iconBtn, styles.shareIconBtn]}>
             <Icon name="file-download" size={24} color={Colors.primary} />
           </TouchableOpacity>
         ) : (
@@ -430,139 +998,197 @@ export default function AttendanceReport() {
       </View>
 
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 120 }}>
-        {/* Date Filter & Preset Controls */}
+        {/* Date Filter Inputs & Dropdown Section Card */}
         <View style={styles.controlCard}>
-          <Text style={styles.sectionHeading}>Select Date Range (From / To)</Text>
+          <Text style={styles.sectionHeading}>Date Range Selection</Text>
 
-          {/* Presets */}
-          <View style={styles.presetRow}>
-            {(['7d', '14d', 'month', 'custom'] as PresetType[]).map(preset => {
-              const label =
-                preset === '7d'
-                  ? '7 Days'
-                  : preset === '14d'
-                  ? '14 Days'
-                  : preset === 'month'
-                  ? 'Last 30D'
-                  : 'Custom';
-              const isSelected = activePreset === preset;
-              return (
+          {/* Side-by-side From Date & To Date Input Fields with Calendar Buttons */}
+          <View style={styles.dateInputsRow}>
+            {/* From Date Box */}
+            <View style={styles.dateInputWrapper}>
+              <Text style={styles.fieldLabel}>From Date</Text>
+              <View style={styles.dateInputWithIcon}>
+                <TextInput
+                  style={styles.dateTextInput}
+                  value={startDate}
+                  onChangeText={setStartDate}
+                  placeholder="YYYY-MM-DD"
+                  placeholderTextColor="#94A3B8"
+                />
                 <TouchableOpacity
-                  key={preset}
-                  style={[styles.presetBtn, isSelected && styles.presetBtnActive]}
-                  onPress={() => applyPreset(preset)}
+                  style={styles.calendarIconButton}
+                  onPress={() => openCalendarPicker('start')}
+                  activeOpacity={0.8}
                 >
-                  <Text style={[styles.presetText, isSelected && styles.presetTextActive]}>{label}</Text>
+                  <Icon name="calendar-today" size={18} color={Colors.primary} />
                 </TouchableOpacity>
-              );
-            })}
+              </View>
+            </View>
+
+            {/* To Date Box */}
+            <View style={styles.dateInputWrapper}>
+              <Text style={styles.fieldLabel}>To Date</Text>
+              <View style={styles.dateInputWithIcon}>
+                <TextInput
+                  style={styles.dateTextInput}
+                  value={endDate}
+                  onChangeText={setEndDate}
+                  placeholder="YYYY-MM-DD"
+                  placeholderTextColor="#94A3B8"
+                />
+                <TouchableOpacity
+                  style={styles.calendarIconButton}
+                  onPress={() => openCalendarPicker('end')}
+                  activeOpacity={0.8}
+                >
+                  <Icon name="event" size={18} color={Colors.primary} />
+                </TouchableOpacity>
+              </View>
+            </View>
           </View>
 
-          {/* Active Range Banner */}
-          <TouchableOpacity
-            style={styles.dateDisplayBox}
-            activeOpacity={0.8}
-            onPress={() => setCustomModalVisible(true)}
-          >
-            <View style={styles.dateBoxItem}>
-              <Icon name="calendar-today" size={18} color={Colors.primary} style={{ marginRight: 8 }} />
-              <View>
-                <Text style={styles.dateBoxLabel}>From Date</Text>
-                <Text style={styles.dateBoxValue}>{startDate}</Text>
-              </View>
-            </View>
-            <Icon name="arrow-forward" size={18} color="#94A3B8" />
-            <View style={styles.dateBoxItem}>
-              <Icon name="event" size={18} color={Colors.primary} style={{ marginRight: 8 }} />
-              <View>
-                <Text style={styles.dateBoxLabel}>To Date</Text>
-                <Text style={styles.dateBoxValue}>{endDate}</Text>
-              </View>
-            </View>
-          </TouchableOpacity>
-
-          {/* Section Filter Selector (Both Classes Together, III IT G, III IT E) */}
-          <View style={styles.sectionRow}>
-            <Text style={styles.sectionSublabel}>Filter Class / Section:</Text>
-            <View style={styles.tabGroup}>
-              {[
-                { key: 'Both', label: 'Both Classes Together' },
-                { key: 'III IT G', label: 'III IT G' },
-                { key: 'III IT E', label: 'III IT E' },
-              ].map(sec => (
-                <TouchableOpacity
-                  key={sec.key}
-                  style={[styles.tabBtn, selectedSection === sec.key && styles.tabBtnActive]}
-                  onPress={() => setSelectedSection(sec.key)}
-                >
-                  <Text style={[styles.tabText, selectedSection === sec.key && styles.tabTextActive]}>
-                    {sec.label}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </View>
+          {/* Section Filter Dropdown Menu */}
+          <View style={{ marginTop: 14 }}>
+            <Text style={styles.fieldLabel}>Filter Class / Section</Text>
+            <TouchableOpacity
+              style={styles.dropdownSelectorBox}
+              onPress={() => setSectionDropdownVisible(true)}
+              activeOpacity={0.8}
+            >
+              <Icon name="class" size={20} color={Colors.primary} style={{ marginRight: 8 }} />
+              <Text style={styles.dropdownSelectorText}>
+                {getSectionDropdownLabel(selectedSection)}
+              </Text>
+              <Icon name="arrow-drop-down" size={24} color="#64748B" />
+            </TouchableOpacity>
           </View>
         </View>
 
-        {/* ADMIN CSV DOWNLOAD BANNER */}
-        <View style={styles.adminBanner}>
-          <View style={styles.adminBannerHeader}>
-            <Icon name="security" size={20} color={isAdminUser ? Colors.primary : '#64748B'} style={{ marginRight: 8 }} />
-            <Text style={styles.adminBannerTitle}>
-              {isAdminUser ? 'Admin CSV Export Controls' : 'CSV Export Notice'}
-            </Text>
-          </View>
+        {/* ADMIN EXCEL & GOOGLE SHEET DOWNLOAD CONTROLS */}
+        {isAdminUser && (
+          <View style={styles.adminBanner}>
+            <View style={styles.adminBannerHeader}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
+                <Icon name="verified-user" size={18} color="#DC2626" style={{ marginRight: 6 }} />
+                <Text style={styles.adminBannerTitle}>
+                  Admin Export Portal ({selectedSection === 'Both' ? 'Both Classes G + E' : selectedSection})
+                </Text>
+              </View>
+              <View style={styles.adminTagBadge}>
+                <Text style={styles.adminTagText}>ADMIN ONLY</Text>
+              </View>
+            </View>
 
-          {isAdminUser ? (
+            {/* Filter Dropdown Selector */}
+            <View style={styles.adminDropdownWrapper}>
+              <Text style={styles.adminDropdownFieldLabel}>Report Filter Category</Text>
+              <TouchableOpacity
+                style={[
+                  styles.adminDropdownSelectorBox,
+                  { borderColor: currentDataset.color, backgroundColor: currentDataset.badgeBg }
+                ]}
+                onPress={() => setAdminFilterDropdownVisible(true)}
+                activeOpacity={0.8}
+              >
+                <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
+                  <Icon
+                    name={
+                      adminExportFilter === 'absentees' ? 'person-off'
+                      : adminExportFilter === 'gte75' ? 'verified'
+                      : adminExportFilter === 'lt75' ? 'warning'
+                      : 'groups'
+                    }
+                    size={18}
+                    color={currentDataset.color}
+                    style={{ marginRight: 8 }}
+                  />
+                  <Text style={[styles.adminDropdownSelectorText, { color: currentDataset.color }]} numberOfLines={1}>
+                    {currentDataset.label}
+                  </Text>
+                  <View style={[styles.adminFilterInlineBadge, { backgroundColor: currentDataset.color }]}>
+                    <Text style={styles.adminFilterInlineBadgeText}>
+                      {currentDataset.count}
+                    </Text>
+                  </View>
+                </View>
+                <Icon name="arrow-drop-down" size={24} color={currentDataset.color} />
+              </TouchableOpacity>
+            </View>
+
+            {/* Active Filter Info Strip */}
+            <View style={[styles.activeFilterSummaryBar, { borderColor: currentDataset.color }]}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
+                <View style={[styles.activeFilterDot, { backgroundColor: currentDataset.color }]} />
+                <Text style={styles.activeFilterSummaryText} numberOfLines={1}>
+                  Target: <Text style={{ fontWeight: '800', color: currentDataset.color }}>{currentDataset.label}</Text> ({currentDataset.count} records)
+                </Text>
+              </View>
+              <Text style={styles.activeFilterDateText}>
+                {startDate} to {endDate}
+              </Text>
+            </View>
+
+            {/* Export Actions: CSV, Excel, Google Sheets */}
             <View style={styles.csvActionRow}>
               <TouchableOpacity
-                style={[styles.csvBtn, { backgroundColor: Colors.primary }]}
-                onPress={handleDownloadFullCSV}
+                style={[
+                  styles.csvBtn,
+                  { backgroundColor: currentDataset.color },
+                ]}
+                onPress={handleDownloadCSVReport}
                 activeOpacity={0.8}
               >
-                <Icon name="table-view" size={18} color="#ffffff" style={{ marginRight: 6 }} />
-                <Text style={styles.csvBtnText}>Full CSV</Text>
+                <Icon name="table-view" size={17} color="#FFFFFF" style={{ marginRight: 6 }} />
+                <Text style={styles.csvBtnText}>Download CSV</Text>
               </TouchableOpacity>
 
               <TouchableOpacity
-                style={[styles.csvBtn, { backgroundColor: Colors.error }]}
-                onPress={handleDownloadAbsenteesCSV}
+                style={[styles.csvBtn, { backgroundColor: '#1E3A8A' }]}
+                onPress={handleDownloadExcelReport}
                 activeOpacity={0.8}
               >
-                <Icon name="person-off" size={18} color="#ffffff" style={{ marginRight: 6 }} />
-                <Text style={styles.csvBtnText}>Absentees CSV</Text>
+                <Icon name="description" size={17} color="#FFFFFF" style={{ marginRight: 6 }} />
+                <Text style={styles.csvBtnText}>Excel (.xls)</Text>
               </TouchableOpacity>
 
               <TouchableOpacity
-                style={[styles.csvBtn, { backgroundColor: '#10B981' }]}
-                onPress={handleShareGoogleSheet}
+                style={[styles.csvBtn, { backgroundColor: Colors.success }]}
+                onPress={() => handleExportGoogleSheet()}
                 activeOpacity={0.8}
               >
-                <Icon name="grid-on" size={18} color="#ffffff" style={{ marginRight: 6 }} />
-                <Text style={styles.csvBtnText}>Share Google Sheet</Text>
+                <Icon name="grid-on" size={17} color="#FFFFFF" style={{ marginRight: 6 }} />
+                <Text style={styles.csvBtnText}>Google Sheet</Text>
               </TouchableOpacity>
             </View>
-          ) : (
-            <Text style={styles.adminBannerNotice}>
-              🔒 CSV downloads are enabled exclusively for Administrator login (`admin@skct.edu.in`).
-            </Text>
-          )}
-        </View>
 
-        {/* View Mode Switcher (Summary Cards vs Database Table) */}
+            {/* Dedicated WhatsApp Share Button */}
+            <TouchableOpacity
+              style={styles.waShareBtn}
+              onPress={handleShareWhatsApp}
+              activeOpacity={0.85}
+            >
+              <Icon name="send" size={17} color="#FFFFFF" style={{ marginRight: 8 }} />
+              <Text style={styles.waShareBtnText}>
+                Share {currentDataset.shortLabel} in WhatsApp
+              </Text>
+            </TouchableOpacity>
+          </View>
+        )}
+
+        {/* View Mode Switcher */}
         <View style={styles.viewToggleContainer}>
           <TouchableOpacity
             style={[styles.viewToggleBtn, viewMode === 'summary' && styles.viewToggleBtnActive]}
             onPress={() => setViewMode('summary')}
           >
-            <Icon name="bar-chart" size={18} color={viewMode === 'summary' ? '#ffffff' : '#64748B'} style={{ marginRight: 6 }} />
+            <Icon name="bar-chart" size={18} color={viewMode === 'summary' ? '#FFFFFF' : '#64748B'} style={{ marginRight: 6 }} />
             <Text style={[styles.viewToggleText, viewMode === 'summary' && styles.viewToggleTextActive]}>Summary Cards</Text>
           </TouchableOpacity>
           <TouchableOpacity
             style={[styles.viewToggleBtn, viewMode === 'table' && styles.viewToggleBtnActive]}
             onPress={() => setViewMode('table')}
           >
-            <Icon name="table-chart" size={18} color={viewMode === 'table' ? '#ffffff' : '#64748B'} style={{ marginRight: 6 }} />
+            <Icon name="table-chart" size={18} color={viewMode === 'table' ? '#FFFFFF' : '#64748B'} style={{ marginRight: 6 }} />
             <Text style={[styles.viewToggleText, viewMode === 'table' && styles.viewToggleTextActive]}>Database Table Log</Text>
           </TouchableOpacity>
         </View>
@@ -572,9 +1198,11 @@ export default function AttendanceReport() {
           <View style={styles.pieCardHeader}>
             <Icon name="pie-chart" size={24} color={Colors.primary} style={{ marginRight: 8 }} />
             <View style={{ flex: 1 }}>
-              <Text style={styles.pieCardTitle}>Overall Class Attendance Pie Chart</Text>
+              <Text style={styles.pieCardTitle}>
+                {isAdminUser ? 'Overall Class Attendance Pie Chart' : `${facultyScope.assignedSubject} Attendance Chart`}
+              </Text>
               <Text style={styles.pieCardSub}>
-                Filter: {selectedSection === 'Both' ? 'Both Classes (G + E)' : selectedSection} | {startDate} to {endDate}
+                Subject: {facultyScope.assignedSubject} | Section: {selectedSection === 'Both' ? 'Both Classes (G + E)' : selectedSection} | {startDate} to {endDate}
               </Text>
             </View>
           </View>
@@ -622,65 +1250,67 @@ export default function AttendanceReport() {
           </View>
         </View>
 
-        {/* Search & Percentage Filters */}
-        <View style={styles.searchFilterBlock}>
-          <View style={styles.searchBox}>
-            <Icon name="search" size={20} color="#94A3B8" style={{ marginRight: 8 }} />
-            <TextInput
-              style={styles.searchInput}
-              placeholder="Search student or roll no..."
-              placeholderTextColor="#94A3B8"
-              value={searchQuery}
-              onChangeText={setSearchQuery}
-            />
-            {searchQuery.length > 0 && (
-              <TouchableOpacity onPress={() => setSearchQuery('')}>
-                <Icon name="close" size={18} color="#94A3B8" />
-              </TouchableOpacity>
-            )}
-          </View>
+        {/* STUDENT ATTENDANCE LIST CARD (Matching Mockup Design) */}
+        {viewMode === 'summary' ? (
+          <View style={styles.listSectionCard}>
+            {/* Header Row: Title + Search Box + Sort Dropdown Button */}
+            <View style={styles.listCardHeaderBlock}>
+              <Text style={styles.listCardTitle}>
+                {pctFilter === 'lt75' ? 'Low Attendance List' : pctFilter === 'gt75' ? 'Eligible Attendance List' : 'Student Attendance List'}
+              </Text>
 
-          {/* Percentage Filter Tabs */}
-          <View style={styles.pctFilterRow}>
-            {(['all', 'gt75', 'lt75'] as PctFilter[]).map(filterKey => {
-              const label =
-                filterKey === 'all'
-                  ? `All (${reportData.length})`
-                  : filterKey === 'gt75'
-                  ? `\u226575% (${metrics.good})`
-                  : `<75% (${metrics.risk})`;
-              const isSelected = pctFilter === filterKey;
-              return (
+              <View style={styles.searchSortRow}>
+                {/* Search Box */}
+                <View style={styles.headerSearchBox}>
+                  <Icon name="search" size={18} color="#94A3B8" style={{ marginRight: 6 }} />
+                  <TextInput
+                    style={styles.headerSearchInput}
+                    placeholder="Search student..."
+                    placeholderTextColor="#94A3B8"
+                    value={searchQuery}
+                    onChangeText={setSearchQuery}
+                  />
+                  {searchQuery.length > 0 && (
+                    <TouchableOpacity onPress={() => setSearchQuery('')}>
+                      <Icon name="close" size={16} color="#94A3B8" />
+                    </TouchableOpacity>
+                  )}
+                </View>
+
+                {/* Sort Dropdown Button */}
                 <TouchableOpacity
-                  key={filterKey}
-                  style={[
-                    styles.pctChip,
-                    isSelected && styles.pctChipActive,
-                    filterKey === 'lt75' && isSelected && { backgroundColor: Colors.error },
-                  ]}
-                  onPress={() => setPctFilter(filterKey)}
+                  style={styles.sortDropdownBtn}
+                  onPress={() => setPctDropdownVisible(true)}
+                  activeOpacity={0.8}
                 >
-                  <Text style={[styles.pctChipText, isSelected && styles.pctChipTextActive]}>
-                    {label}
+                  <Icon name="sort" size={18} color={Colors.primary} style={{ marginRight: 4 }} />
+                  <Text style={styles.sortDropdownText}>
+                    {pctFilter === 'all' ? 'Sort' : pctFilter === 'gt75' ? '\u226575%' : '<75%'}
                   </Text>
+                  <Icon name="keyboard-arrow-down" size={18} color="#64748B" style={{ marginLeft: 2 }} />
                 </TouchableOpacity>
-              );
-            })}
-          </View>
-        </View>
+              </View>
+            </View>
 
-        {/* CONTENT VIEW: Summary Cards or Database Log Table */}
-        {loading ? (
-          <View style={{ marginTop: 40 }}>
-            <BreatheLoader message="Generating attendance report..." />
-          </View>
-        ) : viewMode === 'summary' ? (
-          <View style={styles.cardsList}>
-            {filteredStudents.length === 0 ? (
+            {/* Table Header Subbar: Student | Present | Late | Absent | Att. % */}
+            <View style={styles.columnHeaderRow}>
+              <Text style={[styles.colHeaderText, { flex: 2.2 }]}>Student</Text>
+              <Text style={[styles.colHeaderText, { flex: 1, textAlign: 'center' }]}>Present</Text>
+              <Text style={[styles.colHeaderText, { flex: 1, textAlign: 'center' }]}>Late</Text>
+              <Text style={[styles.colHeaderText, { flex: 1, textAlign: 'center' }]}>Absent</Text>
+              <Text style={[styles.colHeaderText, { flex: 1.2, textAlign: 'right' }]}>Att. %</Text>
+            </View>
+
+            {/* Student List Items */}
+            {loading ? (
+              <View style={{ paddingVertical: 30 }}>
+                <BreatheLoader message="Loading student list..." />
+              </View>
+            ) : filteredStudents.length === 0 ? (
               <View style={styles.emptyCard}>
-                <Icon name="sentiment-dissatisfied" size={40} color="#94A3B8" />
+                <Icon name="sentiment-dissatisfied" size={36} color="#94A3B8" />
                 <Text style={styles.emptyTitle}>No Student Records Found</Text>
-                <Text style={styles.emptySub}>Try adjusting search query or date range filters.</Text>
+                <Text style={styles.emptySub}>Try adjusting search query or filter options.</Text>
               </View>
             ) : (
               filteredStudents.map((item, index) => (
@@ -730,7 +1360,7 @@ export default function AttendanceReport() {
                       <Text style={[styles.tdCell, { width: 85 }]}>Day {row.day_order || 4}</Text>
                       <Text style={[styles.tdCell, { width: 80 }]}>{row.period}</Text>
                       <Text style={[styles.tdCell, { width: 140 }]}>{row.time}</Text>
-                      <Text style={[styles.tdCell, { width: 120, fontWeight: '600', color: Colors.primary }]}>
+                      <Text style={[styles.tdCell, { width: 120, fontWeight: '700', color: Colors.primary }]}>
                         {row.roll_no}
                       </Text>
                       <Text style={[styles.tdCell, { width: 140, fontWeight: '600' }]}>{row.student_name || 'N/A'}</Text>
@@ -743,10 +1373,10 @@ export default function AttendanceReport() {
                             {
                               backgroundColor:
                                 row.status === 'Present'
-                                  ? '#DCFCE7'
+                                  ? Colors.successSoft
                                   : row.status === 'Absent'
-                                  ? '#FEE2E2'
-                                  : '#FEF9C3',
+                                  ? Colors.errorSoft
+                                  : Colors.warningSoft,
                             },
                           ]}
                         >
@@ -759,7 +1389,7 @@ export default function AttendanceReport() {
                                     ? Colors.success
                                     : row.status === 'Absent'
                                     ? Colors.error
-                                    : '#EAB308',
+                                    : Colors.warning,
                               },
                             ]}
                           >
@@ -776,48 +1406,531 @@ export default function AttendanceReport() {
         )}
       </ScrollView>
 
-      {/* Custom Date Range Modal */}
-      <Modal visible={customModalVisible} transparent animationType="fade">
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalCard}>
-            <Text style={styles.modalTitle}>Select Custom Date Range</Text>
-
-            <Text style={styles.inputLabel}>From Date (YYYY-MM-DD)</Text>
-            <TextInput
-              style={styles.dateInput}
-              value={tempStart}
-              onChangeText={setTempStart}
-              placeholder="YYYY-MM-DD"
-              placeholderTextColor="#94A3B8"
-            />
-
-            <Text style={styles.inputLabel}>To Date (YYYY-MM-DD)</Text>
-            <TextInput
-              style={styles.dateInput}
-              value={tempEnd}
-              onChangeText={setTempEnd}
-              placeholder="YYYY-MM-DD"
-              placeholderTextColor="#94A3B8"
-            />
-
-            <View style={styles.modalActionRow}>
+      {/* DROPDOWN MODAL 1: Section / Class Filter */}
+      <Modal visible={sectionDropdownVisible} transparent animationType="fade">
+        <TouchableOpacity
+          style={styles.modalOverlay}
+          activeOpacity={1}
+          onPress={() => setSectionDropdownVisible(false)}
+        >
+          <View style={styles.dropdownModalCard}>
+            <Text style={styles.dropdownModalTitle}>Select Class / Section</Text>
+            {[
+              { key: 'Both', label: 'Both Classes Together (G + E)' },
+              { key: 'III IT G', label: 'III IT G' },
+              { key: 'III IT E', label: 'III IT E' },
+            ].map(item => (
               <TouchableOpacity
-                style={styles.modalCancelBtn}
-                onPress={() => setCustomModalVisible(false)}
-              >
-                <Text style={styles.modalCancelText}>Cancel</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={styles.modalApplyBtn}
+                key={item.key}
+                style={[
+                  styles.dropdownOptionItem,
+                  selectedSection === item.key && styles.dropdownOptionSelected,
+                ]}
                 onPress={() => {
-                  setStartDate(tempStart);
-                  setEndDate(tempEnd);
-                  setActivePreset('custom');
-                  setCustomModalVisible(false);
+                  if (!isAdminUser && facultyScope.assignedSection !== 'Both' && item.key !== facultyScope.assignedSection) {
+                    Alert.alert(
+                      'Access Restricted 🔒',
+                      `According to your timetable, you are assigned to ${facultyScope.assignedSection} (${facultyScope.assignedSubject}). You cannot view attendance reports for other sections.`
+                    );
+                    setSectionDropdownVisible(false);
+                    return;
+                  }
+                  setSelectedSection(item.key);
+                  setSectionDropdownVisible(false);
                 }}
               >
-                <Text style={styles.modalApplyText}>Apply Range</Text>
+                <Text
+                  style={[
+                    styles.dropdownOptionText,
+                    selectedSection === item.key && styles.dropdownOptionTextSelected,
+                  ]}
+                >
+                  {item.label}
+                </Text>
+                {selectedSection === item.key && (
+                  <Icon name="check" size={20} color={Colors.primary} />
+                )}
+              </TouchableOpacity>
+            ))}
+          </View>
+        </TouchableOpacity>
+      </Modal>
+
+      {/* DROPDOWN MODAL 2: Student Percentage / Status Filter */}
+      <Modal visible={pctDropdownVisible} transparent animationType="fade">
+        <TouchableOpacity
+          style={styles.modalOverlay}
+          activeOpacity={1}
+          onPress={() => setPctDropdownVisible(false)}
+        >
+          <View style={styles.dropdownModalCard}>
+            <Text style={styles.dropdownModalTitle}>Select Attendance Filter</Text>
+            {[
+              { key: 'all', label: `All Students (${reportData.length})` },
+              { key: 'gt75', label: `Eligible \u226575% (${metrics.good})` },
+              { key: 'lt75', label: `Defaulters <75% (${metrics.risk})` },
+            ].map(item => (
+              <TouchableOpacity
+                key={item.key}
+                style={[
+                  styles.dropdownOptionItem,
+                  pctFilter === item.key && styles.dropdownOptionSelected,
+                ]}
+                onPress={() => {
+                  setPctFilter(item.key as PctFilter);
+                  setPctDropdownVisible(false);
+                }}
+              >
+                <Text
+                  style={[
+                    styles.dropdownOptionText,
+                    pctFilter === item.key && styles.dropdownOptionTextSelected,
+                  ]}
+                >
+                  {item.label}
+                </Text>
+                {pctFilter === item.key && (
+                  <Icon name="check" size={20} color={Colors.primary} />
+                )}
+              </TouchableOpacity>
+            ))}
+          </View>
+        </TouchableOpacity>
+      </Modal>
+
+      {/* DROPDOWN MODAL: Admin Export Report Filter */}
+      <Modal visible={adminFilterDropdownVisible} transparent animationType="fade">
+        <TouchableOpacity
+          style={styles.modalOverlay}
+          activeOpacity={1}
+          onPress={() => setAdminFilterDropdownVisible(false)}
+        >
+          <View style={styles.dropdownModalCard}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 14 }}>
+              <Icon name="filter-list" size={20} color={Colors.primary} style={{ marginRight: 8 }} />
+              <Text style={styles.dropdownModalTitle}>Select Report Filter</Text>
+            </View>
+            {[
+              {
+                key: 'absentees' as AdminExportFilter,
+                label: 'Absentees Alone',
+                sub: 'Only students marked absent in selected date range',
+                icon: 'person-off',
+                color: '#DC2626',
+                count: getAbsenteeRecords().length,
+              },
+              {
+                key: 'all' as AdminExportFilter,
+                label: 'All Students',
+                sub: 'Full attendance records for all enrolled students',
+                icon: 'groups',
+                color: '#2563EB',
+                count: reportData.length,
+              },
+              {
+                key: 'gte75' as AdminExportFilter,
+                label: 'Eligible (≥ 75%)',
+                sub: 'Students meeting minimum 75% threshold',
+                icon: 'verified',
+                color: '#16A34A',
+                count: metrics.good,
+              },
+              {
+                key: 'lt75' as AdminExportFilter,
+                label: 'Defaulters (< 75%)',
+                sub: 'Students below 75% attendance needing intimation',
+                icon: 'warning',
+                color: '#D97706',
+                count: metrics.risk,
+              },
+            ].map(opt => {
+              const isSelected = adminExportFilter === opt.key;
+              return (
+                <TouchableOpacity
+                  key={opt.key}
+                  style={[
+                    styles.adminFilterOptionItem,
+                    isSelected && { backgroundColor: `${opt.color}15`, borderColor: opt.color },
+                  ]}
+                  onPress={() => {
+                    setAdminExportFilter(opt.key);
+                    setAdminFilterDropdownVisible(false);
+                  }}
+                  activeOpacity={0.75}
+                >
+                  <View style={[styles.adminFilterOptionIconBox, { backgroundColor: `${opt.color}20` }]}>
+                    <Icon name={opt.icon} size={20} color={opt.color} />
+                  </View>
+                  <View style={{ flex: 1, marginLeft: 10 }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                      <Text style={[styles.adminFilterOptionTitle, isSelected && { color: opt.color, fontWeight: '800' }]}>
+                        {opt.label}
+                      </Text>
+                      <View style={[styles.adminFilterCountPill, { backgroundColor: opt.color }]}>
+                        <Text style={styles.adminFilterCountPillText}>{opt.count}</Text>
+                      </View>
+                    </View>
+                    <Text style={styles.adminFilterOptionSub}>{opt.sub}</Text>
+                  </View>
+                  {isSelected && (
+                    <Icon name="check-circle" size={20} color={opt.color} style={{ marginLeft: 8 }} />
+                  )}
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+        </TouchableOpacity>
+      </Modal>
+
+      {/* CALENDAR PICKER MODAL (For From Date & To Date) */}
+      <Modal visible={calendarModalVisible} transparent animationType="fade">
+        <View style={styles.modalOverlay}>
+          <View style={styles.calendarModalCard}>
+            <View style={styles.modalHeaderRow}>
+              <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                <Icon name="calendar-month" size={24} color={Colors.primary} style={{ marginRight: 8 }} />
+                <Text style={styles.modalTitle}>
+                  Select {dateTarget === 'start' ? 'From Date' : 'To Date'}
+                </Text>
+              </View>
+              <TouchableOpacity onPress={() => setCalendarModalVisible(false)} style={styles.modalCloseCircle}>
+                <Icon name="close" size={20} color="#64748B" />
+              </TouchableOpacity>
+            </View>
+
+            {/* Month & Year Navigation */}
+            <View style={styles.calMonthNavRow}>
+              <TouchableOpacity
+                style={styles.calNavIconBtn}
+                onPress={() => {
+                  if (calMonth === 0) {
+                    setCalMonth(11);
+                    setCalYear(prev => prev - 1);
+                  } else {
+                    setCalMonth(prev => prev - 1);
+                  }
+                }}
+              >
+                <Icon name="chevron-left" size={26} color="#0F172A" />
+              </TouchableOpacity>
+              <Text style={styles.calMonthText}>
+                {MONTH_NAMES[calMonth]} {calYear}
+              </Text>
+              <TouchableOpacity
+                style={styles.calNavIconBtn}
+                onPress={() => {
+                  if (calMonth === 11) {
+                    setCalMonth(0);
+                    setCalYear(prev => prev + 1);
+                  } else {
+                    setCalMonth(prev => prev + 1);
+                  }
+                }}
+              >
+                <Icon name="chevron-right" size={26} color="#0F172A" />
+              </TouchableOpacity>
+            </View>
+
+            {/* Day of Week Headers */}
+            <View style={styles.calWeekRow}>
+              {WEEK_DAYS.map((wd, i) => (
+                <Text
+                  key={i}
+                  style={[
+                    styles.calWeekText,
+                    (i === 0 || i === 6) && { color: '#EF4444' },
+                  ]}
+                >
+                  {wd}
+                </Text>
+              ))}
+            </View>
+
+            {/* Calendar Days Grid */}
+            <View style={styles.calDaysGrid}>
+              {Array.from({ length: new Date(calYear, calMonth, 1).getDay() }).map((_, i) => (
+                <View key={`empty-${i}`} style={styles.calDayBox} />
+              ))}
+              {Array.from({ length: new Date(calYear, calMonth + 1, 0).getDate() }).map((_, i) => {
+                const dayNum = i + 1;
+                const iso = `${calYear}-${String(calMonth + 1).padStart(2, '0')}-${String(dayNum).padStart(2, '0')}`;
+                const isSelected = (dateTarget === 'start' ? startDate : endDate) === iso;
+                const todayIso = new Date().toISOString().split('T')[0];
+                const isToday = iso === todayIso;
+
+                return (
+                  <TouchableOpacity
+                    key={`day-${dayNum}`}
+                    style={[
+                      styles.calDayBox,
+                      isSelected && styles.calDayBoxSelected,
+                      !isSelected && isToday && styles.calDayBoxToday,
+                    ]}
+                    onPress={() => {
+                      if (dateTarget === 'start') {
+                        setStartDate(iso);
+                      } else {
+                        setEndDate(iso);
+                      }
+                      setCalendarModalVisible(false);
+                    }}
+                    activeOpacity={0.7}
+                  >
+                    <Text
+                      style={[
+                        styles.calDayNumText,
+                        isSelected && styles.calDayNumTextSelected,
+                        !isSelected && isToday && styles.calDayNumTextToday,
+                      ]}
+                    >
+                      {dayNum}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* GOOGLE SHEETS EXPORT MODAL */}
+      <Modal visible={googleSheetsModalVisible} transparent animationType="slide">
+        <View style={styles.modalOverlay}>
+          <View style={styles.googleModalCard}>
+            <View style={styles.modalHeaderRow}>
+              <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                <Icon name="grid-on" size={24} color={Colors.success} style={{ marginRight: 8 }} />
+                <Text style={styles.modalTitle}>
+                  {currentDataset.shortLabel} • Google Sheets
+                </Text>
+              </View>
+              <TouchableOpacity onPress={() => setGoogleSheetsModalVisible(false)} style={styles.modalCloseCircle}>
+                <Icon name="close" size={20} color="#64748B" />
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.googleModalBody}>
+              {/* Status Banner */}
+              {generatedGoogleSheetUrl ? (
+                <View style={{ backgroundColor: '#DCFCE7', borderRadius: 12, padding: 12, marginBottom: 12, borderWidth: 1, borderColor: '#86EFAC' }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 4 }}>
+                    <Icon name="check-circle" size={18} color="#16A34A" style={{ marginRight: 6 }} />
+                    <Text style={{ fontSize: 13, fontWeight: '800', color: '#166534' }}>Google Sheet Created & Active!</Text>
+                  </View>
+                  <Text style={{ fontSize: 11, color: '#15803D' }} numberOfLines={2}>
+                    {generatedGoogleSheetUrl}
+                  </Text>
+                </View>
+              ) : null}
+
+              {/* Permanent Cloud Backend Status */}
+              <View style={{ backgroundColor: '#F0FDF4', borderRadius: 12, padding: 12, marginBottom: 12, borderWidth: 1, borderColor: '#BBF7D0' }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 4 }}>
+                  <Icon name="verified" size={18} color="#16A34A" style={{ marginRight: 6 }} />
+                  <Text style={{ fontSize: 13, fontWeight: '800', color: '#166534' }}>Permanent Backend Cloud Sync ⚡</Text>
+                </View>
+                <Text style={{ fontSize: 11.5, color: '#14532D', lineHeight: 16 }}>
+                  Google Sheets integration is permanently managed via the backend server. All reports are automatically created in your Google account with official SKCT headers and formatting.
+                </Text>
+              </View>
+
+              {/* Action: Generate Live Google Sheet */}
+              <TouchableOpacity
+                style={{
+                  backgroundColor: currentDataset.color,
+                  borderRadius: 12,
+                  paddingVertical: 12,
+                  alignItems: 'center',
+                  flexDirection: 'row',
+                  justifyContent: 'center',
+                  marginBottom: 10,
+                  shadowColor: '#000',
+                  shadowOffset: { width: 0, height: 2 },
+                  shadowOpacity: 0.15,
+                  shadowRadius: 4,
+                  elevation: 3,
+                }}
+                onPress={() => handleExportGoogleSheet()}
+                disabled={isGeneratingSheet}
+                activeOpacity={0.8}
+              >
+                {isGeneratingSheet ? (
+                  <ActivityIndicator size="small" color="#FFFFFF" style={{ marginRight: 8 }} />
+                ) : (
+                  <Icon name="cloud-upload" size={18} color="#FFFFFF" style={{ marginRight: 8 }} />
+                )}
+                <Text style={{ color: '#FFFFFF', fontSize: 13, fontWeight: '800' }}>
+                  {isGeneratingSheet ? 'Generating Sheet in Drive...' : `Generate Live ${currentDataset.shortLabel} Sheet`}
+                </Text>
+              </TouchableOpacity>
+
+              {/* Action 1: Open Google Sheets Web / App */}
+              <TouchableOpacity
+                style={styles.openGoogleSheetsBtn}
+                onPress={() => {
+                  setGoogleSheetsModalVisible(false);
+                  Linking.openURL(generatedGoogleSheetUrl || 'https://sheets.new').catch(() => {});
+                }}
+                activeOpacity={0.8}
+              >
+                <Icon name="launch" size={18} color="#FFFFFF" style={{ marginRight: 8 }} />
+                <Text style={styles.openGoogleSheetsBtnText}>
+                  {generatedGoogleSheetUrl ? 'Open Google Sheet in App' : 'Open Google Sheets (sheets.new)'}
+                </Text>
+              </TouchableOpacity>
+
+              {/* Action 2: Share in WhatsApp */}
+              <TouchableOpacity
+                style={[styles.openGoogleSheetsBtn, { backgroundColor: '#25D366', marginTop: 8 }]}
+                onPress={() => {
+                  setGoogleSheetsModalVisible(false);
+                  handleShareWhatsApp();
+                }}
+                activeOpacity={0.8}
+              >
+                <Icon name="send" size={18} color="#FFFFFF" style={{ marginRight: 8 }} />
+                <Text style={styles.openGoogleSheetsBtnText}>
+                  Share {currentDataset.shortLabel} in WhatsApp
+                </Text>
+              </TouchableOpacity>
+
+              {/* Action 3: Download Real Excel (.xlsx) or CSV for Google Sheets */}
+              <TouchableOpacity
+                style={styles.downloadBackupExcelBtn}
+                onPress={() => {
+                  setGoogleSheetsModalVisible(false);
+                  if (generatedSpreadsheetId) {
+                    Linking.openURL(`https://docs.google.com/spreadsheets/d/${generatedSpreadsheetId}/export?format=xlsx`).catch(() => {});
+                  } else {
+                    handleDownloadCSVReport();
+                  }
+                }}
+                activeOpacity={0.8}
+              >
+                <Icon name="file-download" size={18} color={Colors.primary} style={{ marginRight: 6 }} />
+                <Text style={styles.downloadBackupExcelText}>
+                  {generatedSpreadsheetId ? 'Download Real Excel (.xlsx) from Google' : 'Download CSV (Opens in Google Sheets App)'}
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* OFFICIAL BILINGUAL SKCT ABSENTEE INTIMATION LETTER MODAL */}
+      <Modal visible={absenteeModalVisible} transparent animationType="slide">
+        <View style={styles.modalOverlay}>
+          <View style={styles.absenteeLetterModalCard}>
+            <View style={styles.modalHeaderRow}>
+              <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                <Icon name="mark-email-unread" size={24} color={Colors.error} style={{ marginRight: 8 }} />
+                <Text style={styles.modalTitle}>Absentee Intimation Letter</Text>
+              </View>
+              <TouchableOpacity onPress={() => setAbsenteeModalVisible(false)} style={styles.modalCloseCircle}>
+                <Icon name="close" size={20} color="#64748B" />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView style={{ maxHeight: 460 }} showsVerticalScrollIndicator={true}>
+              {selectedStudentForEmail && (
+                <View style={styles.letterPaperContainer}>
+                  {/* College Official Letterhead Header */}
+                  <View style={styles.letterheadHeader}>
+                    <Text style={styles.letterCollegeTitle}>SRI KRISHNA COLLEGE OF TECHNOLOGY</Text>
+                    <Text style={styles.letterCollegeSub}>(An Autonomous Institution, Affiliated to Anna University & Approved by AICTE)</Text>
+                    <Text style={styles.letterCollegeSub}>KOVAIPUDUR, COIMBATORE – 641 042.</Text>
+                    <View style={styles.letterDivider} />
+                    <Text style={styles.letterDeptTitle}>DEPARTMENT OF INFORMATION TECHNOLOGY</Text>
+                  </View>
+
+                  <View style={styles.letterDateRow}>
+                    <Text style={styles.letterDateText}>Date: {new Date().toLocaleDateString('en-IN')}</Text>
+                  </View>
+
+                  {/* To Address Section */}
+                  <View style={styles.letterToBlock}>
+                    <Text style={styles.letterToLabel}>To</Text>
+                    <Text style={styles.letterToDetail}>Parent of <Text style={styles.letterHighlightRed}>{selectedStudentForEmail.name}</Text>,</Text>
+                    <Text style={styles.letterToDetail}>Reg. No: <Text style={styles.letterHighlightRed}>{selectedStudentForEmail.roll_no}</Text>,</Text>
+                    <Text style={styles.letterToDetail}>Class: III Year B.E. IT ({selectedStudentForEmail.className || selectedSection}),</Text>
+                    <Text style={styles.letterToDetail}>Kovaipudur, Coimbatore.</Text>
+                  </View>
+
+                  <Text style={styles.letterSalutation}>Dear Parent,</Text>
+
+                  {/* English Intimation Paragraph */}
+                  <Text style={styles.letterParagraph}>
+                    This is to inform you that your Son / Daughter, <Text style={styles.letterHighlightBold}>Mr/Ms. {selectedStudentForEmail.name}</Text> (Reg.No: <Text style={styles.letterHighlightBold}>{selectedStudentForEmail.roll_no}</Text>), III Year B.E. IT ({selectedStudentForEmail.className || selectedSection}), has secured only <Text style={styles.letterHighlightRed}>{selectedStudentForEmail.percentage}%</Text> attendance for the period <Text style={styles.letterHighlightBold}>{startDate} to {endDate}</Text>. As per academic regulations, your ward should secure a minimum attendance percentage of <Text style={styles.letterHighlightRed}>75%</Text> to appear for the End Semester Examinations.
+                  </Text>
+
+                  <Text style={styles.letterParagraph}>
+                    Your ward is directed to attend classes regularly and maintain the prescribed minimum attendance requirement of <Text style={styles.letterHighlightRed}>75%</Text> to remain eligible to appear for the End Semester Examinations.
+                  </Text>
+
+                  {/* Tamil Intimation Paragraph Box */}
+                  <View style={styles.tamilBoxContainer}>
+                    <Text style={styles.tamilSalutation}>அன்புள்ள பெற்றோரே,</Text>
+                    <Text style={styles.tamilParagraph}>
+                      தங்கள் மகன்/மகள் திரு/செல்வி <Text style={styles.tamilHighlightBold}>{selectedStudentForEmail.name}</Text> (பதிவு எண்: <Text style={styles.tamilHighlightBold}>{selectedStudentForEmail.roll_no}</Text>), மூன்றாம் ஆண்டு B.E. IT ({selectedStudentForEmail.className || selectedSection}) வகுப்பு மாணவர்/மாணவி, <Text style={styles.tamilHighlightBold}>{startDate} முதல் {endDate}</Text> வரையிலான காலகட்டத்தில் <Text style={styles.tamilHighlightRed}>{selectedStudentForEmail.percentage}%</Text> வருகையை மட்டுமே பதிவு செய்துள்ளார் என்பதைத் தெரிவித்துக்கொள்கிறோம். கல்விசார் விதிமுறைகளின்படி, பருவ இறுதித் தேர்வுகளில் (End Semester Examinations) கலந்துகொள்ள மாணவர்கள் குறைந்தபட்சம் <Text style={styles.tamilHighlightRed}>75%</Text> வருகையைப் பெற்றிருக்க வேண்டும்.
+                    </Text>
+                    <Text style={styles.tamilParagraph}>
+                      எனவே, பருவ இறுதித் தேர்வுகளில் கலந்துகொள்வதற்கான தகுதியைத் தக்கவைத்துக்கொள்ள, தங்கள் மகன்/மகள் வகுப்புகளுக்குத் தவறாமல் வருகை தந்து, நிர்ணயிக்கப்பட்ட குறைந்தபட்ச வருகை அளவான <Text style={styles.tamilHighlightRed}>75%</Text>-ஐப் பூர்த்தி செய்யுமாறு கேட்டுக்கொள்கிறோம்.
+                    </Text>
+                  </View>
+
+                  {/* Official Signature Footer Table */}
+                  <View style={styles.signatureGridRow}>
+                    <View style={styles.sigColCell}>
+                      <Text style={styles.sigTitleText}>TUTOR</Text>
+                      <Text style={styles.sigNameText}>Ms. S Saranya</Text>
+                      <Text style={styles.sigPhoneText}>+91 9876543210</Text>
+                    </View>
+                    <View style={styles.sigColCell}>
+                      <Text style={styles.sigTitleText}>HOD</Text>
+                      <Text style={styles.sigNameText}>Dr. N. Susila</Text>
+                      <Text style={styles.sigPhoneText}>+91 9443304580</Text>
+                    </View>
+                    <View style={styles.sigColCell}>
+                      <Text style={styles.sigTitleText}>DEAN</Text>
+                      <Text style={styles.sigNameText}>Dr. M. Jayakumar</Text>
+                      <Text style={styles.sigPhoneText}>+91 9787190902</Text>
+                    </View>
+                    <View style={styles.sigColCell}>
+                      <Text style={styles.sigTitleText}>PRINCIPAL</Text>
+                      <Text style={styles.sigNameText}>SKCT Office</Text>
+                      <Text style={styles.sigPhoneText}>Principal Desk</Text>
+                    </View>
+                  </View>
+                </View>
+              )}
+            </ScrollView>
+
+            {/* Email Dispatch Action Bar */}
+            <View style={styles.emailDispatchCard}>
+              <Text style={styles.emailDispatchLabel}>Parent Email Address (Fetched from DB):</Text>
+              <View style={styles.emailInputWrapper}>
+                <Icon name="email" size={18} color={Colors.primary} style={{ marginRight: 6 }} />
+                <TextInput
+                  style={styles.emailTextInput}
+                  value={recipientEmailInput}
+                  onChangeText={setRecipientEmailInput}
+                  placeholder="parent@skct.edu.in"
+                  placeholderTextColor="#94A3B8"
+                  keyboardType="email-address"
+                  autoCapitalize="none"
+                />
+              </View>
+
+              <TouchableOpacity
+                style={[styles.sendEmailSubmitBtn, sendingEmail && { opacity: 0.6 }]}
+                onPress={handleSendAbsenteeEmail}
+                disabled={sendingEmail}
+                activeOpacity={0.8}
+              >
+                <Icon name="send" size={18} color="#FFFFFF" style={{ marginRight: 6 }} />
+                <Text style={styles.sendEmailSubmitBtnText}>
+                  {sendingEmail ? 'Sending Email...' : 'Send Absentee Email Now ✉️'}
+                </Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -828,587 +1941,459 @@ export default function AttendanceReport() {
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#F8FAFC',
-  },
+  container: { flex: 1, backgroundColor: Colors.background },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-between',
     paddingHorizontal: 16,
-    paddingVertical: 14,
-    backgroundColor: '#ffffff',
+    paddingVertical: 12,
+    backgroundColor: '#FFFFFF',
     borderBottomWidth: 1,
-    borderBottomColor: '#E2E8F0',
+    borderBottomColor: '#F1F5F9',
   },
-  iconBtn: {
-    padding: 6,
-    borderRadius: 8,
-  },
-  shareIconBtn: {
-    backgroundColor: '#F0F9FF',
-  },
-  headerCenter: {
-    flex: 1,
-    alignItems: 'center',
-  },
-  headerTitle: {
-    fontSize: 18,
-    fontWeight: '800',
-    color: '#0F172A',
-  },
-  headerSubtitle: {
-    fontSize: 12,
-    color: '#64748B',
-    marginTop: 2,
-  },
+  iconBtn: { padding: 8, borderRadius: 12, backgroundColor: '#F8FAFC' },
+  shareIconBtn: { backgroundColor: Colors.primarySoft },
+  headerCenter: { flex: 1, alignItems: 'center' },
+  headerTitle: { fontSize: 18, fontWeight: '800', color: '#0F172A' },
+  headerSubtitle: { fontSize: 12, color: '#64748B', fontWeight: '500' },
+
   controlCard: {
-    backgroundColor: '#ffffff',
+    backgroundColor: '#FFFFFF',
     marginHorizontal: 16,
-    marginTop: 16,
+    marginTop: 14,
+    borderRadius: 20,
     padding: 16,
-    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#F1F5F9',
+    shadowColor: '#0F172A',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.03,
+    shadowRadius: 6,
+    elevation: 2,
+  },
+  sectionHeading: { fontSize: 14, fontWeight: '800', color: '#0F172A', marginBottom: 12 },
+
+  dateInputsRow: { flexDirection: 'row', gap: 10 },
+  dateInputWrapper: { flex: 1 },
+  fieldLabel: { fontSize: 12, fontWeight: '700', color: '#475569', marginBottom: 6 },
+  dateInputWithIcon: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F8FAFC',
+    borderRadius: 12,
     borderWidth: 1,
     borderColor: '#E2E8F0',
+    paddingHorizontal: 10,
   },
-  sectionHeading: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: '#0F172A',
-    marginBottom: 12,
-  },
-  presetRow: {
-    flexDirection: 'row',
-    gap: 8,
-    marginBottom: 14,
-  },
-  presetBtn: {
-    flex: 1,
-    paddingVertical: 8,
-    borderRadius: 10,
-    backgroundColor: '#F1F5F9',
-    alignItems: 'center',
-  },
-  presetBtnActive: {
-    backgroundColor: Colors.primary,
-  },
-  presetText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#64748B',
-  },
-  presetTextActive: {
-    color: '#ffffff',
-  },
-  dateDisplayBox: {
+  dateTextInput: { flex: 1, paddingVertical: 10, fontSize: 13, color: '#0F172A', fontWeight: '600' },
+  calendarIconButton: { padding: 6, borderRadius: 8, backgroundColor: Colors.primarySoft },
+
+  dropdownSelectorBox: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: '#F0F9FF',
-    padding: 12,
+    backgroundColor: '#F8FAFC',
     borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#BAE6FD',
-    marginBottom: 14,
-  },
-  dateBoxItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  dateBoxLabel: {
-    fontSize: 10,
-    color: '#0284C7',
-    fontWeight: '600',
-  },
-  dateBoxValue: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#0369A1',
-    marginTop: 1,
-  },
-  sectionRow: {
-    flexDirection: 'column',
-    gap: 8,
-  },
-  sectionSublabel: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#64748B',
-  },
-  tabGroup: {
-    flexDirection: 'row',
-    backgroundColor: '#F1F5F9',
-    borderRadius: 12,
-    padding: 3,
-    gap: 4,
-  },
-  tabBtn: {
-    flex: 1,
-    paddingVertical: 8,
-    borderRadius: 10,
-    alignItems: 'center',
-  },
-  tabBtnActive: {
-    backgroundColor: Colors.primary,
-  },
-  tabText: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: '#64748B',
-  },
-  tabTextActive: {
-    color: '#ffffff',
-  },
-  adminBanner: {
-    backgroundColor: '#ffffff',
-    marginHorizontal: 16,
-    marginTop: 14,
-    padding: 14,
-    borderRadius: 16,
     borderWidth: 1,
     borderColor: '#E2E8F0',
+    paddingHorizontal: 14,
+    paddingVertical: 12,
   },
-  adminBannerHeader: {
+  dropdownSelectorText: { flex: 1, fontSize: 14, fontWeight: '700', color: '#0F172A' },
+
+  adminBanner: {
+    backgroundColor: '#FFFFFF',
+    marginHorizontal: 16,
+    marginTop: 12,
+    borderRadius: 16,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: '#F1F5F9',
+  },
+  adminBannerHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 10 },
+  adminBannerTitle: { fontSize: 13, fontWeight: '800', color: '#0F172A' },
+  adminTagBadge: {
+    backgroundColor: '#FEE2E2',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: 'rgba(220, 38, 38, 0.2)',
+  },
+  adminTagText: { fontSize: 10, fontWeight: '900', color: '#DC2626' },
+  adminDropdownWrapper: { marginBottom: 12 },
+  adminDropdownFieldLabel: { fontSize: 11.5, fontWeight: '700', color: '#475569', marginBottom: 6 },
+  adminDropdownSelectorBox: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 12,
+    paddingVertical: 11,
+    borderRadius: 12,
+    borderWidth: 1.5,
+  },
+  adminDropdownSelectorText: { fontSize: 13, fontWeight: '800', marginRight: 8 },
+  adminFilterInlineBadge: {
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 10,
+    minWidth: 22,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  adminFilterInlineBadgeText: { color: '#FFFFFF', fontSize: 11, fontWeight: '800' },
+  adminFilterOptionItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 12,
+    borderRadius: 14,
+    borderWidth: 1.5,
+    borderColor: '#E2E8F0',
+    backgroundColor: '#FFFFFF',
     marginBottom: 8,
   },
-  adminBannerTitle: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: '#0F172A',
+  adminFilterOptionIconBox: {
+    width: 38,
+    height: 38,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  csvActionRow: {
+  adminFilterOptionTitle: { fontSize: 13, fontWeight: '700', color: '#0F172A' },
+  adminFilterOptionSub: { fontSize: 11, color: '#64748B', marginTop: 2 },
+  adminFilterCountPill: {
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 8,
+    minWidth: 20,
+    alignItems: 'center',
+  },
+  adminFilterCountPillText: { color: '#FFFFFF', fontSize: 10, fontWeight: '800' },
+  activeFilterSummaryBar: {
     flexDirection: 'row',
-    gap: 10,
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderRadius: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    marginBottom: 10,
   },
-  csvBtn: {
-    flex: 1,
+  activeFilterDot: { width: 7, height: 7, borderRadius: 4, marginRight: 6 },
+  activeFilterSummaryText: { fontSize: 11, color: '#334155' },
+  activeFilterDateText: { fontSize: 10, fontWeight: '600', color: '#64748B' },
+  csvActionRow: { flexDirection: 'row', gap: 8 },
+  csvBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 10, borderRadius: 10 },
+  csvBtnText: { color: '#FFFFFF', fontSize: 12, fontWeight: '800' },
+  waShareBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 10,
+    backgroundColor: '#25D366',
+    paddingVertical: 11,
     borderRadius: 10,
+    marginTop: 8,
   },
-  csvBtnText: {
-    color: '#ffffff',
-    fontSize: 12,
-    fontWeight: '700',
-  },
-  adminBannerNotice: {
-    fontSize: 12,
-    color: '#64748B',
-    lineHeight: 18,
-  },
+  waShareBtnText: { color: '#FFFFFF', fontSize: 13, fontWeight: '800' },
+
   viewToggleContainer: {
     flexDirection: 'row',
     marginHorizontal: 16,
-    marginTop: 14,
-    backgroundColor: '#E2E8F0',
-    borderRadius: 12,
-    padding: 3,
-  },
-  viewToggleBtn: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 10,
-    borderRadius: 10,
-  },
-  viewToggleBtnActive: {
-    backgroundColor: Colors.primary,
-  },
-  viewToggleText: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#64748B',
-  },
-  viewToggleTextActive: {
-    color: '#ffffff',
-  },
-  pieCard: {
-    backgroundColor: '#ffffff',
-    marginHorizontal: 16,
-    marginTop: 14,
-    padding: 16,
-    borderRadius: 16,
+    marginTop: 12,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 14,
+    padding: 4,
     borderWidth: 1,
     borderColor: '#E2E8F0',
   },
-  pieCardHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  pieCardTitle: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: '#0F172A',
-  },
-  pieCardSub: {
-    fontSize: 12,
-    color: '#64748B',
-    marginTop: 2,
-  },
-  pieContentRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-around',
-  },
-  pieRingOuter: {
-    width: 110,
-    height: 110,
-    borderRadius: 55,
-    justifyContent: 'center',
-    alignItems: 'center',
-    position: 'relative',
-  },
-  pieRingArc: {
-    position: 'absolute',
-    width: 110,
-    height: 110,
-    borderRadius: 55,
-    borderWidth: 12,
-  },
-  pieRingInner: {
-    width: 84,
-    height: 84,
-    borderRadius: 42,
-    backgroundColor: '#ffffff',
-    justifyContent: 'center',
-    alignItems: 'center',
+  viewToggleBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 10, borderRadius: 10 },
+  viewToggleBtnActive: { backgroundColor: Colors.primary },
+  viewToggleText: { fontSize: 13, fontWeight: '700', color: '#64748B' },
+  viewToggleTextActive: { color: '#FFFFFF' },
+
+  pieCard: {
+    backgroundColor: '#FFFFFF',
+    marginHorizontal: 16,
+    marginTop: 12,
+    borderRadius: 20,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: '#F1F5F9',
+    shadowColor: '#0F172A',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.03,
+    shadowRadius: 6,
     elevation: 2,
   },
-  pieCenterValue: {
-    fontSize: 20,
+  pieCardHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 16 },
+  pieCardTitle: { fontSize: 15, fontWeight: '800', color: '#0F172A' },
+  pieCardSub: { fontSize: 11, color: '#64748B', marginTop: 2 },
+  pieContentRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-around' },
+  pieRingOuter: { width: 110, height: 110, borderRadius: 55, justifyContent: 'center', alignItems: 'center', position: 'relative' },
+  pieRingArc: { width: 110, height: 110, borderRadius: 55, borderWidth: 10, position: 'absolute' },
+  pieRingInner: { alignItems: 'center' },
+  pieCenterValue: { fontSize: 20, fontWeight: '900', color: '#0F172A' },
+  pieCenterLabel: { fontSize: 10, color: '#64748B', fontWeight: '700' },
+  pieLegendBlock: { gap: 8 },
+  legendItem: { flexDirection: 'row', alignItems: 'center' },
+  legendDot: { width: 10, height: 10, borderRadius: 5, marginRight: 8 },
+  legendLabel: { fontSize: 12, color: '#64748B', fontWeight: '600', marginRight: 6 },
+  legendValue: { fontSize: 13, fontWeight: '800', color: '#0F172A' },
+
+  listSectionCard: {
+    backgroundColor: '#FFFFFF',
+    marginHorizontal: 16,
+    marginTop: 12,
+    borderRadius: 20,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: '#F1F5F9',
+    shadowColor: '#0F172A',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.03,
+    shadowRadius: 6,
+    elevation: 2,
+  },
+  listCardHeaderBlock: {
+    marginBottom: 14,
+  },
+  listCardTitle: {
+    fontSize: 16,
     fontWeight: '800',
     color: '#0F172A',
-  },
-  pieCenterLabel: {
-    fontSize: 10,
-    color: '#64748B',
-    fontWeight: '600',
-  },
-  pieLegendBlock: {
-    gap: 10,
-  },
-  legendItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  legendDot: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    marginRight: 8,
-  },
-  legendLabel: {
-    fontSize: 13,
-    color: '#64748B',
-    marginRight: 6,
-  },
-  legendValue: {
-    fontSize: 14,
-    fontWeight: '800',
-    color: '#0F172A',
-  },
-  searchFilterBlock: {
-    marginHorizontal: 16,
-    marginTop: 14,
-  },
-  searchBox: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#ffffff',
-    borderRadius: 12,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-  },
-  searchInput: {
-    flex: 1,
-    fontSize: 14,
-    color: '#0F172A',
-  },
-  pctFilterRow: {
-    flexDirection: 'row',
-    gap: 8,
-    marginTop: 10,
-  },
-  pctChip: {
-    flex: 1,
-    paddingVertical: 8,
-    borderRadius: 10,
-    backgroundColor: '#ffffff',
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-  },
-  pctChipActive: {
-    backgroundColor: Colors.primary,
-    borderColor: Colors.primary,
-  },
-  pctChipText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#64748B',
-  },
-  pctChipTextActive: {
-    color: '#ffffff',
-    fontWeight: '700',
-  },
-  cardsList: {
-    marginHorizontal: 16,
-    marginTop: 14,
-  },
-  studentCard: {
-    backgroundColor: '#ffffff',
-    padding: 14,
-    borderRadius: 14,
     marginBottom: 10,
+  },
+  searchSortRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  headerSearchBox: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F8FAFC',
+    borderRadius: 12,
     borderWidth: 1,
     borderColor: '#E2E8F0',
+    paddingHorizontal: 10,
+    paddingVertical: 8,
   },
-  cardTopRow: {
+  headerSearchInput: {
+    flex: 1,
+    fontSize: 13,
+    color: '#0F172A',
+    padding: 0,
+  },
+  sortDropdownBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+  },
+  sortDropdownText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#334155',
+  },
+  columnHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F8FAFC',
+    paddingVertical: 8,
+    paddingHorizontal: 10,
+    borderRadius: 10,
+    marginBottom: 6,
+  },
+  colHeaderText: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#64748B',
+    textTransform: 'uppercase',
+  },
+  studentCardRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 10,
+    paddingHorizontal: 10,
+    borderRadius: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F1F5F9',
+  },
+  studentCol: {
+    flex: 2.2,
     flexDirection: 'row',
     alignItems: 'center',
   },
   avatar: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 34,
+    height: 34,
+    borderRadius: 17,
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: 10,
+    marginRight: 8,
   },
   avatarText: {
-    fontSize: 16,
-    fontWeight: '700',
+    fontSize: 14,
+    fontWeight: '800',
   },
   nameBlock: {
     flex: 1,
   },
   studentName: {
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '700',
     color: '#0F172A',
   },
-  metaRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: 2,
-  },
   rollNo: {
-    fontSize: 12,
+    fontSize: 11,
     color: '#64748B',
+    fontWeight: '500',
   },
-  metaDot: {
-    width: 4,
-    height: 4,
-    borderRadius: 2,
-    backgroundColor: '#94A3B8',
-    marginHorizontal: 6,
+  statCol: {
+    flex: 1,
+    alignItems: 'center',
   },
-  className: {
-    fontSize: 12,
-    color: '#64748B',
+  statNumPresent: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: Colors.success,
+  },
+  statNumMuted: {
+    fontSize: 13,
     fontWeight: '600',
+    color: '#64748B',
+  },
+  statNumAbsent: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: Colors.error,
+  },
+  pctCol: {
+    flex: 1.2,
+    alignItems: 'flex-end',
   },
   percentageBadge: {
-    paddingHorizontal: 10,
+    paddingHorizontal: 8,
     paddingVertical: 4,
-    borderRadius: 10,
+    borderRadius: 8,
     alignItems: 'center',
   },
   percentageText: {
-    fontSize: 14,
-    fontWeight: '800',
+    fontSize: 13,
+    fontWeight: '900',
   },
-  percentageSub: {
-    fontSize: 9,
-    fontWeight: '600',
-  },
-  progressTrack: {
-    height: 6,
-    backgroundColor: '#F1F5F9',
-    borderRadius: 3,
-    marginTop: 10,
-    overflow: 'hidden',
-  },
-  progressBar: {
-    height: '100%',
-    borderRadius: 3,
-  },
-  cardBottomRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginTop: 8,
-  },
-  sessionsText: {
-    fontSize: 12,
-    color: '#64748B',
-  },
-  sessionsBold: {
-    fontWeight: '700',
-    color: '#0F172A',
-  },
-  alertChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#FEE2E2',
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 8,
-  },
-  alertChipText: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: Colors.error,
-  },
-  tableCard: {
-    backgroundColor: '#ffffff',
+
+  scopeCard: {
+    backgroundColor: '#FFFFFF',
     marginHorizontal: 16,
-    marginTop: 14,
+    marginTop: 12,
     borderRadius: 16,
+    padding: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
     borderWidth: 1,
-    borderColor: '#E2E8F0',
-    overflow: 'hidden',
+    borderColor: '#F1F5F9',
   },
-  tableCardHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 14,
-    backgroundColor: '#F8FAFC',
-    borderBottomWidth: 1,
-    borderBottomColor: '#E2E8F0',
-  },
-  tableCardTitle: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: '#0F172A',
-  },
-  tableHeaderRow: {
-    flexDirection: 'row',
-    backgroundColor: '#F1F5F9',
-    paddingVertical: 10,
-    paddingHorizontal: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: '#E2E8F0',
-  },
-  thCell: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#475569',
-  },
-  tableDataRow: {
-    flexDirection: 'row',
-    paddingVertical: 10,
-    paddingHorizontal: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: '#F1F5F9',
-    alignItems: 'center',
-  },
-  tdCell: {
-    fontSize: 12,
-    color: '#334155',
-  },
-  statusPill: {
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 8,
-    alignSelf: 'flex-start',
-  },
-  statusPillText: {
-    fontSize: 11,
-    fontWeight: '700',
-  },
-  emptyCard: {
-    padding: 30,
-    alignItems: 'center',
-    backgroundColor: '#ffffff',
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-  },
-  emptyTitle: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#0F172A',
-    marginTop: 10,
-  },
-  emptySub: {
+  scopeTitle: {
     fontSize: 13,
-    color: '#64748B',
-    marginTop: 4,
-    textAlign: 'center',
-  },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(15, 23, 42, 0.5)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 20,
-  },
-  modalCard: {
-    width: '100%',
-    backgroundColor: '#ffffff',
-    borderRadius: 20,
-    padding: 20,
-    elevation: 5,
-  },
-  modalTitle: {
-    fontSize: 18,
     fontWeight: '800',
     color: '#0F172A',
-    marginBottom: 16,
   },
-  inputLabel: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#475569',
-    marginBottom: 6,
-  },
-  dateInput: {
-    backgroundColor: '#F8FAFC',
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: '#CBD5E1',
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    fontSize: 14,
-    color: '#0F172A',
-    marginBottom: 14,
-  },
-  modalActionRow: {
-    flexDirection: 'row',
-    gap: 12,
-    marginTop: 8,
-  },
-  modalCancelBtn: {
-    flex: 1,
-    paddingVertical: 12,
-    borderRadius: 12,
-    backgroundColor: '#F1F5F9',
-    alignItems: 'center',
-  },
-  modalCancelText: {
-    fontSize: 14,
-    fontWeight: '700',
+  scopeSub: {
+    fontSize: 11,
+    fontWeight: '500',
     color: '#64748B',
+    marginTop: 2,
   },
-  modalApplyBtn: {
-    flex: 1,
-    paddingVertical: 12,
-    borderRadius: 12,
-    backgroundColor: Colors.primary,
-    alignItems: 'center',
-  },
-  modalApplyText: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: '#ffffff',
-  },
+
+  emptyCard: { backgroundColor: '#FFFFFF', borderRadius: 20, padding: 32, alignItems: 'center', marginTop: 10, borderWidth: 1, borderColor: '#E2E8F0' },
+  emptyTitle: { fontSize: 16, fontWeight: '800', color: '#0F172A', marginTop: 10 },
+  emptySub: { fontSize: 12, color: '#64748B', marginTop: 4 },
+
+  tableCard: { backgroundColor: '#FFFFFF', marginHorizontal: 16, marginTop: 12, borderRadius: 20, padding: 16, borderWidth: 1, borderColor: '#F1F5F9' },
+  tableCardHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 12 },
+  tableCardTitle: { fontSize: 15, fontWeight: '800', color: '#0F172A' },
+  tableHeaderRow: { flexDirection: 'row', backgroundColor: '#F8FAFC', paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: '#E2E8F0' },
+  thCell: { fontSize: 12, fontWeight: '800', color: '#475569', paddingHorizontal: 6 },
+  tableDataRow: { flexDirection: 'row', paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: '#F1F5F9', alignItems: 'center' },
+  tdCell: { fontSize: 12, color: '#1E293B', paddingHorizontal: 6 },
+  statusPill: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6, alignItems: 'center' },
+  statusPillText: { fontSize: 10, fontWeight: '800' },
+
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(15, 23, 42, 0.6)', justifyContent: 'center', alignItems: 'center', padding: 20 },
+  dropdownModalCard: { width: '90%', maxWidth: 360, backgroundColor: '#FFFFFF', borderRadius: 20, padding: 20, elevation: 8 },
+  dropdownModalTitle: { fontSize: 16, fontWeight: '800', color: '#0F172A', marginBottom: 14 },
+  dropdownOptionItem: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 12, paddingHorizontal: 14, borderRadius: 12, marginBottom: 6, backgroundColor: '#F8FAFC' },
+  dropdownOptionSelected: { backgroundColor: Colors.primarySoft, borderWidth: 1, borderColor: 'rgba(255, 107, 0, 0.2)' },
+  dropdownOptionText: { fontSize: 14, fontWeight: '600', color: '#334155' },
+  dropdownOptionTextSelected: { color: Colors.primary, fontWeight: '800' },
+
+  calendarModalCard: { backgroundColor: '#FFFFFF', borderRadius: 24, padding: 20, width: '92%', maxWidth: 380, elevation: 8 },
+  modalHeaderRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 },
+  modalTitle: { fontSize: 17, fontWeight: '800', color: '#0F172A' },
+  modalCloseCircle: { padding: 6, borderRadius: 20, backgroundColor: '#F1F5F9' },
+  calMonthNavRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 10, marginBottom: 8 },
+  calNavIconBtn: { padding: 6, borderRadius: 12, backgroundColor: '#F8FAFC' },
+  calMonthText: { fontSize: 17, fontWeight: '800', color: '#0F172A' },
+  calWeekRow: { flexDirection: 'row', justifyContent: 'space-around', paddingBottom: 8, borderBottomWidth: 1, borderBottomColor: '#F1F5F9' },
+  calWeekText: { width: 38, textAlign: 'center', fontSize: 12, fontWeight: '700', color: '#64748B' },
+  calDaysGrid: { flexDirection: 'row', flexWrap: 'wrap', paddingVertical: 10 },
+  calDayBox: { width: '14.28%', height: 44, justifyContent: 'center', alignItems: 'center', borderRadius: 12, marginVertical: 2 },
+  calDayBoxSelected: { backgroundColor: Colors.primary },
+  calDayBoxToday: { borderWidth: 1.5, borderColor: Colors.primary },
+  calDayNumText: { fontSize: 14, fontWeight: '700', color: '#1E293B' },
+  calDayNumTextSelected: { color: '#FFFFFF', fontWeight: '800' },
+  calDayNumTextToday: { color: Colors.primary, fontWeight: '800' },
+
+  googleModalCard: { backgroundColor: '#FFFFFF', borderRadius: 24, padding: 20, width: '92%', maxWidth: 400, elevation: 10 },
+  googleModalBody: { marginTop: 12 },
+  stepBadgeRow: { flexDirection: 'row', alignItems: 'flex-start', backgroundColor: '#F8FAFC', padding: 12, borderRadius: 14, borderWidth: 1, borderColor: '#F1F5F9' },
+  stepBadgeCircle: { width: 28, height: 28, borderRadius: 14, backgroundColor: Colors.successSoft, justifyContent: 'center', alignItems: 'center', marginRight: 10, marginTop: 2 },
+  stepBadgeNum: { fontSize: 14, fontWeight: '900', color: Colors.success },
+  stepBadgeTitle: { fontSize: 14, fontWeight: '800', color: '#0F172A' },
+  stepBadgeSub: { fontSize: 12, color: '#64748B', marginTop: 3, lineHeight: 16 },
+  openGoogleSheetsBtn: { backgroundColor: Colors.success, borderRadius: 14, paddingVertical: 14, paddingHorizontal: 16, flexDirection: 'row', justifyContent: 'center', alignItems: 'center', marginTop: 16 },
+  openGoogleSheetsBtnText: { color: '#FFFFFF', fontSize: 14, fontWeight: '800' },
+  downloadBackupExcelBtn: { backgroundColor: Colors.primarySoft, borderRadius: 14, paddingVertical: 12, paddingHorizontal: 16, flexDirection: 'row', justifyContent: 'center', alignItems: 'center', marginTop: 8 },
+  downloadBackupExcelText: { color: Colors.primary, fontSize: 13, fontWeight: '800' },
+
+  absenteeLetterModalCard: { backgroundColor: '#FFFFFF', borderRadius: 24, padding: 18, width: '95%', maxWidth: 500, elevation: 10 },
+  letterPaperContainer: { backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#CBD5E1', borderRadius: 12, padding: 14, marginTop: 4 },
+  letterheadHeader: { alignItems: 'center', borderBottomWidth: 1.5, borderBottomColor: Colors.primary, paddingBottom: 8 },
+  letterCollegeTitle: { fontSize: 13, fontWeight: '900', color: '#003366', textAlign: 'center' },
+  letterCollegeSub: { fontSize: 9, color: '#64748B', textAlign: 'center', marginTop: 1 },
+  letterDivider: { height: 1, backgroundColor: '#E2E8F0', width: '100%', marginVertical: 5 },
+  letterDeptTitle: { fontSize: 12, fontWeight: '900', color: Colors.primary, textAlign: 'center', letterSpacing: 0.5 },
+  letterDateRow: { alignItems: 'flex-end', marginTop: 8 },
+  letterDateText: { fontSize: 11, fontWeight: '700', color: '#475569' },
+  letterToBlock: { marginVertical: 8 },
+  letterToLabel: { fontSize: 12, fontWeight: '800', color: '#0F172A' },
+  letterToDetail: { fontSize: 11, color: '#334155', lineHeight: 16 },
+  letterHighlightRed: { color: Colors.error, fontWeight: '800' },
+  letterHighlightBold: { color: '#0F172A', fontWeight: '800' },
+  letterSalutation: { fontSize: 12, fontWeight: '800', color: '#0F172A', marginTop: 6, marginBottom: 4 },
+  letterParagraph: { fontSize: 11, color: '#1E293B', lineHeight: 16, marginBottom: 8, textAlign: 'justify' },
+  tamilBoxContainer: { backgroundColor: '#FEF2F2', borderRadius: 8, padding: 10, marginVertical: 8, borderWidth: 1, borderColor: '#FCA5A5' },
+  tamilSalutation: { fontSize: 11, fontWeight: '800', color: '#991B1B', marginBottom: 4 },
+  tamilParagraph: { fontSize: 10.5, color: '#7F1D1D', lineHeight: 15, marginBottom: 6 },
+  tamilHighlightBold: { fontWeight: '800', color: '#7F1D1D' },
+  tamilHighlightRed: { fontWeight: '900', color: Colors.error },
+  signatureGridRow: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 12, paddingTop: 8, borderTopWidth: 1, borderTopColor: '#E2E8F0' },
+  sigColCell: { width: '24%', alignItems: 'center' },
+  sigTitleText: { fontSize: 9, fontWeight: '900', color: '#0F172A', marginBottom: 2 },
+  sigNameText: { fontSize: 8.5, fontWeight: '700', color: Colors.error, textAlign: 'center' },
+  sigPhoneText: { fontSize: 7.5, color: '#64748B', textAlign: 'center' },
+  emailDispatchCard: { marginTop: 12, paddingTop: 10, borderTopWidth: 1, borderTopColor: '#F1F5F9' },
+  emailDispatchLabel: { fontSize: 11, fontWeight: '800', color: '#0F172A', marginBottom: 6 },
+  emailInputWrapper: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#F8FAFC', borderRadius: 10, borderWidth: 1, borderColor: '#CBD5E1', paddingHorizontal: 10, height: 40 },
+  emailTextInput: { flex: 1, fontSize: 12, color: '#0F172A', fontWeight: '600' },
+  sendEmailSubmitBtn: { backgroundColor: Colors.error, borderRadius: 12, height: 44, flexDirection: 'row', justifyContent: 'center', alignItems: 'center', marginTop: 10 },
+  sendEmailSubmitBtnText: { color: '#FFFFFF', fontSize: 13, fontWeight: '800' },
 });

@@ -11,7 +11,6 @@ export default function StudentProfile() {
   const route = useRoute<any>();
   const { student, classDetails } = route.params || { student: { name: 'Unknown', id: 'N/A' }, classDetails: { className: 'Unknown' } };
 
-  // Generate a mock attendance percentage between 70 and 100 based on their ID string length and char codes
   const mockAttendance = useMemo(() => {
     let hash = 0;
     for (let i = 0; i < student.id.length; i++) {
@@ -20,7 +19,7 @@ export default function StudentProfile() {
     return 70 + (hash % 30);
   }, [student.id]);
 
-  const studentPhone = '9876543210'; // Mocked
+  const studentPhone = '9876543210';
   const parentPhone = student.phone || '9442211279'; 
 
   const makeCall = (phoneNumber: string) => {
@@ -32,7 +31,7 @@ export default function StudentProfile() {
       <View style={styles.header}>
         <View style={styles.headerTop}>
           <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
-            <Icon name="arrow-back" size={28} color={Colors.text} />
+            <Icon name="arrow-back" size={26} color={Colors.text} />
           </TouchableOpacity>
           <Text style={styles.title}>Student Profile</Text>
           <View style={{ width: 28 }} />
@@ -50,12 +49,12 @@ export default function StudentProfile() {
 
           <View style={styles.statsRow}>
             <View style={styles.statBox}>
-              <Text style={styles.statLabel}>Attendance</Text>
+              <Text style={styles.statLabel}>Attendance Percentage</Text>
               <Text style={[styles.statValue, { color: mockAttendance >= 75 ? Colors.success : Colors.error }]}>
                 {mockAttendance}%
               </Text>
               <Text style={styles.statStatus}>
-                {mockAttendance >= 75 ? 'Good Standing' : 'Critical'}
+                {mockAttendance >= 75 ? 'Good Standing' : 'Critical Defaulter'}
               </Text>
             </View>
           </View>
@@ -66,24 +65,24 @@ export default function StudentProfile() {
           
           <TouchableOpacity 
             style={styles.actionCard} 
-            activeOpacity={0.7}
+            activeOpacity={0.8}
             onPress={() => makeCall(studentPhone)}
           >
-            <View style={[styles.iconWrap, { backgroundColor: '#E0F2FE' }]}>
-              <Icon name="person" size={24} color="#0284C7" />
+            <View style={[styles.iconWrap, { backgroundColor: Colors.primarySoft }]}>
+              <Icon name="person" size={24} color={Colors.primary} />
             </View>
             <View style={styles.actionInfo}>
               <Text style={styles.actionTitle}>Call Student</Text>
               <Text style={styles.actionSubtitle}>{studentPhone}</Text>
             </View>
-            <View style={styles.callBtn}>
-              <Icon name="call" size={24} color="#ffffff" />
+            <View style={[styles.callBtn, { backgroundColor: Colors.primary }]}>
+              <Icon name="call" size={22} color="#FFFFFF" />
             </View>
           </TouchableOpacity>
 
           <TouchableOpacity 
             style={styles.actionCard} 
-            activeOpacity={0.7}
+            activeOpacity={0.8}
             onPress={() => makeCall(parentPhone)}
           >
             <View style={[styles.iconWrap, { backgroundColor: '#FEF3C7' }]}>
@@ -93,8 +92,8 @@ export default function StudentProfile() {
               <Text style={styles.actionTitle}>Call Parent</Text>
               <Text style={styles.actionSubtitle}>{parentPhone}</Text>
             </View>
-            <View style={styles.callBtn}>
-              <Icon name="call" size={24} color="#ffffff" />
+            <View style={[styles.callBtn, { backgroundColor: Colors.success }]}>
+              <Icon name="call" size={22} color="#FFFFFF" />
             </View>
           </TouchableOpacity>
         </Animated.View>
@@ -106,13 +105,12 @@ export default function StudentProfile() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F8FAFC',
-    
+    backgroundColor: Colors.background,
   },
   header: {
-    paddingHorizontal: 24,
-    paddingVertical: 16,
-    backgroundColor: '#ffffff',
+    paddingHorizontal: 20,
+    paddingVertical: 14,
+    backgroundColor: '#FFFFFF',
     borderBottomWidth: 1,
     borderBottomColor: '#F1F5F9',
   },
@@ -126,61 +124,63 @@ const styles = StyleSheet.create({
     marginLeft: -4,
   },
   title: {
-    fontSize: 22,
+    fontSize: 20,
     fontWeight: '800',
     color: '#0F172A',
   },
   subtitle: {
-    fontSize: 14,
+    fontSize: 13,
     color: '#64748B',
     fontWeight: '600',
-    marginTop: 8,
+    marginTop: 6,
     textAlign: 'center',
   },
   content: {
-    padding: 24,
+    padding: 20,
     paddingBottom: 40,
   },
   profileCard: {
-    backgroundColor: '#ffffff',
+    backgroundColor: '#FFFFFF',
     borderRadius: 24,
-    padding: 32,
+    padding: 28,
     alignItems: 'center',
-    shadowColor: '#000',
+    shadowColor: '#0F172A',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.04,
     shadowRadius: 10,
     elevation: 2,
     borderWidth: 1,
     borderColor: '#F1F5F9',
-    marginBottom: 32,
+    marginBottom: 24,
   },
   avatarLarge: {
-    width: 96,
-    height: 96,
-    borderRadius: 48,
-    backgroundColor: 'rgba(255, 93, 56, 0.1)',
+    width: 88,
+    height: 88,
+    borderRadius: 44,
+    backgroundColor: Colors.primarySoft,
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 107, 0, 0.2)',
   },
   avatarTextLarge: {
-    fontSize: 40,
+    fontSize: 38,
     fontWeight: '900',
     color: Colors.primary,
   },
   studentName: {
-    fontSize: 26,
+    fontSize: 24,
     fontWeight: '900',
     color: Colors.text,
-    marginBottom: 8,
+    marginBottom: 4,
     textAlign: 'center',
   },
   studentId: {
-    fontSize: 16,
+    fontSize: 14,
     color: Colors.textSecondary,
     fontWeight: '700',
-    marginBottom: 24,
+    marginBottom: 20,
   },
   statsRow: {
     flexDirection: 'row',
@@ -193,18 +193,18 @@ const styles = StyleSheet.create({
     padding: 16,
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: '#F1F5F9',
+    borderColor: '#E2E8F0',
   },
   statLabel: {
-    fontSize: 13,
+    fontSize: 12,
     color: Colors.textSecondary,
     fontWeight: '700',
     textTransform: 'uppercase',
-    letterSpacing: 1,
-    marginBottom: 8,
+    letterSpacing: 0.8,
+    marginBottom: 6,
   },
   statValue: {
-    fontSize: 32,
+    fontSize: 30,
     fontWeight: '900',
     marginBottom: 4,
   },
@@ -217,59 +217,54 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   sectionTitle: {
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: '800',
     color: Colors.text,
-    marginBottom: 16,
+    marginBottom: 14,
   },
   actionCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#ffffff',
-    borderRadius: 20,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 18,
     padding: 16,
-    marginBottom: 16,
+    marginBottom: 14,
     borderWidth: 1,
     borderColor: '#F1F5F9',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
+    shadowColor: '#0F172A',
+    shadowOffset: { width: 0, height: 3 },
     shadowOpacity: 0.03,
-    shadowRadius: 12,
+    shadowRadius: 8,
     elevation: 2,
   },
   iconWrap: {
-    width: 56,
-    height: 56,
-    borderRadius: 16,
+    width: 50,
+    height: 50,
+    borderRadius: 14,
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: 16,
+    marginRight: 14,
   },
   actionInfo: {
     flex: 1,
   },
   actionTitle: {
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '800',
     color: Colors.text,
-    marginBottom: 4,
+    marginBottom: 2,
   },
   actionSubtitle: {
-    fontSize: 14,
+    fontSize: 13,
     color: Colors.textSecondary,
     fontWeight: '600',
   },
   callBtn: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: Colors.success,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     justifyContent: 'center',
     alignItems: 'center',
-    shadowColor: Colors.success,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 4,
+    elevation: 3,
   }
 });

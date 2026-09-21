@@ -15,8 +15,8 @@ const { width, height } = Dimensions.get('window');
 
 export default function Splash({ navigation }: any) {
   const fadeAnim = useRef(new Animated.Value(0)).current;
-  const scaleAnim = useRef(new Animated.Value(0.8)).current;
-  const slideAnim = useRef(new Animated.Value(30)).current;
+  const scaleAnim = useRef(new Animated.Value(0.85)).current;
+  const slideAnim = useRef(new Animated.Value(25)).current;
   const logoPulse = useRef(new Animated.Value(1)).current;
 
   useEffect(() => {
@@ -44,13 +44,13 @@ export default function Splash({ navigation }: any) {
     Animated.loop(
       Animated.sequence([
         Animated.timing(logoPulse, {
-          toValue: 1.05,
-          duration: 1500,
+          toValue: 1.04,
+          duration: 1600,
           useNativeDriver: true,
         }),
         Animated.timing(logoPulse, {
           toValue: 1,
-          duration: 1500,
+          duration: 1600,
           useNativeDriver: true,
         }),
       ])
@@ -66,9 +66,9 @@ export default function Splash({ navigation }: any) {
           } else {
             navigation.replace('Login');
           }
-        }, 2800);
+        }, 2600);
       } catch (e) {
-        setTimeout(() => navigation.replace('Login'), 2800);
+        setTimeout(() => navigation.replace('Login'), 2600);
       }
     };
 
@@ -77,14 +77,14 @@ export default function Splash({ navigation }: any) {
 
   return (
     <View style={styles.container}>
-      {/* Dynamic Background Glows */}
+      {/* Warm Orange Glows */}
       <View
         style={[
           styles.glow,
           {
-            top: -height * 0.1,
-            left: -width * 0.2,
-            backgroundColor: 'rgba(255, 93, 56, 0.06)',
+            top: -height * 0.15,
+            left: -width * 0.25,
+            backgroundColor: 'rgba(255, 107, 0, 0.14)',
           },
         ]}
       />
@@ -92,9 +92,9 @@ export default function Splash({ navigation }: any) {
         style={[
           styles.glow,
           {
-            bottom: -height * 0.1,
-            right: -width * 0.2,
-            backgroundColor: 'rgba(59, 130, 246, 0.18)',
+            bottom: -height * 0.15,
+            right: -width * 0.25,
+            backgroundColor: 'rgba(255, 133, 51, 0.08)',
           },
         ]}
       />
@@ -108,7 +108,7 @@ export default function Splash({ navigation }: any) {
           },
         ]}
       >
-        {/* BIG HERO LOGO CONTAINER */}
+        {/* LOGO CONTAINER */}
         <Animated.View
           style={[
             styles.logoContainer,
@@ -135,7 +135,7 @@ export default function Splash({ navigation }: any) {
         </View>
       </Animated.View>
 
-      {/* Loading Indicator */}
+      {/* Orange Activity Spinner */}
       <View style={styles.footerLoader}>
         <ActivityIndicator size="large" color={Colors.primary} />
       </View>
@@ -148,14 +148,14 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#0F172A', // Ultra-premium deep dark blue
+    backgroundColor: '#0B0F19', // Deep dark luxury slate
     overflow: 'hidden',
   },
   glow: {
     position: 'absolute',
-    width: width * 1.1,
-    height: width * 1.1,
-    borderRadius: (width * 1.1) / 2,
+    width: width * 1.2,
+    height: width * 1.2,
+    borderRadius: (width * 1.2) / 2,
   },
   content: {
     alignItems: 'center',
@@ -165,23 +165,23 @@ const styles = StyleSheet.create({
   logoContainer: {
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 20,
+    marginBottom: 24,
   },
   logoHalo: {
     position: 'absolute',
-    width: 290,
-    height: 290,
-    borderRadius: 145,
-    backgroundColor: 'rgba(255, 93, 56, 0.05)',
+    width: 280,
+    height: 280,
+    borderRadius: 140,
+    backgroundColor: 'rgba(255, 107, 0, 0.08)',
   },
   heroLogo: {
     width: width * 0.65,
     height: width * 0.65,
-    maxWidth: 260,
-    maxHeight: 260,
+    maxWidth: 250,
+    maxHeight: 250,
   },
   title: {
-    fontSize: 44,
+    fontSize: 42,
     fontWeight: '900',
     color: '#FFFFFF',
     letterSpacing: -0.5,
@@ -190,31 +190,31 @@ const styles = StyleSheet.create({
     color: Colors.primary,
   },
   subtitle: {
-    fontSize: 12,
+    fontSize: 11,
     color: '#94A3B8',
     marginTop: 10,
     fontWeight: '800',
-    letterSpacing: 2.5,
+    letterSpacing: 2.2,
     textAlign: 'center',
   },
   taglineBadge: {
-    marginTop: 16,
-    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+    marginTop: 18,
+    backgroundColor: 'rgba(255, 107, 0, 0.12)',
     paddingHorizontal: 16,
-    paddingVertical: 6,
+    paddingVertical: 7,
     borderRadius: 20,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.12)',
+    borderColor: 'rgba(255, 107, 0, 0.25)',
   },
   taglineText: {
-    color: '#E2E8F0',
+    color: '#FF8533',
     fontSize: 12,
-    fontWeight: '600',
+    fontWeight: '700',
     letterSpacing: 0.5,
   },
   footerLoader: {
     position: 'absolute',
-    bottom: 65,
+    bottom: 60,
     alignItems: 'center',
   },
 });
