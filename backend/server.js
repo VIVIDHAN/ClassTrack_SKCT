@@ -306,21 +306,14 @@ app.get(['/api/reports/download-excel', '/api/reports/absentees/download'], asyn
     csvContent += `Date Range: ${startStr} to ${endStr}\n`;
     csvContent += `Total Records: ${filteredList.length}\n\n`;
 
-    if (isDefaulterReport) {
-      csvContent += `S.No,Roll No,Student Name,Section,Present,Total,Percentage,Classes Needed for 75%,Parent Mobile,Status\n`;
-      filteredList.forEach((s, idx) => {
-        const cleanName = s.name.includes(',') ? `"${s.name}"` : s.name;
-        const shortfall = Math.max(1, Math.ceil((0.75 * s.total - s.attended) / 0.25));
-        csvContent += `${idx + 1},${s.roll_no},${cleanName},${s.section},${s.attended},${s.total},${s.percentage}%,${shortfall} classes,${s.parent_phone},Defaulter (<75%)\n`;
-      });
-    } else {
-      csvContent += `S.No,Roll No,Student Name,Section,Present,Total,Percentage,Parent Mobile,Status\n`;
-      filteredList.forEach((s, idx) => {
-        const cleanName = s.name.includes(',') ? `"${s.name}"` : s.name;
-        const status = s.percentage >= 75 ? 'Eligible (≥75%)' : 'Defaulter (<75%)';
-        csvContent += `${idx + 1},${s.roll_no},${cleanName},${s.section},${s.attended},${s.total},${s.percentage}%,${s.parent_phone},${status}\n`;
-      });
-    }
+    csvContent += `S.No,Roll No,Name,Class,Present,Absent,Total,Percentage\n`;
+    filteredList.forEach((s, idx) => {
+      const cleanName = s.name.includes(',') ? `"${s.name}"` : s.name;
+      const present = s.attended || 0;
+      const total = s.total || 25;
+      const absent = Math.max(0, total - present);
+      csvContent += `${idx + 1},${s.roll_no},${cleanName},${s.section},${present},${absent},${total},${s.percentage}%\n`;
+    });
 
     res.setHeader('Content-Type', 'text/csv; charset=utf-8');
     res.setHeader('Content-Disposition', `attachment; filename="${fileName.replace('.xls', '.csv')}"`);

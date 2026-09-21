@@ -27,7 +27,7 @@ function doPost(e) {
     var department = data.department || "Dept: Information Technology";
     var dateRange = data.dateRange || "";
     var primaryColor = data.primaryColor || "#FF6B00";
-    var headers = data.headers || ['S.No', 'Roll No', 'Name', 'Section', 'Total Classes', 'Attended Classes', 'Percentage %', 'Status'];
+    var headers = data.headers || ['S.No', 'Roll No', 'Name', 'Class', 'Present', 'Absent', 'Total', 'Percentage'];
     var rows = data.rows || [];
 
     // 1. Create a new Google Spreadsheet in Google Drive

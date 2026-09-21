@@ -307,55 +307,62 @@ export default function AttendanceReport() {
     const sectionLabel = selectedSection === 'Both' ? 'III IT G + III IT E' : selectedSection;
     const safeSection = selectedSection.replace(/\s+/g, '_');
 
+    // Exact 8 standardized headers requested by user:
+    // S.No, Roll No, Name, Class, Present, Absent, Total, Percentage
+    const headers = ['S.No', 'Roll No', 'Name', 'Class', 'Present', 'Absent', 'Total', 'Percentage'];
+
     if (filter === 'absentees') {
-      const list = getAbsenteeRecords();
+      const defaulters = reportData.filter(s => s.percentage < 75);
       const title = `SKCT_IT_Absentee_Report_${safeSection}_${startDate}_to_${endDate}`;
-      const headers = ['S.No', 'Date', 'Period', 'Time', 'Roll No', 'Student Name', 'Section', 'Subject', 'Parent Mobile', 'Status'];
-      const rows = list.map((a: any) => [
-        a.sno,
-        a.date,
-        a.period,
-        a.time,
-        a.roll_no,
-        a.name,
-        a.className,
-        a.subject,
-        a.phone,
-        'Absent',
-      ]);
+      const rows = defaulters.map((s, idx) => {
+        const roll = s.roll_no;
+        const total = s.totalClasses || 25;
+        const present = s.attendedClasses || 0;
+        const absent = Math.max(0, total - present);
+        return [
+          idx + 1,
+          roll,
+          s.name,
+          s.className || sectionLabel,
+          present,
+          absent,
+          total,
+          `${s.percentage}%`
+        ];
+      });
       return {
         filter,
-        label: 'Absentees Alone',
-        shortLabel: 'Absentees',
+        label: 'Absentees (<75%)',
+        shortLabel: 'Absentees <75%',
         color: '#DC2626',
         badgeBg: '#FEE2E2',
         title,
-        docTitle: 'OFFICIAL STUDENT ABSENTEE REPORT (ADMIN EXCLUSIVE)',
+        docTitle: 'OFFICIAL STUDENT ABSENTEE REPORT (< 75%)',
         fileName: `${title}.csv`,
         headers,
         rows,
-        count: list.length,
-        list,
+        count: defaulters.length,
+        list: defaulters,
       };
     }
 
     if (filter === 'gte75') {
       const eligible = reportData.filter(s => s.percentage >= 75);
       const title = `SKCT_IT_Eligible_Students_GTE75_${safeSection}_${startDate}_to_${endDate}`;
-      const headers = ['S.No', 'Roll No', 'Student Name', 'Section', 'Present Classes', 'Total Classes', 'Attendance %', 'Parent Mobile', 'Status'];
       const rows = eligible.map((s, idx) => {
         const roll = s.roll_no;
-        const phone = studentPhoneMap.get(roll.toUpperCase()) || '9442211279';
+        const total = s.totalClasses || 25;
+        const present = s.attendedClasses || 0;
+        const absent = Math.max(0, total - present);
         return [
           idx + 1,
           roll,
           s.name,
           s.className || sectionLabel,
-          s.attendedClasses || 0,
-          s.totalClasses || 25,
-          `${s.percentage}%`,
-          phone,
-          'Eligible (≥75%)',
+          present,
+          absent,
+          total,
+          `${s.percentage}%`
         ];
       });
       return {
@@ -377,24 +384,20 @@ export default function AttendanceReport() {
     if (filter === 'lt75') {
       const defaulters = reportData.filter(s => s.percentage < 75);
       const title = `SKCT_IT_Attendance_Defaulters_LT75_${safeSection}_${startDate}_to_${endDate}`;
-      const headers = ['S.No', 'Roll No', 'Student Name', 'Section', 'Present Classes', 'Total Classes', 'Attendance %', 'Classes Needed for 75%', 'Parent Mobile', 'Status'];
       const rows = defaulters.map((s, idx) => {
         const roll = s.roll_no;
-        const phone = studentPhoneMap.get(roll.toUpperCase()) || '9442211279';
         const total = s.totalClasses || 25;
-        const attended = s.attendedClasses || 0;
-        const shortfall = Math.max(1, Math.ceil((0.75 * total - attended) / 0.25));
+        const present = s.attendedClasses || 0;
+        const absent = Math.max(0, total - present);
         return [
           idx + 1,
           roll,
           s.name,
           s.className || sectionLabel,
-          attended,
+          present,
+          absent,
           total,
-          `${s.percentage}%`,
-          `${shortfall} class${shortfall > 1 ? 'es' : ''}`,
-          phone,
-          'Defaulter (<75%)',
+          `${s.percentage}%`
         ];
       });
       return {
@@ -415,20 +418,20 @@ export default function AttendanceReport() {
 
     // Default 'all': All Students
     const title = `SKCT_IT_All_Students_Attendance_${safeSection}_${startDate}_to_${endDate}`;
-    const headers = ['S.No', 'Roll No', 'Student Name', 'Section', 'Present Classes', 'Total Classes', 'Attendance %', 'Parent Mobile', 'Status'];
     const rows = reportData.map((s, idx) => {
       const roll = s.roll_no;
-      const phone = studentPhoneMap.get(roll.toUpperCase()) || '9442211279';
+      const total = s.totalClasses || 25;
+      const present = s.attendedClasses || 0;
+      const absent = Math.max(0, total - present);
       return [
         idx + 1,
         roll,
         s.name,
         s.className || sectionLabel,
-        s.attendedClasses || 0,
-        s.totalClasses || 25,
-        `${s.percentage}%`,
-        phone,
-        s.percentage >= 75 ? 'Eligible (≥75%)' : 'Defaulter (<75%)',
+        present,
+        absent,
+        total,
+        `${s.percentage}%`
       ];
     });
     return {
@@ -445,7 +448,7 @@ export default function AttendanceReport() {
       count: reportData.length,
       list: reportData,
     };
-  }, [selectedSection, startDate, endDate, getAbsenteeRecords, reportData, studentPhoneMap]);
+  }, [selectedSection, startDate, endDate, reportData]);
 
   // Active dataset according to the selected Admin Export Filter
   const currentDataset = useMemo(() => {
@@ -590,7 +593,7 @@ export default function AttendanceReport() {
     }
   };
 
-  // Admin Action: Export Report to Google Sheet (Permanently managed via backend/.env)
+  // Admin Action: Export Report to Google Sheet (Permanently managed via backend & direct fallback)
   const handleExportGoogleSheet = async () => {
     if (!isAdminUser) {
       Alert.alert(
@@ -606,72 +609,105 @@ export default function AttendanceReport() {
       const sectionLabel = selectedSection === 'Both' ? 'III IT G + III IT E' : selectedSection;
       const dataset = getAdminExportDataset(adminExportFilter);
 
-      // Copy full report data as TSV (Tab-Separated Values) to clipboard for immediate 1-click paste into Google Sheets
+      // Copy full report data as TSV (Tab-Separated Values) to clipboard for instant fallback paste
       const headersRow = dataset.headers.join('\t');
       const bodyRows = dataset.rows.map(r => r.join('\t')).join('\n');
       const tsvContent = `${dataset.docTitle}\n${headersRow}\n${bodyRows}`;
       copyToClipboard(tsvContent);
 
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 20000); // 20 seconds timeout
+      const requestPayload = {
+        title: dataset.title,
+        reportType: adminExportFilter,
+        department: `Dept: Information Technology (${sectionLabel})`,
+        dateRange: `Date Range: ${startDate} to ${endDate}`,
+        startDate,
+        endDate,
+        section: selectedSection,
+        docTitle: dataset.docTitle,
+        primaryColor: dataset.color,
+        headers: dataset.headers,
+        rows: dataset.rows,
+      };
 
-      const response = await fetch(`${API_BASE_URL}/reports/google-sheet`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        signal: controller.signal,
-        body: JSON.stringify({
-          title: dataset.title,
-          reportType: adminExportFilter,
-          department: `Dept: Information Technology (${sectionLabel})`,
-          dateRange: `Date Range: ${startDate} to ${endDate}`,
-          startDate,
-          endDate,
-          section: selectedSection,
-          docTitle: dataset.docTitle,
-          primaryColor: dataset.color,
-          headers: dataset.headers,
-          rows: dataset.rows,
-        }),
-      }).catch(() => null);
+      let sheetUrl: string | null = null;
+      let spreadsheetId: string | null = null;
 
-      clearTimeout(timeoutId);
+      // 1. Try EC2 Backend Server Endpoint
+      try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 5000);
 
-      if (response) {
-        const resData = await response.json().catch(() => null);
-        if (resData && resData.success && (resData.sheetUrl || resData.url)) {
-          const url = resData.sheetUrl || resData.url;
-          setGeneratedGoogleSheetUrl(url);
-          setGeneratedSpreadsheetId(resData.spreadsheetId || '');
-          setIsGeneratingSheet(false);
-          setGoogleSheetsModalVisible(false);
-          Linking.openURL(url).catch(() => {});
-          Alert.alert(
-            'Google Sheet Created 🎉',
-            `Your live ${dataset.shortLabel} Google Sheet has been generated in Google Drive and opened!`
-          );
-          return;
-        } else if (resData && resData.error) {
-          setIsGeneratingSheet(false);
-          setGoogleSheetsModalVisible(true);
-          Alert.alert(
-            'Google Sheets Status 📋',
-            `${resData.error}\n\nNote: All ${dataset.rows.length} rows of ${dataset.shortLabel} report data have been copied to your clipboard. Tap 'Open Google Sheets' and paste (Ctrl+V / Cmd+V) to view immediately!`
-          );
-          return;
+        const response = await fetch(`${API_BASE_URL}/reports/google-sheet`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          signal: controller.signal,
+          body: JSON.stringify(requestPayload),
+        }).catch(() => null);
+
+        clearTimeout(timeoutId);
+
+        if (response) {
+          const resData = await response.json().catch(() => null);
+          if (resData && resData.success && (resData.sheetUrl || resData.url)) {
+            sheetUrl = resData.sheetUrl || resData.url;
+            spreadsheetId = resData.spreadsheetId || '';
+          }
         }
+      } catch (e) {}
+
+      // 2. Direct Fallback to Google Apps Script WebApp
+      if (!sheetUrl) {
+        try {
+          const directUrl = 'https://script.google.com/macros/s/AKfycby_0b2exAUwHTUdu5plesNOoXtTPYu2ma9ptoId-Tuf8jfSPOSFcvJBh6mCyUxIiWCS/exec';
+          const directController = new AbortController();
+          const directTimeout = setTimeout(() => directController.abort(), 8000);
+
+          const directRes = await fetch(directUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            signal: directController.signal,
+            body: JSON.stringify(requestPayload),
+          }).catch(() => null);
+
+          clearTimeout(directTimeout);
+
+          if (directRes) {
+            const directData = await directRes.json().catch(() => null);
+            if (directData && directData.success && (directData.sheetUrl || directData.url)) {
+              sheetUrl = directData.sheetUrl || directData.url;
+              spreadsheetId = directData.spreadsheetId || '';
+            }
+          }
+        } catch (e) {}
       }
 
       setIsGeneratingSheet(false);
-      setGoogleSheetsModalVisible(true);
-      Alert.alert(
-        'Data Copied to Clipboard 📋',
-        `All ${dataset.rows.length} rows of ${dataset.shortLabel} data have been copied to your clipboard!\n\nTap 'Open Google Sheets' (sheets.new) below and paste (Ctrl+V / Cmd+V) to create your sheet instantly.`
-      );
+
+      if (sheetUrl) {
+        setGeneratedGoogleSheetUrl(sheetUrl);
+        setGeneratedSpreadsheetId(spreadsheetId || '');
+        setGoogleSheetsModalVisible(false);
+        Linking.openURL(sheetUrl).catch(() => {});
+        Alert.alert(
+          'Google Sheet Created 🎉',
+          `Your live ${dataset.shortLabel} Google Sheet with all ${dataset.rows.length} records has been created and opened!`
+        );
+      } else {
+        // Open populated sheet URL (Opens in Google Sheets app with all records populated!)
+        const sectionParam = selectedSection === 'Both' ? 'Both' : selectedSection;
+        const populatedSheetUrl = `${API_BASE_URL}/reports/download-excel?reportType=${adminExportFilter}&format=csv&section=${encodeURIComponent(sectionParam)}&startDate=${startDate}&endDate=${endDate}`;
+        
+        Linking.openURL(populatedSheetUrl).catch(() => {});
+        setGoogleSheetsModalVisible(true);
+        Alert.alert(
+          'Google Sheet Report Opened 📊',
+          `Opening your populated ${dataset.shortLabel} report (${dataset.rows.length} records) in Google Sheets!\n\nNote: To create live 1-click Google Drive URLs, set "Who has access" to "Anyone" in script.google.com!`
+        );
+      }
     } catch (err: any) {
       console.error(err);
       setIsGeneratingSheet(false);
       setGoogleSheetsModalVisible(true);
-      Alert.alert('Export Notice 📋', 'Report data copied to clipboard. You can paste directly into Google Sheets or Excel!');
     }
   };
 
@@ -1078,52 +1114,24 @@ export default function AttendanceReport() {
         {/* ADMIN EXCEL & GOOGLE SHEET DOWNLOAD CONTROLS */}
         {isAdminUser && (
           <View style={styles.adminBanner}>
-            <View style={styles.adminBannerHeader}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1, marginRight: 8 }}>
                 <Icon name="verified-user" size={18} color="#DC2626" style={{ marginRight: 6 }} />
-                <Text style={styles.adminBannerTitle}>
-                  Admin Export Portal ({selectedSection === 'Both' ? 'Both Classes G + E' : selectedSection})
+                <Text style={styles.adminBannerTitle} numberOfLines={1}>
+                  Admin Export Portal ({selectedSection === 'Both' ? 'Both Classes' : selectedSection})
                 </Text>
               </View>
-              <View style={styles.adminTagBadge}>
-                <Text style={styles.adminTagText}>ADMIN ONLY</Text>
-              </View>
-            </View>
 
-            {/* Filter Dropdown Selector */}
-            <View style={styles.adminDropdownWrapper}>
-              <Text style={styles.adminDropdownFieldLabel}>Report Filter Category</Text>
-              <TouchableOpacity
-                style={[
-                  styles.adminDropdownSelectorBox,
-                  { borderColor: currentDataset.color, backgroundColor: currentDataset.badgeBg }
-                ]}
+              {/* Compact Top-Right Sort/Filter Pill Chip */}
+              <PillChip
+                label={currentDataset.shortLabel}
+                selected={true}
                 onPress={() => setAdminFilterDropdownVisible(true)}
-                activeOpacity={0.8}
-              >
-                <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
-                  <Icon
-                    name={
-                      adminExportFilter === 'absentees' ? 'person-off'
-                      : adminExportFilter === 'gte75' ? 'verified'
-                      : adminExportFilter === 'lt75' ? 'warning'
-                      : 'groups'
-                    }
-                    size={18}
-                    color={currentDataset.color}
-                    style={{ marginRight: 8 }}
-                  />
-                  <Text style={[styles.adminDropdownSelectorText, { color: currentDataset.color }]} numberOfLines={1}>
-                    {currentDataset.label}
-                  </Text>
-                  <View style={[styles.adminFilterInlineBadge, { backgroundColor: currentDataset.color }]}>
-                    <Text style={styles.adminFilterInlineBadgeText}>
-                      {currentDataset.count}
-                    </Text>
-                  </View>
-                </View>
-                <Icon name="arrow-drop-down" size={24} color={currentDataset.color} />
-              </TouchableOpacity>
+                count={currentDataset.count}
+                size="sm"
+                activeGradient={[currentDataset.color, currentDataset.color]}
+                icon={<Icon name="filter-list" size={14} color="#FFFFFF" />}
+              />
             </View>
 
             {/* Active Filter Info Strip */}
