@@ -53,14 +53,19 @@ app.post('/api/reports/google-sheet', async (req, res) => {
 
     if (
       response.status === 401 ||
-      responseText.includes('Google Drive -- Page Not Found') ||
+      response.status === 404 ||
+      responseText.includes('Page not found') ||
+      responseText.includes('Page Not Found') ||
+      responseText.includes('unable to open the file at present') ||
       responseText.includes('accounts.google.com') ||
       responseText.includes('You need access') ||
       responseText.includes('request-access-icon') ||
-      responseText.includes('docs.google.com/accounts')
+      responseText.includes('docs.google.com/accounts') ||
+      responseText.toLowerCase().includes('doctype html')
     ) {
       return res.status(401).json({
         success: false,
+        isPermissionError: true,
         error: 'Google Apps Script Access Error: In script.google.com, click Deploy > Manage deployments > Edit ✏️ (pencil icon) > set "Who has access" to "Anyone" (instead of "Only myself") > click Deploy.'
       });
     }

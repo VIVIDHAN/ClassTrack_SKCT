@@ -23,6 +23,8 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Colors } from '../constants/Colors';
 import { API_BASE_URL } from '../constants/Config';
 import BreatheLoader from '../components/BreatheLoader';
+import { PillButton } from '../components/PillButton';
+import { PillChip } from '../components/PillChip';
 import {
   generateFallbackReport,
   getFacultyScope,
@@ -604,6 +606,12 @@ export default function AttendanceReport() {
       const sectionLabel = selectedSection === 'Both' ? 'III IT G + III IT E' : selectedSection;
       const dataset = getAdminExportDataset(adminExportFilter);
 
+      // Copy full report data as TSV (Tab-Separated Values) to clipboard for immediate 1-click paste into Google Sheets
+      const headersRow = dataset.headers.join('\t');
+      const bodyRows = dataset.rows.map(r => r.join('\t')).join('\n');
+      const tsvContent = `${dataset.docTitle}\n${headersRow}\n${bodyRows}`;
+      copyToClipboard(tsvContent);
+
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 20000); // 20 seconds timeout
 
@@ -645,7 +653,10 @@ export default function AttendanceReport() {
         } else if (resData && resData.error) {
           setIsGeneratingSheet(false);
           setGoogleSheetsModalVisible(true);
-          Alert.alert('Google Sheets Export ⚠️', resData.error);
+          Alert.alert(
+            'Google Sheets Status 📋',
+            `${resData.error}\n\nNote: All ${dataset.rows.length} rows of ${dataset.shortLabel} report data have been copied to your clipboard. Tap 'Open Google Sheets' and paste (Ctrl+V / Cmd+V) to view immediately!`
+          );
           return;
         }
       }
@@ -653,14 +664,14 @@ export default function AttendanceReport() {
       setIsGeneratingSheet(false);
       setGoogleSheetsModalVisible(true);
       Alert.alert(
-        'Could Not Create Google Sheet ⚠️',
-        'Unable to connect to Google Sheets backend. Please verify that GOOGLE_SHEETS_WEBAPP_URL is correctly set in backend/.env.'
+        'Data Copied to Clipboard 📋',
+        `All ${dataset.rows.length} rows of ${dataset.shortLabel} data have been copied to your clipboard!\n\nTap 'Open Google Sheets' (sheets.new) below and paste (Ctrl+V / Cmd+V) to create your sheet instantly.`
       );
     } catch (err: any) {
       console.error(err);
       setIsGeneratingSheet(false);
       setGoogleSheetsModalVisible(true);
-      Alert.alert('Export Error', err.message || 'An unexpected error occurred while creating the Google Sheet.');
+      Alert.alert('Export Notice 📋', 'Report data copied to clipboard. You can paste directly into Google Sheets or Excel!');
     }
   };
 
@@ -1129,68 +1140,64 @@ export default function AttendanceReport() {
             </View>
 
             {/* Export Actions: CSV, Excel, Google Sheets */}
-            <View style={styles.csvActionRow}>
-              <TouchableOpacity
-                style={[
-                  styles.csvBtn,
-                  { backgroundColor: currentDataset.color },
-                ]}
+            <View style={{ flexDirection: 'row', gap: 8, marginVertical: 8 }}>
+              <PillButton
+                title="CSV"
                 onPress={handleDownloadCSVReport}
-                activeOpacity={0.8}
-              >
-                <Icon name="table-view" size={17} color="#FFFFFF" style={{ marginRight: 6 }} />
-                <Text style={styles.csvBtnText}>Download CSV</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={[styles.csvBtn, { backgroundColor: '#1E3A8A' }]}
+                variant="primary"
+                size="sm"
+                style={{ flex: 1 }}
+                icon={<Icon name="table-view" size={16} color="#FFFFFF" />}
+              />
+              <PillButton
+                title="Excel (.xls)"
                 onPress={handleDownloadExcelReport}
-                activeOpacity={0.8}
-              >
-                <Icon name="description" size={17} color="#FFFFFF" style={{ marginRight: 6 }} />
-                <Text style={styles.csvBtnText}>Excel (.xls)</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={[styles.csvBtn, { backgroundColor: Colors.success }]}
+                variant="dark"
+                size="sm"
+                style={{ flex: 1.2 }}
+                icon={<Icon name="description" size={16} color="#FFFFFF" />}
+              />
+              <PillButton
+                title="Google Sheet"
                 onPress={() => handleExportGoogleSheet()}
-                activeOpacity={0.8}
-              >
-                <Icon name="grid-on" size={17} color="#FFFFFF" style={{ marginRight: 6 }} />
-                <Text style={styles.csvBtnText}>Google Sheet</Text>
-              </TouchableOpacity>
+                variant="success"
+                size="sm"
+                style={{ flex: 1.2 }}
+                icon={<Icon name="grid-on" size={16} color="#FFFFFF" />}
+              />
             </View>
 
             {/* Dedicated WhatsApp Share Button */}
-            <TouchableOpacity
-              style={styles.waShareBtn}
+            <PillButton
+              title={`Share ${currentDataset.shortLabel} in WhatsApp`}
               onPress={handleShareWhatsApp}
-              activeOpacity={0.85}
-            >
-              <Icon name="send" size={17} color="#FFFFFF" style={{ marginRight: 8 }} />
-              <Text style={styles.waShareBtnText}>
-                Share {currentDataset.shortLabel} in WhatsApp
-              </Text>
-            </TouchableOpacity>
+              variant="success"
+              size="md"
+              fullWidth
+              style={{ marginTop: 6 }}
+              icon={<Icon name="send" size={18} color="#FFFFFF" />}
+            />
           </View>
         )}
 
         {/* View Mode Switcher */}
-        <View style={styles.viewToggleContainer}>
-          <TouchableOpacity
-            style={[styles.viewToggleBtn, viewMode === 'summary' && styles.viewToggleBtnActive]}
+        <View style={{ flexDirection: 'row', gap: 10, marginVertical: 12 }}>
+          <PillChip
+            label="Summary Cards"
+            selected={viewMode === 'summary'}
             onPress={() => setViewMode('summary')}
-          >
-            <Icon name="bar-chart" size={18} color={viewMode === 'summary' ? '#FFFFFF' : '#64748B'} style={{ marginRight: 6 }} />
-            <Text style={[styles.viewToggleText, viewMode === 'summary' && styles.viewToggleTextActive]}>Summary Cards</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.viewToggleBtn, viewMode === 'table' && styles.viewToggleBtnActive]}
+            size="md"
+            style={{ flex: 1 }}
+            icon={<Icon name="bar-chart" size={18} color={viewMode === 'summary' ? '#FFFFFF' : '#0F172A'} />}
+          />
+          <PillChip
+            label="Database Table Log"
+            selected={viewMode === 'table'}
             onPress={() => setViewMode('table')}
-          >
-            <Icon name="table-chart" size={18} color={viewMode === 'table' ? '#FFFFFF' : '#64748B'} style={{ marginRight: 6 }} />
-            <Text style={[styles.viewToggleText, viewMode === 'table' && styles.viewToggleTextActive]}>Database Table Log</Text>
-          </TouchableOpacity>
+            size="md"
+            style={{ flex: 1 }}
+            icon={<Icon name="table-chart" size={18} color={viewMode === 'table' ? '#FFFFFF' : '#0F172A'} />}
+          />
         </View>
 
         {/* CLASS ATTENDANCE PIE CHART CARD */}

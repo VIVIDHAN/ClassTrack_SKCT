@@ -23,6 +23,8 @@ import { API_BASE_URL, fetchWithTimeout } from '../constants/Config';
 import { PERIOD_SCHEDULE, getTeacherFullTimetableFallback } from '../constants/DummyData';
 import { getTodayDayOrder } from '../constants/AcademicCalendar';
 import BreatheLoader from '../components/BreatheLoader';
+import { PillButton } from '../components/PillButton';
+import { PillChip } from '../components/PillChip';
 
 const { width, height } = Dimensions.get('window');
 
@@ -571,13 +573,22 @@ export default function Dashboard() {
             <Text style={styles.modalTitle}>Confirm Logout</Text>
             <Text style={styles.modalSubtitle}>Are you sure you want to log out of your session?</Text>
 
-            <View style={styles.modalBtnRow}>
-              <TouchableOpacity style={styles.modalCancelBtn} onPress={() => setLogoutModalVisible(false)}>
-                <Text style={styles.modalCancelText}>Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.modalLogoutBtn} onPress={handleLogout}>
-                <Text style={styles.modalLogoutText}>Log Out</Text>
-              </TouchableOpacity>
+            <View style={{ flexDirection: 'row', gap: 10, marginTop: 16 }}>
+              <PillButton
+                title="Cancel"
+                onPress={() => setLogoutModalVisible(false)}
+                variant="light"
+                size="md"
+                style={{ flex: 1 }}
+              />
+              <PillButton
+                title="Log Out"
+                onPress={handleLogout}
+                variant="danger"
+                size="md"
+                style={{ flex: 1 }}
+                icon={<Icon name="logout" size={18} color="#FFFFFF" />}
+              />
             </View>
           </View>
         </View>

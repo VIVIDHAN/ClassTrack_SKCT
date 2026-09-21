@@ -16,6 +16,7 @@ import Animated, { FadeInUp, FadeInRight } from 'react-native-reanimated';
 import { Colors } from '../constants/Colors';
 import { API_BASE_URL, fetchWithTimeout } from '../constants/Config';
 import BreatheLoader from '../components/BreatheLoader';
+import { PillChip } from '../components/PillChip';
 import {
   getWorkingCycleTabs,
   getTodayDayOrder,
@@ -320,42 +321,22 @@ export default function FacultyTimetable() {
       </Animated.View>
 
       {/* DAY SELECTOR SEGMENTED TABS */}
-      <View style={styles.daySelectorContainer}>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 16, paddingVertical: 8, gap: 8 }}>
         {weekDays.map(d => {
           const isSelected = selectedDay === d.day;
           const classCount = (timetableByDay[d.day] || []).length;
           return (
-            <TouchableOpacity
+            <PillChip
               key={d.day}
-              style={[styles.dayTab, isSelected && styles.dayTabActive]}
+              label={`Day ${d.day} (${d.shortDay})`}
+              selected={isSelected}
               onPress={() => setSelectedDay(d.day)}
-              activeOpacity={0.7}
-            >
-              <Text 
-                style={[styles.dayTabLabel, isSelected && styles.dayTabLabelActive]}
-                numberOfLines={1}
-                adjustsFontSizeToFit
-              >
-                {d.shortDay}, {d.dateStr}
-              </Text>
-
-              <Text style={[styles.dayTabSub, isSelected && styles.dayTabSubActive]}>
-                Day {d.day}{d.isToday ? ' • Today' : ''}
-              </Text>
-
-              {classCount > 0 ? (
-                <View style={[styles.dayDot, isSelected && styles.dayDotActive]}>
-                  <Text style={[styles.dayDotText, isSelected && styles.dayDotTextActive]}>
-                    {classCount}
-                  </Text>
-                </View>
-              ) : (
-                <View style={[styles.dayDotEmpty, isSelected && styles.dayDotEmptyActive]} />
-              )}
-            </TouchableOpacity>
+              count={classCount}
+              size="md"
+            />
           );
         })}
-      </View>
+      </ScrollView>
 
       {/* TIMETABLE CONTENT */}
       {loading ? (

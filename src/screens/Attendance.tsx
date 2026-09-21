@@ -10,6 +10,8 @@ import { API_BASE_URL } from '../constants/Config';
 import BreatheLoader from '../components/BreatheLoader';
 import { SKCT_STUDENTS_G, SKCT_STUDENTS_E, PERIOD_SCHEDULE } from '../constants/DummyData';
 import { saveAttendanceLocally, getSavedAttendanceForSession, unlockAttendanceSession } from '../services/AttendanceService';
+import { PillButton } from '../components/PillButton';
+import { PillChip } from '../components/PillChip';
 
 export default function Attendance() {
   const navigation = useNavigation<any>();
@@ -343,31 +345,28 @@ export default function Attendance() {
           <Text style={styles.studentName}>{item.name}</Text>
           <Text style={styles.studentId}>{item.id}</Text>
         </View>
-        <View style={styles.toggleGroup}>
-          <TouchableOpacity 
-            style={[styles.toggleBtn, (!item.isAbsent && !item.isOnDuty) ? styles.toggleBtnActivePresent : styles.toggleBtnInactive]}
-            onPress={() => markStatus(item.id, 'present')}
-            disabled={isLocked}
-            activeOpacity={isLocked ? 1 : 0.7}
-          >
-            <Text style={[styles.toggleText, (!item.isAbsent && !item.isOnDuty) ? styles.toggleTextActive : styles.toggleTextInactive]}>Present</Text>
-          </TouchableOpacity>
-          <TouchableOpacity 
-            style={[styles.toggleBtn, item.isAbsent ? styles.toggleBtnActiveAbsent : styles.toggleBtnInactive]}
-            onPress={() => markStatus(item.id, 'absent')}
-            disabled={isLocked}
-            activeOpacity={isLocked ? 1 : 0.7}
-          >
-            <Text style={[styles.toggleText, item.isAbsent ? styles.toggleTextActive : styles.toggleTextInactive]}>Absent</Text>
-          </TouchableOpacity>
-          <TouchableOpacity 
-            style={[styles.toggleBtn, item.isOnDuty ? styles.toggleBtnActiveOD : styles.toggleBtnInactive]}
-            onPress={() => markStatus(item.id, 'onduty')}
-            disabled={isLocked}
-            activeOpacity={isLocked ? 1 : 0.7}
-          >
-            <Text style={[styles.toggleText, item.isOnDuty ? styles.toggleTextActive : styles.toggleTextInactive]}>OD</Text>
-          </TouchableOpacity>
+        <View style={{ flexDirection: 'row', gap: 6 }}>
+          <PillChip
+            label="Present"
+            selected={!item.isAbsent && !item.isOnDuty}
+            onPress={() => !isLocked && markStatus(item.id, 'present')}
+            size="sm"
+            activeGradient={['#34D399', '#059669']}
+          />
+          <PillChip
+            label="Absent"
+            selected={item.isAbsent}
+            onPress={() => !isLocked && markStatus(item.id, 'absent')}
+            size="sm"
+            activeGradient={['#F87171', '#DC2626']}
+          />
+          <PillChip
+            label="OD"
+            selected={item.isOnDuty}
+            onPress={() => !isLocked && markStatus(item.id, 'onduty')}
+            size="sm"
+            activeGradient={['#FF8C38', '#E05D00']}
+          />
         </View>
       </View>
     </View>
@@ -405,10 +404,13 @@ export default function Attendance() {
                 Attendance Locked (SMS Sent).
               </Text>
             </View>
-            <TouchableOpacity style={styles.unlockBannerBtn} onPress={handleUnlockSession}>
-              <Icon name="lock-open" size={16} color="#D97706" style={{ marginRight: 4 }} />
-              <Text style={styles.unlockBannerText}>Unlock</Text>
-            </TouchableOpacity>
+            <PillButton
+              title="Unlock"
+              onPress={handleUnlockSession}
+              variant="warning"
+              size="sm"
+              icon={<Icon name="lock-open" size={14} color="#FFFFFF" />}
+            />
           </Animated.View>
         )}
 
@@ -424,10 +426,14 @@ export default function Attendance() {
                 onChangeText={setAbsentInput}
                 keyboardType="number-pad"
               />
-              <TouchableOpacity style={styles.fastMarkBtn} onPress={handleFastMark}>
-                <Text style={styles.fastMarkBtnText}>Mark</Text>
-                <Icon name="keyboard-arrow-down" size={16} color="#FFFFFF" style={{ marginLeft: 4 }} />
-              </TouchableOpacity>
+              <PillButton
+                title="Mark"
+                onPress={handleFastMark}
+                variant="dark"
+                size="sm"
+                icon={<Icon name="keyboard-arrow-down" size={16} color="#FFFFFF" />}
+                iconPosition="right"
+              />
             </View>
           </Animated.View>
         )}
@@ -460,26 +466,43 @@ export default function Attendance() {
       <View style={styles.footer}>
         {isLocked ? (
           <View style={{ flex: 1, flexDirection: 'row', gap: 10 }}>
-            <View style={[styles.lockedFooterBtn, { flex: 1 }]}>
-              <Icon name="lock" size={18} color="#475569" style={{ marginRight: 6 }} />
-              <Text style={styles.lockedFooterText}>Locked</Text>
-            </View>
-            <TouchableOpacity style={styles.unlockFooterBtn} onPress={handleUnlockSession}>
-              <Icon name="lock-open" size={18} color="#FFFFFF" style={{ marginRight: 6 }} />
-              <Text style={styles.unlockFooterText}>Unlock Session</Text>
-            </TouchableOpacity>
+            <PillButton
+              title="Locked"
+              onPress={() => {}}
+              variant="light"
+              size="md"
+              disabled
+              style={{ flex: 1 }}
+              icon={<Icon name="lock" size={18} color="#475569" />}
+            />
+            <PillButton
+              title="Unlock Session"
+              onPress={handleUnlockSession}
+              variant="dark"
+              size="md"
+              style={{ flex: 1 }}
+              icon={<Icon name="lock-open" size={18} color="#FFFFFF" />}
+            />
           </View>
         ) : (
-          <>
-            <TouchableOpacity style={styles.submitOnlyBtn} onPress={() => handleSubmit(false)}>
-              <Icon name="check-circle-outline" size={20} color={Colors.primary} style={{ marginRight: 6 }} />
-              <Text style={styles.submitOnlyText}>Submit</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.submitSmsBtn} onPress={() => handleSubmit(true)}>
-              <Icon name="sms" size={20} color="#FFFFFF" style={{ marginRight: 6 }} />
-              <Text style={styles.submitSmsText}>Submit & Send SMS</Text>
-            </TouchableOpacity>
-          </>
+          <View style={{ flex: 1, flexDirection: 'row', gap: 10 }}>
+            <PillButton
+              title="Submit"
+              onPress={() => handleSubmit(false)}
+              variant="outline"
+              size="md"
+              style={{ flex: 1 }}
+              icon={<Icon name="check-circle-outline" size={18} color="#1E1B4B" />}
+            />
+            <PillButton
+              title="Submit & SMS"
+              onPress={() => handleSubmit(true)}
+              variant="primary"
+              size="md"
+              style={{ flex: 1.2 }}
+              icon={<Icon name="sms" size={18} color="#FFFFFF" />}
+            />
+          </View>
         )}
       </View>
 

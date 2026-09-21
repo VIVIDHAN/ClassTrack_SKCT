@@ -7,6 +7,7 @@ import { Colors } from '../constants/Colors';
 import { API_BASE_URL } from '../constants/Config';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import BreatheLoader from '../components/BreatheLoader';
+import { PillButton } from '../components/PillButton';
 
 export default function Profile() {
   const navigation = useNavigation<any>();
@@ -131,13 +132,22 @@ export default function Profile() {
             <Text style={styles.modalTitle}>Confirm Logout</Text>
             <Text style={styles.modalSubtitle}>Are you sure you want to log out of your session?</Text>
             
-            <View style={styles.modalBtnRow}>
-              <TouchableOpacity style={styles.modalCancelBtn} onPress={() => setLogoutModalVisible(false)}>
-                <Text style={styles.modalCancelText}>Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.modalConfirmBtn} onPress={handleLogout}>
-                <Text style={styles.modalConfirmText}>Log Out</Text>
-              </TouchableOpacity>
+            <View style={{ flexDirection: 'row', gap: 10, marginTop: 16 }}>
+              <PillButton
+                title="Cancel"
+                onPress={() => setLogoutModalVisible(false)}
+                variant="light"
+                size="md"
+                style={{ flex: 1 }}
+              />
+              <PillButton
+                title="Log Out"
+                onPress={handleLogout}
+                variant="danger"
+                size="md"
+                style={{ flex: 1 }}
+                icon={<Icon name="logout" size={18} color="#FFFFFF" />}
+              />
             </View>
           </View>
         </View>

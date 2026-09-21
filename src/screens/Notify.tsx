@@ -23,6 +23,7 @@ import { Colors } from '../constants/Colors';
 import { API_BASE_URL } from '../constants/Config';
 import BreatheLoader from '../components/BreatheLoader';
 import { syncPendingAttendance } from '../services/AttendanceService';
+import { PillButton } from '../components/PillButton';
 
 const MONTH_NAMES = [
   'January', 'February', 'March', 'April', 'May', 'June',
@@ -979,19 +980,15 @@ export default function Notify() {
       {/* Floating Bottom Action: Notify All */}
       {filteredAbsentees.length > 0 && (
         <View style={styles.floatingFooter}>
-          <TouchableOpacity
-            style={styles.notifyAllButton}
+          <PillButton
+            title={batchSending ? 'Dispatching Broadcast...' : `Notify All (${filteredAbsentees.length}) via SMS`}
             onPress={handleNotifyAll}
-            disabled={batchSending}
-            activeOpacity={0.85}
-          >
-            <Icon name="notifications" size={24} color="#ffffff" style={{ marginRight: 8 }} />
-            <Text style={styles.notifyAllText}>
-              {batchSending
-                ? 'Dispatching Broadcast...'
-                : `Notify All (${filteredAbsentees.length}) via SMS`}
-            </Text>
-          </TouchableOpacity>
+            variant="primary"
+            size="lg"
+            loading={batchSending}
+            fullWidth
+            icon={<Icon name="notifications" size={22} color="#FFFFFF" />}
+          />
         </View>
       )}
 

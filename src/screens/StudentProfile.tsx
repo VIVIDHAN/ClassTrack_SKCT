@@ -5,6 +5,7 @@ import { useNavigation, useRoute } from '@react-navigation/native';
 import Animated, { FadeInUp, FadeInDown } from 'react-native-reanimated';
 import Icon from 'react-native-vector-icons/MaterialIcons';
 import { Colors } from '../constants/Colors';
+import { PillButton } from '../components/PillButton';
 
 export default function StudentProfile() {
   const navigation = useNavigation<any>();
@@ -63,39 +64,24 @@ export default function StudentProfile() {
         <Animated.View entering={FadeInDown.delay(200).duration(500)} style={styles.actionSection}>
           <Text style={styles.sectionTitle}>Contact Directory</Text>
           
-          <TouchableOpacity 
-            style={styles.actionCard} 
-            activeOpacity={0.8}
-            onPress={() => makeCall(studentPhone)}
-          >
-            <View style={[styles.iconWrap, { backgroundColor: Colors.primarySoft }]}>
-              <Icon name="person" size={24} color={Colors.primary} />
-            </View>
-            <View style={styles.actionInfo}>
-              <Text style={styles.actionTitle}>Call Student</Text>
-              <Text style={styles.actionSubtitle}>{studentPhone}</Text>
-            </View>
-            <View style={[styles.callBtn, { backgroundColor: Colors.primary }]}>
-              <Icon name="call" size={22} color="#FFFFFF" />
-            </View>
-          </TouchableOpacity>
-
-          <TouchableOpacity 
-            style={styles.actionCard} 
-            activeOpacity={0.8}
-            onPress={() => makeCall(parentPhone)}
-          >
-            <View style={[styles.iconWrap, { backgroundColor: '#FEF3C7' }]}>
-              <Icon name="family-restroom" size={24} color="#D97706" />
-            </View>
-            <View style={styles.actionInfo}>
-              <Text style={styles.actionTitle}>Call Parent</Text>
-              <Text style={styles.actionSubtitle}>{parentPhone}</Text>
-            </View>
-            <View style={[styles.callBtn, { backgroundColor: Colors.success }]}>
-              <Icon name="call" size={22} color="#FFFFFF" />
-            </View>
-          </TouchableOpacity>
+          <View style={{ gap: 12 }}>
+            <PillButton
+              title={`Call Student (${studentPhone})`}
+              onPress={() => makeCall(studentPhone)}
+              variant="primary"
+              size="md"
+              fullWidth
+              icon={<Icon name="call" size={20} color="#FFFFFF" />}
+            />
+            <PillButton
+              title={`Call Parent (${parentPhone})`}
+              onPress={() => makeCall(parentPhone)}
+              variant="success"
+              size="md"
+              fullWidth
+              icon={<Icon name="family-restroom" size={20} color="#FFFFFF" />}
+            />
+          </View>
         </Animated.View>
       </ScrollView>
     </SafeAreaView>

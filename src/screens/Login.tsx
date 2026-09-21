@@ -27,6 +27,7 @@ import Icon from 'react-native-vector-icons/MaterialIcons';
 import { Colors } from '../constants/Colors';
 import { useNavigation } from '@react-navigation/native';
 import { API_BASE_URL } from '../constants/Config';
+import { PillButton } from '../components/PillButton';
 
 const { width, height } = Dimensions.get('window');
 
@@ -272,18 +273,15 @@ export default function Login() {
 
             <View style={{ height: 12 }} />
 
-            <TouchableOpacity
-              style={styles.loginButton}
+            <PillButton
+              title="Sign In"
               onPress={handleLogin}
-              activeOpacity={0.85}
-              disabled={loading}
-            >
-              {loading ? (
-                <ActivityIndicator color="#ffffff" size="small" />
-              ) : (
-                <Text style={styles.loginButtonText}>Sign In</Text>
-              )}
-            </TouchableOpacity>
+              variant="primary"
+              size="lg"
+              loading={loading}
+              fullWidth
+              icon={<Icon name="login" size={20} color="#FFFFFF" />}
+            />
 
             <View style={styles.termsContainer}>
               <Text style={styles.termsText}>By signing in, you agree to </Text>
